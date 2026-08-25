@@ -380,12 +380,6 @@ missing pieces. The eye direction is a unit vector; a zeroed one
   "How many of the newest matched-room splits ride to the overlay -
 and how many rows its panel reserves.")
 
-(defun format-split-clock (ms)
-  "m:ss for a split row's enter clock; the delta column carries the
-precision, the clock only anchors the row on the run's timeline."
-  (multiple-value-bind (minutes seconds) (floor (floor ms 1000) 60)
-    (format nil "~d:~2,'0d" minutes seconds)))
-
 (defun ghost-overlay-data (race elapsed-ms &key marker)
   "Snapshot for the overlay's ghost panel (vs header, room-split rows
 and the in-world marker), or NIL until a ghost is attached and the

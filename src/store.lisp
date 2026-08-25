@@ -95,10 +95,12 @@ parked on the refactor backlog (T20)."
     (multiple-value-bind (minutes seconds) (floor total-seconds 60)
       (format nil "~d:~2,'0d.~3,'0d" minutes seconds msec))))
 
-(defun format-run-clock (ms)
-  "The live in-quest clock (quest-status pane, window title): seconds
-precision, so the 4 Hz GUI tick repaints it once a second instead of
-four times. Finished runs keep full milliseconds (FORMAT-RUN-TIME)."
+(defun format-split-clock (ms)
+  "m:ss - the seconds-precision clock. Anchors the overlay's split rows
+\(the delta column carries the precision there) and shows the live
+in-quest time on the quest-status pane and window title, where seconds
+precision keeps the 4 Hz GUI tick from repainting every tick. Finished
+runs keep full milliseconds (FORMAT-RUN-TIME)."
   (multiple-value-bind (minutes seconds) (floor (floor ms 1000) 60)
     (format nil "~d:~2,'0d" minutes seconds)))
 
@@ -477,19 +479,26 @@ Unranked (record-only) runs are skipped too - the server refuses their
 uploads; an entry only carries both :unranked and a :video-path when
 tracking-only mode was switched on mid-quest. An entry whose file
 vanished from disk (the user deleted it) gives up on the spot and the
-scan moves on."
-  (dolist (entry (reverse (queued-runs)))
-    (when (and (getf entry :video-path)
-               (getf entry :server-id)
-               (not (getf entry :aborted))
-               (not (getf entry :unranked))
-               (not (getf entry :video-attached))
-               (not (getf entry :upload-given-up))
-               (let ((next (getf entry :next-upload-at)))
-                 (or (null next) (<= next now))))
-      (if (probe-file (getf entry :video-path))
-          (return entry)
-          (update-run! entry :upload-given-up t)))))
+scan moves on. Second value: T when the scan marked at least one entry
+given-up - the caller owes the Runs pane a refresh, since nothing else
+signals that status change."
+  (let ((candidate nil)
+        (gave-up nil))
+    (dolist (entry (reverse (queued-runs)))
+      (when (and (getf entry :video-path)
+                 (getf entry :server-id)
+                 (not (getf entry :aborted))
+                 (not (getf entry :unranked))
+                 (not (getf entry :video-attached))
+                 (not (getf entry :upload-given-up))
+                 (let ((next (getf entry :next-upload-at)))
+                   (or (null next) (<= next now))))
+        (if (probe-file (getf entry :video-path))
+            (progn (setf candidate entry)
+                   (return))
+            (progn (update-run! entry :upload-given-up t)
+                   (setf gave-up t)))))
+    (values candidate gave-up)))
 
 (defun video-path-retention-sets ()
   "Two lists of recording namestrings drawn from the run queue, for the

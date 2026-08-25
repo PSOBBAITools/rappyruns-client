@@ -149,7 +149,12 @@ UPLOAD-ENTRY-VIDEO! and a later call picks up the retry."
              (eq (recorder-state recorder) :idle)
              (or (null *upload-process*)
                  (not (mp:process-alive-p *upload-process*))))
-    (let ((entry (upload-candidate)))
+    (multiple-value-bind (entry gave-up) (upload-candidate)
+      ;; The scan just marked a vanished-file entry given-up: that
+      ;; status-column change has no other event to ride (the periodic
+      ;; in-quest refresh that used to heal it eventually is gone).
+      (when gave-up
+        (refresh-runs-list *interface*))
       (when entry
         (setf *upload-process*
               (mp:process-run-function

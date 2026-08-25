@@ -116,14 +116,22 @@
                                    :video-path path)
                              (list :status :submitted :server-id 1
                                    :video-path "C:/nowhere/gone.mp4"))
-             (check "a vanished recording gives up and the scan moves on"
-                    (eql 2 (getf (ephinea-ta-client::upload-candidate
-                                  :now now)
-                                 :server-id)))
+             (multiple-value-bind (candidate gave-up)
+                 (ephinea-ta-client::upload-candidate :now now)
+               (check "a vanished recording gives up and the scan moves on"
+                      (eql 2 (getf candidate :server-id)))
+               (check "the give-up is reported so the GUI can repaint"
+                      gave-up))
              (check "the vanished entry is marked given up"
                     (getf (find 1 (queued-runs)
                                 :key (lambda (entry) (getf entry :server-id)))
                           :upload-given-up)))
+           (with-test-store ((list :status :submitted :server-id 1
+                                   :video-path path))
+             (check "a clean scan reports no give-up"
+                    (multiple-value-bind (candidate gave-up)
+                        (ephinea-ta-client::upload-candidate :now now)
+                      (and candidate (not gave-up)))))
            (with-test-store ((list :status :queued :video-path path))
              (check "entries without a server draft cannot upload yet"
                     (null (ephinea-ta-client::upload-candidate :now now))))

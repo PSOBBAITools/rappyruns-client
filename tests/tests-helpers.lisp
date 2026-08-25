@@ -175,8 +175,6 @@
                   (list :status :rejected :reason "too fast"))))
   (check "format-run-time formats minutes:seconds.millis"
          (string= "9:59.123" (ephinea-ta-client::format-run-time 599123)))
-  (check "format-run-clock drops the milliseconds for the live pane"
-         (string= "9:59" (ephinea-ta-client::format-run-clock 599123)))
   ;; Reward hint: personal-best delta and provisional board rank the
   ;; server returns with a fresh submission.
   (check "format-improvement-ms shows a sub-minute delta in seconds"

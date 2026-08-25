@@ -1154,17 +1154,30 @@ Called from the poll loop right after it persists the drag
 ;; language toggle destroys and replaces the window, and the poll loop
 ;; or a background check may still hold the old one for a moment.
 
+(defvar *pane-text-cache* (make-hash-table :test 'eq :weak-kind :key)
+  "Last (text . foreground) written per pane (*LAST-WINDOW-TITLE*'s
+pattern), compared against the values as PASSED, not read back from
+CAPI - a realized pane is not guaranteed to echo a designator like NIL
+or :RED verbatim, and a compare that never matches would silently
+bring the 4 Hz repaint back. Keyed by the pane object: a language
+rebuild makes fresh panes, so stale entries just die with their window
+\(weak key) and no reset hook is needed. LW hash tables are
+thread-safe by default, and each pane has a single writing thread.")
+
 (defun set-pane-text (interface accessor text &optional foreground)
   "Update a title pane's text and foreground color (NIL = default) from
 any thread. Errors get :red so they stand out from routine status.
-No-ops when neither changed: this runs on the 4 Hz status tick, and
-rewriting an unchanged pane repaints it for nothing - visible flicker."
-  (capi:execute-with-interface-if-alive
-   interface
-   (lambda ()
-     (let ((pane (funcall accessor interface)))
-       (unless (and (equal text (capi:title-pane-text pane))
-                    (equal foreground (capi:simple-pane-foreground pane)))
+No-ops when neither changed - before dispatching: this runs on the
+4 Hz status tick, and an unconditional setf repaints an unchanged pane
+\(visible flicker) while even a guarded dispatch would still wake the
+GUI thread for nothing."
+  (let ((pane (funcall accessor interface))
+        (value (cons text foreground)))
+    (unless (equal value (gethash pane *pane-text-cache*))
+      (setf (gethash pane *pane-text-cache*) value)
+      (capi:execute-with-interface-if-alive
+       interface
+       (lambda ()
          (setf (capi:title-pane-text pane) text)
          (setf (capi:simple-pane-foreground pane) foreground))))))
 
@@ -1554,10 +1567,16 @@ silent, exactly like the old silent startup check."
 
 (defun update-game-status (interface connected-p detector snapshot
                            &optional recorder rejection read-failing-p)
-  (let ((recording-error (and recorder (recorder-last-error recorder)))
-        (recording-p (and recorder
-                          (eq (recorder-state recorder) :recording)))
-        (in-quest-p (eq (detector-state detector) :in-quest)))
+  (let* ((recording-error (and recorder (recorder-last-error recorder)))
+         (recording-p (and recorder
+                           (eq (recorder-state recorder) :recording)))
+         (in-quest-p (eq (detector-state detector) :in-quest))
+         ;; Formatted once: DETECTOR-ELAPSED-MS is a live clock read, so
+         ;; two independent samples could straddle a second boundary and
+         ;; leave the pane and the window title disagreeing for a tick.
+         (live-clock (and in-quest-p
+                          (format-split-clock
+                           (detector-elapsed-ms detector)))))
     (set-pane-text interface #'game-status-pane
                    (let ((base (cond
                                  (rejection
@@ -1582,7 +1601,7 @@ silent, exactly like the old silent startup check."
           (format nil "~a~@[ (+~d)~] - ~a~:[~; [REC]~]~@[~a~]"
                   (quest-def-slug (detector-active-def detector))
                   (and (plusp extra) extra)
-                  (format-run-clock (detector-elapsed-ms detector))
+                  live-clock
                   recording-p
                   (ghost-status-suffix))))
        ((and snapshot (getf snapshot :quest-name))
@@ -1593,7 +1612,7 @@ silent, exactly like the old silent startup check."
      interface
      (if in-quest-p
          (format nil "~a~@[~a~]~:[~; [REC]~] - Rappy Runs Client"
-                 (format-run-clock (detector-elapsed-ms detector))
+                 live-clock
                  (ghost-title-suffix)
                  recording-p)
          "Rappy Runs Client"))
