@@ -1156,15 +1156,24 @@ Called from the poll loop right after it persists the drag
 
 (defun set-pane-text (interface accessor text &optional foreground)
   "Update a title pane's text and foreground color (NIL = default) from
-any thread. Errors get :red so they stand out from routine status."
+any thread. Errors get :red so they stand out from routine status.
+No-ops when neither changed: this runs on the 4 Hz status tick, and
+rewriting an unchanged pane repaints it for nothing - visible flicker."
   (capi:execute-with-interface-if-alive
    interface
    (lambda ()
      (let ((pane (funcall accessor interface)))
-       (setf (capi:title-pane-text pane) text)
-       (setf (capi:simple-pane-foreground pane) foreground)))))
+       (unless (and (equal text (capi:title-pane-text pane))
+                    (equal foreground (capi:simple-pane-foreground pane)))
+         (setf (capi:title-pane-text pane) text)
+         (setf (capi:simple-pane-foreground pane) foreground))))))
 
 (defun refresh-runs-list (interface)
+  "Rebuild the Runs pane from the queue. Event-driven only (completion,
+upload progress, retry, on-keep): a periodic caller must guard for
+change first - an unconditional rebuild redraws the whole list control
+and drops selection/scroll, exactly what *ROOMS-LIST-SIGNATURE* exists
+to prevent on the Rooms pane."
   (let ((runs (queued-runs)))
     (capi:execute-with-interface-if-alive
      interface
@@ -1573,7 +1582,7 @@ silent, exactly like the old silent startup check."
           (format nil "~a~@[ (+~d)~] - ~a~:[~; [REC]~]~@[~a~]"
                   (quest-def-slug (detector-active-def detector))
                   (and (plusp extra) extra)
-                  (format-run-time (detector-elapsed-ms detector))
+                  (format-run-clock (detector-elapsed-ms detector))
                   recording-p
                   (ghost-status-suffix))))
        ((and snapshot (getf snapshot :quest-name))
@@ -1584,7 +1593,7 @@ silent, exactly like the old silent startup check."
      interface
      (if in-quest-p
          (format nil "~a~@[~a~]~:[~; [REC]~] - Rappy Runs Client"
-                 (format-run-time (detector-elapsed-ms detector))
+                 (format-run-clock (detector-elapsed-ms detector))
                  (ghost-title-suffix)
                  recording-p)
          "Rappy Runs Client"))

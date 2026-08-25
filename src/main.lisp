@@ -323,9 +323,7 @@ into the next iteration."
                             ;; instead of a silent "no active quest".
                             (and reader
                                  (>= (live-reader-unreadable-frames reader)
-                                     +read-failure-frames+)))
-        (when (eq (detector-state detector) :in-quest)
-          (refresh-runs-list interface))))
+                                     +read-failure-frames+)))))
     (mp:process-wait-with-timeout
      "poll interval" +poll-interval+
      (lambda () *stop-requested*))

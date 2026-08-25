@@ -95,6 +95,13 @@ parked on the refactor backlog (T20)."
     (multiple-value-bind (minutes seconds) (floor total-seconds 60)
       (format nil "~d:~2,'0d.~3,'0d" minutes seconds msec))))
 
+(defun format-run-clock (ms)
+  "The live in-quest clock (quest-status pane, window title): seconds
+precision, so the 4 Hz GUI tick repaints it once a second instead of
+four times. Finished runs keep full milliseconds (FORMAT-RUN-TIME)."
+  (multiple-value-bind (minutes seconds) (floor (floor ms 1000) 60)
+    (format nil "~d:~2,'0d" minutes seconds)))
+
 (defun format-improvement-ms (ms)
   "A positive time improvement MS as a compact hint: seconds with two
 decimals under a minute (how personal bests usually land), the m:ss.mmm
