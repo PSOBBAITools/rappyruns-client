@@ -133,8 +133,13 @@
   :names ("Lost HELL PALLASCH") :start (:warp-in) :end (:register 110))
  (:slug "ep1-forsaken-friends" :episode 1 :number 907
   :names ("Forsaken Friends") :start (:warp-in) :end (:register 99))
+ ;; The Patrol quests start on Pioneer 2 and register 1 flips the moment
+ ;; the quest is accepted (trigger log: +1s after load, first kill ~26s
+ ;; later), so it would time the walk to the transporter. Time from the
+ ;; warp into the cave instead, like Subterranean Patrol #2 and Underworld
+ ;; Patrol #1 (warp-in, registered on the site).
  (:slug "ep1-subterranean-patrol-1" :episode 1 :number 1960
-  :names ("Subterranean Patrol #1") :start (:register 1) :end (:register 254))
+  :names ("Subterranean Patrol #1") :start (:warp-in) :end (:register 254))
  ;; ------------------------------------------------ Episode 1 - VR
  (:slug "ep1-towards-the-future" :episode 1 :number 118
   :names ("Towards the Future") :start (:register 12) :end (:register 254))
