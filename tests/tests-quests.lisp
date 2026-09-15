@@ -100,7 +100,13 @@ switch 0; room 2 cleared = floor 5 switch 2; full clear = register 254."
 (defun run-trigger-log-tests ()
   (format t "~&--- trigger log ---~%")
   (ephinea-ta-client::close-trigger-log)
-  (let ((path (ephinea-ta-client::trigger-log-path)))
+  ;; A throwaway log: the real %APPDATA% one may be open in a running
+  ;; client and hundreds of MB (reading it back exhausted the heap).
+  (let* ((ephinea-ta-client::*trigger-log-path*
+           (merge-pathnames (format nil "eta-test-trigger-log-~d.txt"
+                                    (get-internal-real-time))
+                            (uiop:temporary-directory)))
+         (path (ephinea-ta-client::trigger-log-path)))
     (ignore-errors (delete-file path))
     ;; Enabling logging must create the file immediately (before any
     ;; trigger changes), so the user can see it is working.

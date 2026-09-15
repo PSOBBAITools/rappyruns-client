@@ -22,8 +22,14 @@
   #+lispworks `(mp:with-lock (*trigger-log-lock*) ,@body)
   #-lispworks `(progn ,@body))
 
+(defvar *trigger-log-path* nil
+  "Override for the log location; NIL means %APPDATA%. The tests bind a
+throwaway path so they never delete, append to or read back a player's
+real log (which can run to hundreds of MB).")
+
 (defun trigger-log-path ()
-  (merge-pathnames "trigger-log.txt" (config-dir)))
+  (or *trigger-log-path*
+      (merge-pathnames "trigger-log.txt" (config-dir))))
 
 (defun trigger-log-stream ()
   (or *trigger-log-stream*
