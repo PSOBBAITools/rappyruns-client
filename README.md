@@ -290,7 +290,9 @@ in a file (passing quotes on the `gh` command line is unreliable).
 The main asset must be named `RappyRunsClient.zip` - the site's
 download button points at
 `https://github.com/psobb-teapot/rappyruns-client/releases/latest/download/RappyRunsClient.zip`
-(override with `ETA_CLIENT_DOWNLOAD_URL` on the server).
+(the repo comes from `ETA_CLIENT_REPO_URL` on the server; `ETA_CLIENT_DOWNLOAD_URL`
+overrides the whole URL). The auto-updater has its own copy of the repo name in
+`src/updater.lisp`, so a repo rename needs a client release too.
 Pre-releases are excluded from `latest`, so they are safe for test
 builds.
 
