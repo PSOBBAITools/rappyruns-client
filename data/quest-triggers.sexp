@@ -136,8 +136,9 @@
  ;; The Patrol quests start on Pioneer 2 and register 1 flips the moment
  ;; the quest is accepted (trigger log: +1s after load, first kill ~26s
  ;; later), so it would time the walk to the transporter. Time from the
- ;; warp into the cave instead, like Subterranean Patrol #2 and Underworld
- ;; Patrol #1 (warp-in, registered on the site).
+ ;; warp into the cave instead, the rule Subterranean Patrol #2 and
+ ;; Underworld Patrol #1 already used on the site (warp-in, as of
+ ;; 2026-09-16; those two live only in the DB, not here).
  (:slug "ep1-subterranean-patrol-1" :episode 1 :number 1960
   :names ("Subterranean Patrol #1") :start (:warp-in) :end (:register 254))
  ;; ------------------------------------------------ Episode 1 - VR
