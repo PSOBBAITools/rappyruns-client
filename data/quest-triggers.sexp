@@ -34,14 +34,18 @@
 ;;; This file is read with *READ-EVAL* off; keep it pure data.
 
 (;; ------------------------------------------------ Episode 1 - Extermination
+ ;; Mop-up Operation starts on Pioneer 2 and register 0 (psostats' start)
+ ;; flips on accepting the quest: every logged run (site telemetry and
+ ;; psostats frames, 2026-09-16) spends ~10s on Pioneer 2 after it. Time
+ ;; from the warp down instead, like the Patrol quests below.
  (:slug "ep1-mop-up-operation-1" :episode 1 :number 101
-  :names ("Mop-up Operation #1") :start (:register 0) :end (:register 254))
+  :names ("Mop-up Operation #1") :start (:warp-in) :end (:register 254))
  (:slug "ep1-mop-up-operation-2" :episode 1 :number 102
-  :names ("Mop-up Operation #2") :start (:register 0) :end (:register 254))
+  :names ("Mop-up Operation #2") :start (:warp-in) :end (:register 254))
  (:slug "ep1-mop-up-operation-3" :episode 1 :number 103
-  :names ("Mop-up Operation #3") :start (:register 0) :end (:register 254))
+  :names ("Mop-up Operation #3") :start (:warp-in) :end (:register 254))
  (:slug "ep1-mop-up-operation-4" :episode 1 :number 104
-  :names ("Mop-up Operation #4") :start (:register 0) :end (:register 254))
+  :names ("Mop-up Operation #4") :start (:warp-in) :end (:register 254))
  (:slug "ep1-sweep-up-operation-1" :episode 1 :number 1761
   :names ("Sweep-up Operation #1") :start (:register 210) :end (:register 254))
  (:slug "ep1-sweep-up-operation-2" :episode 1 :number 1762
