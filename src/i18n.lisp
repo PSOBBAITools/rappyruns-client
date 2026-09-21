@@ -407,6 +407,9 @@
     :pinshare-status-off
     ("Pin Share: off"
      "Pin Share: オフ")
+    :pinshare-status-not-allowed
+    ("Pin Share: not available for this account yet (limited rollout; needs a linked account)"
+     "Pin Share: このアカウントではまだ利用できません (限定提供中・サイト連携が必要です)")
     :pinshare-status-no-channel
     ("Pin Share: enter a party passphrase"
      "Pin Share: 合言葉を入力してください")

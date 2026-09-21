@@ -25,6 +25,46 @@ Seeded from the cached :MODERATOR config in MAIN so a returning
 moderator's window is right on the first frame, then re-verified from
 /api/me by CHECK-TOKEN, which rebuilds the window if it changed.")
 
+(defun settings-tab-groups (&optional (pinshare *pinshare-allowed-p*))
+  "The Settings tab's groups, top to bottom. Pin Share is in staged
+rollout, so its group only joins for accounts the server lists (/api/me
+features) - like the moderator panes, the panes themselves always exist
+so callbacks and REBUILD-INTERFACE can read them either way."
+  (let ((groups '(language-group connection-group recording-group
+                  ghost-group pinshare-group updates-group tray-group
+                  advanced-group)))
+    (if pinshare
+        groups
+        (remove 'pinshare-group groups))))
+
+(defvar *pinshare-group-cache* (make-hash-table :test 'eq :weak-kind :key)
+  "Interface -> the Pin Share verdict last pushed to its Settings tab, so
+the status tick queues a layout change only when the verdict moved.
+Weak on the window, like *PANE-TEXT-CACHE*: a rebuilt window starts
+fresh and the old entry dies with its window.")
+
+(defun sync-pinshare-group (interface)
+  "Make INTERFACE's Settings tab show or hide the Pin Share group to
+match *PINSHARE-ALLOWED-P* - in place, by swapping the tab's layout
+description. Deliberately NOT a window rebuild: the verdict can move at
+any time (CHECK-TOKEN, a 401, the half-hourly refresher), and a rebuild
+from there pops a window out of the tray over a running game, destroys
+the owner of an open dialog and races other rebuilds. A description swap
+keeps the window, its visibility and its dialogs, and is idempotent, so
+it is safe from the status tick. Called from any thread; the swap runs
+on the interface's own process."
+  (let ((allowed *pinshare-allowed-p*))
+    (multiple-value-bind (pushed known) (gethash interface *pinshare-group-cache*)
+      (unless (and known (eq pushed allowed))
+        (setf (gethash interface *pinshare-group-cache*) allowed)
+        (capi:execute-with-interface-if-alive
+         interface
+         (lambda ()
+           (let ((tab (slot-value interface 'settings-tab))
+                 (groups (settings-tab-groups allowed)))
+             (unless (equal groups (capi:layout-description tab))
+               (setf (capi:layout-description tab) groups)))))))))
+
 (defun client-tab-items ()
   "Main-window tab entries as (LABEL PANE-NAME) pairs. The Rooms tab
 lists the live run's rooms and enemies solely to author quest-clear
@@ -456,11 +496,7 @@ who cannot create rules, never see it."
                        '(trigger-log-check))
                    :title (tr :group-advanced) :title-position :frame
                    :title-font *ui-font* :adjust :left)
-   (settings-tab capi:column-layout
-                 '(language-group connection-group
-                   recording-group ghost-group pinshare-group updates-group
-                   tray-group
-                   advanced-group)
+   (settings-tab capi:column-layout (settings-tab-groups)
                  :adjust :left)
    (rooms-tab capi:column-layout '(rooms-hint rooms-list) :adjust :left)
    (main-tabs capi:tab-layout ()
@@ -565,11 +601,16 @@ to build a fresh window."
 
 (defun rebuild-interface (old)
   "Replace OLD with a freshly built window at the same screen position,
-carrying over unsaved Connection edits and the selected tab.
-*INTERFACE* flips to the new window before OLD is destroyed, so the
-poll loop never picks up a dead interface."
+carrying over unsaved Connection edits, the selected tab and a hidden
+\(in the tray) state: the moderator-role rebuild can land while the
+client sits in the tray - right after a --minimized launch, say - and
+must not pop a window over the game. *INTERFACE* flips to the new window before
+OLD is destroyed, so the poll loop never picks up a dead interface."
   (multiple-value-bind (x y) (capi:top-level-interface-geometry old)
-    (let ((new (make-instance 'client-window :best-x x :best-y y)))
+    (let ((new (apply #'make-instance 'client-window :best-x x :best-y y
+                      (when (eq (capi:top-level-interface-display-state old)
+                                :hidden)
+                        '(:display-state :hidden)))))
       (setf (capi:text-input-pane-text (server-url-input new))
             (capi:text-input-pane-text (server-url-input old))
             (capi:text-input-pane-text (api-token-input new))
@@ -1361,7 +1402,13 @@ the Save settings flow."
     (if (string= token "")
         ;; Unlinked is a supported state, not an error: measuring works,
         ;; runs queue locally, and the status line says how to link.
-        (set-pane-text interface #'token-status-pane (tr :token-unlinked))
+        (progn
+          ;; No verified account, no rollout verdict (here and on a 401
+          ;; below). Only the flag moves: the relay stops within a tick
+          ;; and the status tick takes the group off the Settings tab in
+          ;; place (SYNC-PINSHARE-GROUP) - no rebuild.
+          (set-pinshare-permission nil)
+          (set-pane-text interface #'token-status-pane (tr :token-unlinked)))
         (progn
           (set-pane-text interface #'token-status-pane (tr :token-checking))
           (mp:process-run-function
@@ -1374,6 +1421,11 @@ the Save settings flow."
                       (let ((name (gethash "username" user)))
                         (set-pane-text interface #'token-status-pane
                                        (tr :token-ok name))
+                        ;; The Pin Share rollout verdict first, before
+                        ;; anything fallible below: just a flag (the
+                        ;; status tick shows or hides the group in
+                        ;; place), so it costs no rebuild.
+                        (set-pinshare-permission (pinshare-feature-p user))
                         (apply-moderator-role interface user)
                         (apply-auto-publish interface user)
                         ;; Adopt the anonymous guest's runs the moment
@@ -1402,6 +1454,7 @@ the Save settings flow."
                              (capi:display-message
                               "~a" (tr :token-ok-dialog name)))))))
                      (:unauthorized
+                      (set-pinshare-permission nil)
                       (set-pane-text interface #'token-status-pane
                                      (tr :token-invalid) :red)
                       (when notify
@@ -1675,7 +1728,10 @@ silent, exactly like the old silent startup check."
                  (ghost-title-suffix)
                  recording-p)
          "Rappy Runs Client"))
-    ;; Pin Share relay status (SET-PANE-TEXT no-ops while unchanged).
+    ;; Pin Share: the rollout verdict can move under a live window; show
+    ;; or hide the group in place (no-op while unchanged), then the relay
+    ;; status (SET-PANE-TEXT no-ops while unchanged too).
+    (sync-pinshare-group interface)
     (multiple-value-bind (text error-p)
         (pinshare-status-text *pinshare-status*)
       (set-pane-text interface #'pinshare-status-pane text

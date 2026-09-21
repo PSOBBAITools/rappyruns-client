@@ -235,6 +235,8 @@ says why it is idle."
   (let ((channel (pinshare-channel))
         (exe *pinshare-game-exe*))
     (cond ((not (config-value :pinshare-enabled)) (values nil '(:off)))
+          ;; Staged rollout: the server decides who may use the relay.
+          ((not *pinshare-allowed-p*) (values nil '(:not-allowed)))
           ((string= channel "") (values nil '(:no-channel)))
           ((null exe) (values nil '(:waiting-game)))
           (t (values (list exe channel (pinshare-server-url)) nil)))))
@@ -405,7 +407,40 @@ says why it is idle."
                     (setf *pinshare-status* status)
                     (pinshare-wait 1))))))
 
+(defparameter +pinshare-permission-interval-seconds+ 1800
+  "How often a linked client re-asks /api/me whether it is in the Pin
+Share rollout. The client is resident for days, and CHECK-TOKEN only
+runs at startup and on Save: without this, widening the rollout - or
+pulling the feature - would wait for everyone's next restart.")
+
+(defun pinshare-permission-loop ()
+  "Moves the rollout flag and nothing else - this file knows nothing of
+the GUI. The relay obeys the flag within a tick, and the GUI's status
+tick shows or hides the Settings group in place (SYNC-PINSHARE-GROUP), so
+a widened rollout reaches a client that has been resident for days
+without a restart and without a window rebuild. The moderator role is
+CHECK-TOKEN's business and is left alone."
+  (loop
+    (pinshare-wait +pinshare-permission-interval-seconds+)
+    (when *stop-requested* (return))
+    (let ((token (normalize-token (config-value :api-token))))
+      (when (string/= token "")
+        ;; Transport errors keep the cached verdict: an unreachable site
+        ;; must not switch a working relay off.
+        (ignore-errors
+          (multiple-value-bind (outcome user) (fetch-me :token token)
+            ;; The account may have changed while the request was out
+            ;; (Save with another token): a stale answer must not
+            ;; overwrite the verdict CHECK-TOKEN just stored for it.
+            (when (string= token (normalize-token (config-value :api-token)))
+              (case outcome
+                (:ok (set-pinshare-permission (pinshare-feature-p user)))
+                (:unauthorized (set-pinshare-permission nil))))))))))
+
 (defun start-pinshare! ()
-  "Start the resident relay supervisor (idle until Pin Share is on)."
+  "Start the resident relay supervisor (idle until Pin Share is on) and
+the rollout-permission refresher."
+  (mp:process-run-function "eta-client-pinshare-permission" '()
+                           'pinshare-permission-loop)
   (setf *pinshare-process*
         (mp:process-run-function "eta-client-pinshare" '() 'pinshare-loop)))
