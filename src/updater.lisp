@@ -11,13 +11,15 @@
 ;;; The pure-CL parts - release JSON parsing, zip sanity checks and the
 ;;; helper script text - load on SBCL and are covered by the tests.
 
-(defparameter *update-repo* "psobb-teapot/rappyruns-client"
+(defparameter *update-repo* "PSOBBAITools/rappyruns-client"
   "owner/name of the public repository whose releases carry the client -
 since 2026-07-24 the same repo also carries the client source. Renamed
 from rappyruns-client-releases (2026-07-24) and ephinea-ta-client-releases
-(2026-07-06); GitHub redirects both old names, so clients built before
-each rename keep updating. Those names must never be reused for new
-repositories or the redirects break.")
+(2026-07-06), then transferred from the psobb-teapot account to the
+PSOBBAITools organization (2026-09-22); GitHub redirects every old
+owner/name, so clients built before each move keep updating. Those names
+must never be reused for new repositories - in particular psobb-teapot
+must never again own a rappyruns-client - or the redirects break.")
 
 (defparameter +update-asset-name+ "RappyRunsClient.zip"
   "The release asset the site's download button also points at.")

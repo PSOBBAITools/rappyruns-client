@@ -2,7 +2,7 @@
 
 > Buildable source of the Rappy Runs desktop client, MIT licensed.
 > Ready-to-run downloads live on this repository's
-> [Releases page](https://github.com/psobb-teapot/rappyruns-client/releases);
+> [Releases page](https://github.com/PSOBBAITools/rappyruns-client/releases);
 > the site is at <https://rappyruns-production.up.railway.app>.
 > Development happens in the Rappy Runs monorepo and the client tree is
 > mirrored here (history included) on each release, so what you read
@@ -266,12 +266,14 @@ CLI](https://cli.github.com/) (`gh`); the web UI works too (create the
 release on the releases repo and upload the zip as an asset).
 
 Releases live on the public source repo
-(`psobb-teapot/rappyruns-client`, the mirror this tree is published
+(`PSOBBAITools/rappyruns-client`, the mirror this tree is published
 to), so every release tag lands on the exact source it was built
 from. The former binary-only repos (`rappyruns-client-releases`,
-`ephinea-ta-client-releases`) were folded into it by rename - GitHub
-redirects the old names for already-deployed updaters, so those names
-must never be reused.
+`ephinea-ta-client-releases`) were folded into it by rename, and the
+repo itself moved from the `psobb-teapot` account to the `PSOBBAITools`
+organization (2026-09-22) - GitHub redirects the old owners/names for
+already-deployed updaters, so those names (including
+`psobb-teapot/rappyruns-client`) must never be reused.
 
 Per release: bump `client/VERSION` to the new `X.Y.Z` and commit it
 (release.ps1 refuses a tag that does not match, and deliver.lisp bakes
@@ -289,7 +291,7 @@ in a file (passing quotes on the `gh` command line is unreliable).
 
 The main asset must be named `RappyRunsClient.zip` - the site's
 download button points at
-`https://github.com/psobb-teapot/rappyruns-client/releases/latest/download/RappyRunsClient.zip`
+`https://github.com/PSOBBAITools/rappyruns-client/releases/latest/download/RappyRunsClient.zip`
 (the repo comes from `ETA_CLIENT_REPO_URL` on the server; `ETA_CLIENT_DOWNLOAD_URL`
 overrides the whole URL). The auto-updater has its own copy of the repo name in
 `src/updater.lisp`, so a repo rename needs a client release too.
