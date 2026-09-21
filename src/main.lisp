@@ -72,12 +72,26 @@ need psostats' full sample rate; READ-MONSTERS is one block read per
 monster plus one batched HP read) and :inventory (about once per
 second: one block read per world item) to SNAPSHOT while a quest is
 loaded."
+  ;; A readable frame with no quest loaded ends the load the last
+  ;; account-mode reading was for. An unreadable frame (SNAPSHOT NIL,
+  ;; normal at warps) says nothing about the load and keeps it.
+  (when (and snapshot
+             (not (and (getf snapshot :quest-ptr)
+                       (plusp (getf snapshot :quest-ptr)))))
+    (forget-account-mode-reading))
   (when (and snapshot
              (getf snapshot :quest-ptr)
              (plusp (getf snapshot :quest-ptr)))
     (setf snapshot
           (append snapshot
                   (list :monsters (ignore-errors (read-monsters reader)))))
+    ;; Sandbox or normal, read once per quest load: the player may have
+    ;; changed accounts since the last one without restarting the game.
+    (let ((mode (account-mode-for-quest
+                 (getf snapshot :quest-ptr)
+                 (lambda () (read-account-mode reader)))))
+      (when mode
+        (setf snapshot (append snapshot (list :account-mode mode)))))
     ;; The camera feeds only the overlay's in-world ghost marker
     ;; (*LIVE-CAMERA* via GHOST-RACE-STEP), so nobody else pays its two
     ;; ReadProcessMemory calls per poll frame.
@@ -226,7 +240,15 @@ NIL to keep searching."
           *pinshare-game-exe*
           (and reader (process-image-path reader)))
     (if reader
-        (detector-step detector nil) ; fresh attach: disarm
+        (progn
+          ;; A reading on attach is evidence only (it puts the peers in
+          ;; the log and the diagnostics even if no quest ever loads);
+          ;; the verdict a run carries is read per quest load. A new
+          ;; process may reuse the old one's quest pointer, so whatever
+          ;; was read for that one is dropped.
+          (forget-account-mode-reading)
+          (read-account-mode reader)
+          (detector-step detector nil)) ; fresh attach: disarm
         (progn
           ;; Keep any in-flight stop moving (deletes
           ;; the abandoned file once ffmpeg exits).

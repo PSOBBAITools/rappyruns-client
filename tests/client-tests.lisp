@@ -173,6 +173,7 @@ publishes the Ephinea HP table pointer + scale double."
   (run-pure-helper-tests)
   (run-room-picker-tests)
   (run-recorder-tests)
+  (run-account-mode-tests)
   (run-diagnostics-tests)
   (run-video-flow-tests)
   (run-upload-queue-tests)

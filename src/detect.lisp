@@ -33,6 +33,8 @@
                        ; enemy was actually alive before its kill counts
   (killed-ids '())     ; monster :id values confirmed dead (were alive,
                        ; then observed at 0 hp) this load
+  account-mode         ; "sandbox" / "normal" as read for this load, or
+                       ; NIL without a verdict (see account-mode.lisp)
   telemetry)           ; per-quest TELEMETRY, created with the first tracker
 
 (defun elapsed-ms (start-time)
@@ -138,6 +140,7 @@ itself must not count either, whichever frame the zero lands on."
         (detector-pb-flag detector) nil
         (detector-seen-alive detector) '()
         (detector-killed-ids detector) '()
+        (detector-account-mode detector) nil
         (detector-telemetry detector) nil))
 
 (defun start-tracker (detector def snapshot)
@@ -180,6 +183,7 @@ itself must not count either, whichever frame the zero lands on."
            :submitter-section-id (tracker-my-section-id tracker)
            :difficulty (tracker-difficulty tracker)
            :death-count (and telemetry (telemetry-death-count telemetry))
+           :account-mode (detector-account-mode detector)
            :telemetry (and telemetry (telemetry-run-data telemetry))
            :finished-at (get-universal-time))
      (when aborted (list :aborted t)))))
@@ -221,6 +225,12 @@ quest mid-run emits the unfinished trackers as :aborted runs."
            (setf aborted (abandon-trackers detector))
            (reset-detector detector))
          (setf (detector-quest-ptr detector) ptr))
+       ;; The account mode belongs to the quest load, like the PB flag:
+       ;; it cannot change while the quest stays loaded, so the newest
+       ;; verdict wins and a frame without one keeps what is known.
+       (when (getf snapshot :account-mode)
+         (setf (detector-account-mode detector)
+               (getf snapshot :account-mode)))
        (let ((started '())
              (completed (reverse aborted)))
          ;; Start a tracker for each definition whose start trigger fired.

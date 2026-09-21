@@ -373,3 +373,103 @@
                 (search "client " report)
                 (search "recording log tail" report)))))
 
+
+;;; ------------------------------------------------------------------
+;;; Account mode (account-mode.lisp): sandbox vs normal from the game
+;;; process's TCP peers
+;;; ------------------------------------------------------------------
+
+(defun make-tcp-table (&rest rows)
+  "A MIB_TCPTABLE_OWNER_PID image. Each row is (state (a b c d) port
+pid); the remote address and port go in network byte order, as Windows
+stores them."
+  (let ((bytes (make-array (+ 4 (* 24 (length rows)))
+                           :element-type '(unsigned-byte 8)
+                           :initial-element 0)))
+    (put-u32 bytes 0 (length rows))
+    (loop :for (state address port pid) :in rows
+          :for base :from 4 :by 24
+          :do (put-u32 bytes base state)
+              (loop :for octet :in address
+                    :for i :from (+ base 12)
+                    :do (setf (aref bytes i) octet))
+              (setf (aref bytes (+ base 16)) (ldb (byte 8 8) port)
+                    (aref bytes (+ base 17)) (ldb (byte 8 0) port))
+              (put-u32 bytes (+ base 20) pid))
+    bytes))
+
+(defun run-account-mode-tests ()
+  (format t "~&--- account mode ---~%")
+  (let ((table (make-tcp-table '(5 (34 223 124 214) 14001 4242)   ; ours
+                               '(5 (35 75 43 206) 5279 999)       ; other pid
+                               '(2 (10 0 0 1) 14000 4242))))      ; not ESTAB
+    (check "tcp peers: only the pid's established rows, port in host order"
+           (equal '(("34.223.124.214" . 14001))
+                  (ephinea-ta-client::tcp-peers-for-pid table 4242)))
+    (check "tcp peers: a truncated table is NIL-safe"
+           (null (ephinea-ta-client::tcp-peers-for-pid
+                  (subseq table 0 20) 4242)))
+    (check "tcp peers: no table, no peers"
+           (null (ephinea-ta-client::tcp-peers-for-pid nil 4242))))
+  ;; The measured endpoints (2026-08-13). Both modes share the hosts, so
+  ;; the verdict must come from the port alone.
+  (check "sandbox block port -> sandbox"
+         (equal "sandbox" (ephinea-ta-client::account-mode-from-peers
+                           '(("34.223.124.214" . 14001)))))
+  (check "sandbox ship port -> sandbox"
+         (equal "sandbox" (ephinea-ta-client::account-mode-from-peers
+                           '(("34.223.124.214" . 14000)))))
+  (check "normal block on the same host -> normal"
+         (equal "normal" (ephinea-ta-client::account-mode-from-peers
+                          '(("34.223.124.214" . 5279)))))
+  (check "one sandbox peer among others is still sandbox"
+         (equal "sandbox" (ephinea-ta-client::account-mode-from-peers
+                           '(("1.2.3.4" . 443) ("34.223.124.214" . 14001)))))
+  (check "just outside the band is normal"
+         (and (equal "normal" (ephinea-ta-client::account-mode-from-peers
+                               '(("1.2.3.4" . 13999))))
+              (equal "normal" (ephinea-ta-client::account-mode-from-peers
+                               '(("1.2.3.4" . 15000))))))
+  (check "no peers is no verdict, not normal"
+         (null (ephinea-ta-client::account-mode-from-peers '())))
+  (let ((line (ephinea-ta-client::account-mode-probe-line
+               :pid 4242 :peers '(("34.223.124.214" . 14001))
+               :mode "sandbox" :window-title "Ephinea: PSOBB")))
+    (check "probe line carries the peers and the verdict"
+           (and (search "34.223.124.214:14001" line)
+                (search "mode sandbox" line))))
+  (check "probe line without peers or verdict still formats"
+         (search "peers none mode ?"
+                 (ephinea-ta-client::account-mode-probe-line :pid 1)))
+  ;; One reading per quest load; a NIL reading retries, rate-limited.
+  (let ((calls 0)
+        (answer "sandbox")
+        (second internal-time-units-per-second))
+    (flet ((mode-at (ptr now)
+             (ephinea-ta-client::account-mode-for-quest
+              ptr (lambda () (incf calls) answer) now)))
+      (ephinea-ta-client::forget-account-mode-reading)
+      (check "first frame of a load reads the mode"
+             (and (equal "sandbox" (mode-at 100 0)) (= 1 calls)))
+      (check "later frames of the load reuse it"
+             (and (equal "sandbox" (mode-at 100 (* 60 second))) (= 1 calls)))
+      (setf answer "normal")
+      (check "a different quest pointer reads again"
+             (and (equal "normal" (mode-at 200 (* 61 second))) (= 2 calls)))
+      ;; The account switch: same process, back through the lobby.
+      (ephinea-ta-client::forget-account-mode-reading)
+      (setf answer "sandbox")
+      (check "the same pointer after a lobby visit reads again"
+             (and (equal "sandbox" (mode-at 200 (* 62 second))) (= 3 calls)))
+      (ephinea-ta-client::forget-account-mode-reading)
+      (setf answer nil)
+      (check "a failed reading is no verdict"
+             (and (null (mode-at 300 (* 70 second))) (= 4 calls)))
+      (check "and is not retried within the second"
+             (and (null (mode-at 300 (+ (* 70 second) 1))) (= 4 calls)))
+      (setf answer "sandbox")
+      (check "but is retried after it"
+             (and (equal "sandbox" (mode-at 300 (* 71 second))) (= 5 calls)))
+      (ephinea-ta-client::forget-account-mode-reading)))
+  (check "a reader with no process has no verdict"
+         (null (ephinea-ta-client::read-account-mode (lobby-reader)))))

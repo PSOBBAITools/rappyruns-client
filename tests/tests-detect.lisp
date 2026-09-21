@@ -59,7 +59,16 @@
                                      (aref (gethash "events" telemetry) 0)))))
     (check "payload omits unranked and private for a board run"
            (and (null (gethash "unranked" parsed))
-                (null (gethash "private" parsed)))))
+                (null (gethash "private" parsed))))
+    (check "payload omits account_mode without a verdict"
+           (null (nth-value 1 (gethash "account_mode" parsed)))))
+  ;; The account mode read for the quest load (account-mode.lisp).
+  (let ((parsed (com.inuoe.jzon:parse
+                 (ephinea-ta-client::run-json
+                  (list :quest-slug "ep1-test" :time-ms 60000 :party-size 1
+                        :players '() :account-mode "sandbox")))))
+    (check "payload account_mode rides when detected"
+           (equal "sandbox" (gethash "account_mode" parsed))))
   ;; Tracking-only mode's flags (APPLY-TRACKING-MODE) ride the payload.
   (let ((parsed (com.inuoe.jzon:parse
                  (ephinea-ta-client::run-json
@@ -154,6 +163,34 @@
   (let ((detector (make-detector)))
     (step-with detector (ttf-reader :start 1))
     (check "mid-quest attach stays idle" (eq :idle (detector-state detector))))
+  ;; The account mode rides the snapshot (AUGMENT-SNAPSHOT) and is
+  ;; stamped on the load's runs. A frame without a verdict - the reading
+  ;; failed, or arrived only after the start trigger - keeps what is
+  ;; known; the lobby forgets it, because the player may come back on
+  ;; another account without restarting the game.
+  (flet ((step-mode (detector reader mode)
+           (detector-step detector
+                          (append (read-snapshot reader)
+                                  (and mode (list :account-mode mode))))))
+    (let ((detector (make-detector)))
+      (step-mode detector (lobby-reader) nil)
+      (step-mode detector (ttf-reader) nil)
+      (step-mode detector (ttf-reader :start 1) nil)
+      (step-mode detector (ttf-reader :start 1) "sandbox")
+      (let ((run (first (step-mode detector (ttf-reader :start 1 :end 1) nil))))
+        (check "a verdict arriving after the start still stamps the run"
+               (equal "sandbox" (getf run :account-mode))))
+      (step-mode detector (lobby-reader) nil)
+      (step-mode detector (ttf-reader :start 1) "normal")
+      (let ((run (first (step-mode detector (ttf-reader :start 1 :end 1)
+                                   "normal"))))
+        (check "the next load after a lobby visit carries its own mode"
+               (equal "normal" (getf run :account-mode))))
+      (step-mode detector (lobby-reader) nil)
+      (step-mode detector (ttf-reader :start 1) nil)
+      (let ((run (first (step-mode detector (ttf-reader :start 1 :end 1) nil))))
+        (check "no verdict all load long leaves the run unstamped"
+               (and run (null (getf run :account-mode)))))))
   ;; A charged gauge / cast Shifta at the start is NOT enough for PB - a
   ;; normal No-PB run often starts that way. It must be No PB.
   (let ((detector (make-detector)))
