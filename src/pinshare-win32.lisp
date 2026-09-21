@@ -235,6 +235,8 @@ says why it is idle."
   (let ((channel (pinshare-channel))
         (exe *pinshare-game-exe*))
     (cond ((not (config-value :pinshare-enabled)) (values nil '(:off)))
+          ;; Staged rollout: the server decides who may use the relay.
+          ((not *pinshare-allowed-p*) (values nil '(:not-allowed)))
           ((string= channel "") (values nil '(:no-channel)))
           ((null exe) (values nil '(:waiting-game)))
           (t (values (list exe channel (pinshare-server-url)) nil)))))
@@ -405,7 +407,30 @@ says why it is idle."
                     (setf *pinshare-status* status)
                     (pinshare-wait 1))))))
 
+(defparameter +pinshare-permission-interval-seconds+ 1800
+  "How often a linked client re-asks /api/me whether it is in the Pin
+Share rollout. The client is resident for days, and CHECK-TOKEN only
+runs at startup and on Save: without this, widening the rollout - or
+pulling the feature - would wait for everyone's next restart.")
+
+(defun pinshare-permission-loop ()
+  (loop
+    (pinshare-wait +pinshare-permission-interval-seconds+)
+    (when *stop-requested* (return))
+    (let ((token (normalize-token (config-value :api-token))))
+      (when (string/= token "")
+        ;; Transport errors keep the cached verdict: an unreachable site
+        ;; must not switch a working relay off.
+        (ignore-errors
+          (multiple-value-bind (outcome user) (fetch-me :token token)
+            (case outcome
+              (:ok (apply-account-gates *interface* user))
+              (:unauthorized (revoke-pinshare-permission)))))))))
+
 (defun start-pinshare! ()
-  "Start the resident relay supervisor (idle until Pin Share is on)."
+  "Start the resident relay supervisor (idle until Pin Share is on) and
+the rollout-permission refresher."
+  (mp:process-run-function "eta-client-pinshare-permission" '()
+                           'pinshare-permission-loop)
   (setf *pinshare-process*
         (mp:process-run-function "eta-client-pinshare" '() 'pinshare-loop)))

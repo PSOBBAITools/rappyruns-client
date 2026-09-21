@@ -33,10 +33,9 @@
                              ;; After api-client (parse-websocket-url and
                              ;; the UTF-8 helpers).
                              (:file "websocket-win32" :if-feature :lispworks)
-                             ;; Pin Share relay: the pure half, then the
-                             ;; thread that moves the bytes.
+                             ;; Pin Share relay, the pure half (the thread
+                             ;; that moves the bytes loads after gui).
                              (:file "pinshare")
-                             (:file "pinshare-win32" :if-feature :lispworks)
                              ;; Pure logic of the GUI's quest-rule form,
                              ;; portable so client-tests can reach it.
                              (:file "rule-form")
@@ -51,4 +50,8 @@
                              ;; message-loop FLI bindings.
                              (:file "overlay-win32" :if-feature :lispworks)
                              (:file "autostart-win32" :if-feature :lispworks)
+                             ;; After updater (*stop-requested*) and gui
+                             ;; (*interface*, the account-gate functions
+                             ;; its rollout refresher calls).
+                             (:file "pinshare-win32" :if-feature :lispworks)
                              (:file "main")))))

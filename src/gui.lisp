@@ -456,11 +456,18 @@ who cannot create rules, never see it."
                        '(trigger-log-check))
                    :title (tr :group-advanced) :title-position :frame
                    :title-font *ui-font* :adjust :left)
+   ;; Pin Share is in staged rollout: the group only joins the layout for
+   ;; accounts the server lists (/api/me features), like the moderator
+   ;; panes above. The panes always exist so callbacks and
+   ;; REBUILD-INTERFACE can read them either way.
    (settings-tab capi:column-layout
-                 '(language-group connection-group
-                   recording-group ghost-group pinshare-group updates-group
-                   tray-group
-                   advanced-group)
+                 (if *pinshare-allowed-p*
+                     '(language-group connection-group
+                       recording-group ghost-group pinshare-group
+                       updates-group tray-group advanced-group)
+                     '(language-group connection-group
+                       recording-group ghost-group
+                       updates-group tray-group advanced-group))
                  :adjust :left)
    (rooms-tab capi:column-layout '(rooms-hint rooms-list) :adjust :left)
    (main-tabs capi:tab-layout ()
@@ -1337,19 +1344,36 @@ last known server state if the update failed."
               (capi:display-message
                "~a" (tr :auto-publish-failed condition))))))))))
 
-(defun apply-moderator-role (interface user)
-  "Sync the moderator-only UI to the /api/me USER hash. When the role
-crosses the moderator boundary, cache it and rebuild the window so the
-Rooms tab and the Advanced 'register rule' button appear or vanish.
-Only the change triggers a rebuild, so the CHECK-TOKEN that REBUILD
-issues sees no change and does not loop."
-  (let ((now (moderator-role-p (and user (gethash "role" user)))))
-    (unless (eq now *moderator-p*)
-      (setf *moderator-p* now
-            (config-value :moderator) now)
+(defun apply-account-gates (interface user)
+  "Sync the account-gated UI to the /api/me USER hash (NIL = no linked
+account): the moderator-only Rooms tab and 'register rule' button, and
+the Pin Share group while that feature is in staged rollout. When either
+verdict changes, cache it and rebuild the window so the panes appear or
+vanish - once, however many gates moved. Only a change triggers the
+rebuild, so the CHECK-TOKEN that REBUILD issues sees none and does not
+loop."
+  (let ((moderator (moderator-role-p (and user (gethash "role" user))))
+        (pinshare (pinshare-feature-p user)))
+    (unless (and (eq moderator *moderator-p*)
+                 (eq pinshare *pinshare-allowed-p*))
+      (setf *moderator-p* moderator
+            (config-value :moderator) moderator
+            *pinshare-allowed-p* pinshare
+            (config-value :pinshare-allowed) pinshare)
       (save-config!)
       (capi:execute-with-interface-if-alive
        interface (lambda () (rebuild-interface interface))))))
+
+(defun revoke-pinshare-permission ()
+  "No verified account (unlinked, or a definite 401): the rollout
+verdict cannot stand. Deliberately no window rebuild - this runs next to
+the 401 dialog and the login.txt re-login, which hold the current
+interface; the relay stops at once (PINSHARE-WANTED), the status line
+says why, and the group is gone from the next launch."
+  (when *pinshare-allowed-p*
+    (setf *pinshare-allowed-p* nil
+          (config-value :pinshare-allowed) nil)
+    (save-config!)))
 
 (defun check-token (interface &key on-invalid notify)
   "Verify the configured API token against /api/me on a background
@@ -1361,7 +1385,9 @@ the Save settings flow."
     (if (string= token "")
         ;; Unlinked is a supported state, not an error: measuring works,
         ;; runs queue locally, and the status line says how to link.
-        (set-pane-text interface #'token-status-pane (tr :token-unlinked))
+        (progn
+          (revoke-pinshare-permission)
+          (set-pane-text interface #'token-status-pane (tr :token-unlinked)))
         (progn
           (set-pane-text interface #'token-status-pane (tr :token-checking))
           (mp:process-run-function
@@ -1374,7 +1400,7 @@ the Save settings flow."
                       (let ((name (gethash "username" user)))
                         (set-pane-text interface #'token-status-pane
                                        (tr :token-ok name))
-                        (apply-moderator-role interface user)
+                        (apply-account-gates interface user)
                         (apply-auto-publish interface user)
                         ;; Adopt the anonymous guest's runs the moment
                         ;; a linked token verifies, then drop the guest
@@ -1402,6 +1428,7 @@ the Save settings flow."
                              (capi:display-message
                               "~a" (tr :token-ok-dialog name)))))))
                      (:unauthorized
+                      (revoke-pinshare-permission)
                       (set-pane-text interface #'token-status-pane
                                      (tr :token-invalid) :red)
                       (when notify

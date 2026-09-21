@@ -410,7 +410,9 @@ are persisted incrementally, so an abrupt exit loses nothing."
         ;; Seed from the last verified role so a moderator's Rooms tab and
         ;; rule button are present on the first frame; CHECK-TOKEN re-verifies
         ;; against /api/me and rebuilds the window if it changed.
-        *moderator-p* (and (config-value :moderator) t))
+        *moderator-p* (and (config-value :moderator) t)
+        ;; Same for the Pin Share rollout verdict (/api/me features).
+        *pinshare-allowed-p* (and (config-value :pinshare-allowed) t))
   (cleanup-old-update-files)
   ;; Self-update BEFORE the main window exists, so an outdated build
   ;; never flashes at the user just to quit and relaunch. Does not

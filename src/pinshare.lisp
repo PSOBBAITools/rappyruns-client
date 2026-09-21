@@ -434,6 +434,7 @@ fresh list is atomic enough.")
   (destructuring-bind (kind &rest args) status
     (ecase kind
       (:off (values (tr :pinshare-status-off) nil))
+      (:not-allowed (values (tr :pinshare-status-not-allowed) nil))
       (:no-channel (values (tr :pinshare-status-no-channel) nil))
       (:waiting-game (values (tr :pinshare-status-waiting-game) nil))
       (:connecting (values (tr :pinshare-status-connecting) nil))
@@ -451,6 +452,21 @@ fresh list is atomic enough.")
       (:conflict (values (tr :pinshare-status-conflict) t)))))
 
 ;;; --- settings / paths -----------------------------------------------------
+
+(defvar *pinshare-allowed-p* nil
+  "Whether the linked account is in the Pin Share rollout (GET /api/me
+features). Seeded from the cached :pinshare-allowed at startup so the
+Settings group is there on the first frame; CHECK-TOKEN re-verifies and
+the relay thread re-checks every half hour, so the server can widen the
+rollout - or pull the feature - without a client release.")
+
+(defun pinshare-feature-p (user)
+  "True when the /api/me USER hash lists the pinshare feature. A server
+that predates the field, or an unlinked client (USER NIL), means no."
+  (let ((features (and (hash-table-p user) (gethash "features" user))))
+    (and (vectorp features)
+         (find "pinshare" features :test #'equal)
+         t)))
 
 (defvar *pinshare-game-exe* nil
   "Full path of the attached (signature-verified) PSOBB.exe, or NIL while

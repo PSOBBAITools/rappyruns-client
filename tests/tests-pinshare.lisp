@@ -244,6 +244,15 @@
                         (ephinea-ta-client::parse-websocket-url
                          "ws://localhost:8787"))
                        '(nil "localhost" 8787 "/"))))
+    ;; staged rollout
+    (check "an older server's /api/me (no features) and no account mean no"
+           (and (not (ephinea-ta-client::pinshare-feature-p
+                      (pinshare-parsed "{\"id\":1,\"role\":\"user\"}")))
+                (not (ephinea-ta-client::pinshare-feature-p
+                      (pinshare-parsed "{\"features\":\"pinshare\"}")))
+                (not (ephinea-ta-client::pinshare-feature-p nil))
+                (ephinea-ta-client::pinshare-feature-p
+                 (pinshare-parsed "{\"features\":[\"pinshare\"]}"))))
     (check "every relay status has a line in both languages"
            (every (lambda (status)
                     (every (lambda (language)
@@ -251,7 +260,8 @@
                                (plusp (length (ephinea-ta-client::pinshare-status-text
                                                status)))))
                            '(:en :ja)))
-                  '((:off) (:no-channel) (:waiting-game) (:connecting)
+                  '((:off) (:not-allowed) (:no-channel) (:waiting-game)
+                    (:connecting)
                     (:connected "secret" 2) (:connected-no-addon)
                     (:error "boom")
                     (:no-addon-plugin) (:install-failed "denied")

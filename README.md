@@ -217,6 +217,18 @@ the game exits. This is the one place the client writes next to the
 game, which is why the feature is off by default; the game *process* is
 still never touched.
 
+**Staged rollout.** The Pin Share group only appears - and the relay
+only runs - for accounts the server lists: `GET /api/me` answers with
+`"features": ["pinshare"]` for users named in the server's
+`ETA_PINSHARE_USERS` (comma-separated Discord usernames or user ids,
+`*` = everyone). The verdict is cached as `:pinshare-allowed` so the
+group is there on the first frame, re-verified at startup and on Save,
+and re-asked every 30 minutes (the client is resident for days), so
+widening the rollout or pulling the feature is a server variable
+change, never a client release. It follows that Pin Share needs a linked
+account while the rollout lasts; an unlinked client or a rejected token
+drops the verdict.
+
 `src/pinshare.lisp` is the pure half (file formats, JSON translation,
 reconnect state; SBCL-tested), `src/pinshare-win32.lisp` the relay
 thread, `src/websocket-win32.lisp` the WebSocket client over WinHTTP
