@@ -116,6 +116,7 @@
 (defconstant +player-freeze-traps-offset+ #x89D)  ; u8
 (defconstant +player-confuse-traps-offset+ #x89F) ; u8
 (defconstant +player-guild-card-offset+ #x930)    ; 8 ASCII bytes (Ephinea)
+(defconstant +player-name-color-offset+ #x948) ; u32 ARGB, see +SANDBOX-NAME-COLOR+
 (defconstant +player-class-offset+ #x960)     ; u16, class in bits 8-11,
                                               ; section id in bits 0-7
 (defconstant +player-level-offset+ #xE44)     ; u16, 0-based
@@ -217,6 +218,67 @@ Jellen/Zalure)."
                                  0.5)))))
         (if (minusp multiplier) (- level) level))))
 
+;;; Account mode (sandbox vs normal).
+;;;
+;;; Ephinea's Sandbox is an account-level mode: chosen when the account
+;;; is created, never changed afterwards. Its characters level and spawn
+;;; items freely (/levelup, /item, /srank, /redbox), so a sandbox time is
+;;; not comparable with a normal one and the site ranks the two on
+;;; separate boards (runs.account_mode server-side).
+;;;
+;;; What tells them apart is the colour of the character's name. The
+;;; server hands every player a name colour with the rest of their
+;;; appearance, and Ephinea gives sandbox characters a yellow one - it is
+;;; how other players recognise them. It sits in the player struct
+;;; between the guild card and the class (the stock PSOBB appearance
+;;; layout: guild card string, 8 unused bytes, name_color, ...).
+;;; Measured 2026-09-22 in a lobby of nine: the sandbox character read
+;;; #xFFAB9423, every other player #xFFFFFFFF.
+;;;
+;;; Nothing else does. The ship a session is connected to was tried
+;;; first (PR #304, reverted) and is wrong in both directions: Ephinea
+;;; has no sandbox-only ship, sandbox accounts log into the same ships as
+;;; everyone else. Guild card numbers come from one serial pool for both
+;;; kinds of account. And the string "sandbox" appears nowhere in the
+;;; game's image or heap.
+
+(defconstant +sandbox-name-color+ #xFFAB9423
+  "ARGB name colour of a character on an Ephinea Sandbox account, as
+measured. Only its RGB takes part in the verdict (NAME-COLOR-RGB).")
+
+(defconstant +normal-name-color+ #xFFFFFFFF
+  "ARGB name colour of a character on a normal account: plain white.")
+
+(defun name-color-known-p (color)
+  "Has the game filled the name colour in yet? NIL and all-zero are a
+struct still being set up, not a colour the server hands out - worth
+reading again. Any other value is an answer, recognised or not."
+  (and color (plusp color)))
+
+(defun name-color-rgb (color)
+  "COLOR without its alpha byte. The two measured colours are told apart
+by hue; alpha is how opaque the name is drawn, and a verdict that hung
+on it would fail silently the day a name is drawn differently."
+  (logand color #xFFFFFF))
+
+(defun account-mode-of-color (color)
+  "The account mode a name COLOR says its account is in: \"sandbox\" and
+\"normal\" for the two colours that were measured, NIL for everything
+else. NIL means no verdict, never normal.
+
+An unrecognised colour is deliberately not \"normal\". Both constants
+come from one measurement; if Ephinea retunes the sandbox colour, or
+colours some other kind of name, the honest reading is \"this client
+does not know\" - which the log then shows as a colour without a
+verdict - rather than every sandbox run confidently asserting normal.
+For the boards the two are the same today: the server files a run
+without a verdict as normal."
+  (when (name-color-known-p color)
+    (let ((rgb (name-color-rgb color)))
+      (cond ((= rgb (name-color-rgb +sandbox-name-color+)) "sandbox")
+            ((= rgb (name-color-rgb +normal-name-color+)) "normal")
+            (t nil)))))
+
 (defun strip-name-prefix (name)
   ;; Character names are prefixed with a "\tE" language marker.
   (if (and (>= (length name) 2)
@@ -256,6 +318,7 @@ Jellen/Zalure)."
                 :section-id (section-name-for-id (logand class-bits #xFF))
                 :level (1+ (u16 +player-level-offset+))
                 :guild-card (and (string/= guild-card "") guild-card)
+                :name-color (u32 +player-name-color-offset+)
                 :floor (u16 +player-floor-offset+)
                 :room (u16 +player-room-offset+)
                 :x (f32 +player-x-offset+)

@@ -59,7 +59,28 @@
                                      (aref (gethash "events" telemetry) 0)))))
     (check "payload omits unranked and private for a board run"
            (and (null (gethash "unranked" parsed))
-                (null (gethash "private" parsed)))))
+                (null (gethash "private" parsed))))
+    (check "payload omits account_mode without a verdict"
+           (null (nth-value 1 (gethash "account_mode" parsed)))))
+  ;; The account mode, by the submitter's name colour
+  ;; (ACCOUNT-MODE-OF-COLOR). The colour itself is not part of the run
+  ;; payload; it goes to the recording log (LOG-ACCOUNT-MODE).
+  (let ((parsed (com.inuoe.jzon:parse
+                 (ephinea-ta-client::run-json
+                  (list :quest-slug "ep1-test" :time-ms 60000 :party-size 1
+                        :players '() :account-mode "sandbox"
+                        :my-name-color #xFFAB9423)))))
+    (check "payload account_mode rides when detected"
+           (equal "sandbox" (gethash "account_mode" parsed)))
+    ;; The exact key set, not a search for "color": a guard that a
+    ;; differently spelled key walks past is no guard.
+    (check "the run payload is exactly the known fields - no name colour"
+           (null (set-exclusive-or
+                  (loop :for key :being :the :hash-keys :of parsed
+                        :collect key)
+                  '("quest" "time_ms" "party_size" "players" "notes"
+                    "account_mode")
+                  :test #'equal))))
   ;; Tracking-only mode's flags (APPLY-TRACKING-MODE) ride the payload.
   (let ((parsed (com.inuoe.jzon:parse
                  (ephinea-ta-client::run-json
@@ -99,11 +120,14 @@
 ;;; ------------------------------------------------------------------
 
 (defun ttf-reader (&key (start 0) (end 0) (seg 0) (pb 0.0) warping
-                        (difficulty 0) hp-scale)
+                        (difficulty 0) hp-scale (name-color #xFFFFFFFF)
+                        (partner-color #xFFFFFFFF))
   (make-game-regions
    :players (list (make-player-block :name "Ryu" :class-id 2 :floor 1 :pb pb
-                                     :warping warping)
-                  (make-player-block :name "Elly" :class-id 8 :floor 1))
+                                     :warping warping
+                                     :name-color name-color)
+                  (make-player-block :name "Elly" :class-id 8 :floor 1
+                                     :name-color partner-color))
    :quest-name "Towards the Future" :quest-number 118
    :difficulty difficulty :hp-scale hp-scale
    :register-values (list (cons 12 start) (cons 254 end) (cons 100 seg))))
@@ -154,6 +178,150 @@
   (let ((detector (make-detector)))
     (step-with detector (ttf-reader :start 1))
     (check "mid-quest attach stays idle" (eq :idle (detector-state detector))))
+  ;; Account mode: the submitter's own name colour, read from the game's
+  ;; memory, decides the board. (Ryu is the submitter; Elly is the party.)
+  (let ((sandbox ephinea-ta-client::+sandbox-name-color+)
+        (white ephinea-ta-client::+normal-name-color+))
+    (flet ((mode-of-run (color &rest more)
+             (let ((detector (make-detector)))
+               (step-with detector (lobby-reader))
+               (step-with detector (apply #'ttf-reader :start 1
+                                          :name-color color more))
+               (getf (first (step-with detector
+                                       (apply #'ttf-reader :start 1 :end 1
+                                              :name-color color more)))
+                     :account-mode)))
+           (age-trackers (detector seconds)
+             (dolist (tracker (ephinea-ta-client::detector-trackers detector))
+               (decf (ephinea-ta-client::tracker-start-time tracker)
+                     (* seconds internal-time-units-per-second)))))
+      (check "the sandbox name colour stamps the run sandbox"
+             (equal "sandbox" (mode-of-run sandbox)))
+      (check "a white name stamps the run normal"
+             (equal "normal" (mode-of-run white)))
+      ;; Only the two measured colours are claimed. Anything else is
+      ;; "this client does not know", not a confident normal.
+      (check "an unrecognised colour is no verdict - not normal, not sandbox"
+             (null (mode-of-run #xFFFF0000)))
+      (check "one bit off the sandbox hue is no verdict"
+             (null (mode-of-run (logxor sandbox 1))))
+      (check "a colour the game never fills in is no verdict"
+             (null (mode-of-run 0)))
+      ;; The verdict is the submitter's own, not the party's.
+      (check "a sandbox-coloured party member does not make my run sandbox"
+             (equal "normal" (mode-of-run white :partner-color sandbox)))
+      (check "and a white one does not make a sandbox run normal"
+             (equal "sandbox" (mode-of-run sandbox :partner-color white)))
+      ;; The colour belongs to the quest load and is looked for until it
+      ;; is one the client recognises - an unstamped run is filed as
+      ;; normal, so giving up would misfile a sandbox run.
+      (let ((detector (make-detector)))
+        (step-with detector (lobby-reader))
+        (step-with detector (ttf-reader :start 1 :name-color 0))
+        (step-with detector (ttf-reader :start 1 :name-color sandbox))
+        (let ((run (first (step-with detector
+                                     (ttf-reader :start 1 :end 1
+                                                 :name-color sandbox)))))
+          (check "a colour missing on the start frame is read from a later one"
+                 (and (equal "sandbox" (getf run :account-mode))
+                      (eql sandbox (getf run :my-name-color))))))
+      ;; Whatever sat in the struct before the game filled the colour in
+      ;; must not lock out the real value that follows it.
+      (let ((detector (make-detector)))
+        (step-with detector (lobby-reader))
+        (step-with detector (ttf-reader :start 1 :name-color #xDEADBEEF))
+        (step-with detector (ttf-reader :start 1 :name-color sandbox))
+        (check "an unrecognised colour at the start does not block the real one"
+               (equal "sandbox"
+                      (getf (first (step-with detector
+                                              (ttf-reader :start 1 :end 1
+                                                          :name-color sandbox)))
+                            :account-mode))))
+      ;; White is what the field may hold before the game copies the real
+      ;; colour in, so a white reading stays open to correction ...
+      (let ((detector (make-detector)))
+        (step-with detector (lobby-reader))
+        (step-with detector (ttf-reader :start 1 :name-color white))
+        (step-with detector (ttf-reader :start 1 :name-color sandbox))
+        (check "a white reading at the start is corrected by a sandbox one"
+               (equal "sandbox"
+                      (getf (first (step-with detector
+                                              (ttf-reader :start 1 :end 1
+                                                          :name-color sandbox)))
+                            :account-mode))))
+      (let ((detector (make-detector)))
+        (step-with detector (lobby-reader))
+        (step-with detector (ttf-reader :start 1 :name-color white))
+        (step-with detector (ttf-reader :start 1 :name-color #xDEADBEEF))
+        (check "but a white reading is not lost to an unrecognised one"
+               (equal "normal"
+                      (getf (first (step-with detector
+                                              (ttf-reader :start 1 :end 1
+                                                          :name-color 0)))
+                            :account-mode))))
+      ;; ... while the sandbox colour cannot turn up by accident: once
+      ;; seen it stands, and a later odd frame must not take it back.
+      (let ((detector (make-detector)))
+        (step-with detector (lobby-reader))
+        (step-with detector (ttf-reader :start 1 :name-color sandbox))
+        (step-with detector (ttf-reader :start 1 :name-color white))
+        (check "a sandbox reading is not overwritten mid-load"
+               (equal "sandbox"
+                      (getf (first (step-with detector
+                                              (ttf-reader :start 1 :end 1
+                                                          :name-color white)))
+                            :account-mode))))
+      ;; One load, one board: the segment run that finishes early and the
+      ;; full clear carry the same mode, even when the colour only became
+      ;; readable after both trackers had started.
+      (let* ((segment (ephinea-ta-client::make-quest-def
+                       :slug "ep1-towards-the-future-2-rooms" :episode 1
+                       :names '("Towards the Future") :number 118
+                       :start '(:register 12) :end '(:register 100)))
+             (ephinea-ta-client::*quest-defs*
+               (cons segment ephinea-ta-client::*quest-defs*))
+             (detector (make-detector))
+             (modes '()))
+        (step-with detector (lobby-reader))
+        (step-with detector (ttf-reader :start 1 :name-color 0))
+        (step-with detector (ttf-reader :start 1 :name-color sandbox))
+        (dolist (run (step-with detector (ttf-reader :start 1 :seg 1
+                                                     :name-color sandbox)))
+          (push (getf run :account-mode) modes))
+        (dolist (run (step-with detector (ttf-reader :start 1 :seg 1 :end 1
+                                                     :name-color sandbox)))
+          (push (getf run :account-mode) modes))
+        (check "every run of one load lands on the same board"
+               (and (= 2 (length modes))
+                    (every (lambda (mode) (equal "sandbox" mode)) modes))))
+      ;; One game process, two accounts: log out, log in on another
+      ;; account, no restart. Each run carries the mode it was played on.
+      (let ((detector (make-detector)))
+        (step-with detector (lobby-reader))
+        (step-with detector (ttf-reader :start 1 :name-color sandbox))
+        (let ((first-run (first (step-with detector
+                                           (ttf-reader :start 1 :end 1
+                                                       :name-color sandbox)))))
+          (step-with detector (lobby-reader))
+          (step-with detector (ttf-reader :start 1))
+          (let ((second-run (first (step-with detector
+                                              (ttf-reader :start 1 :end 1)))))
+            (check "an account change between quests lands each run on its board"
+                   (and (equal "sandbox" (getf first-run :account-mode))
+                        (equal "normal" (getf second-run :account-mode)))))))
+      ;; An abandoned run (back to the lobby mid-quest) has no quest
+      ;; snapshot left to read a colour from: it is built from what the
+      ;; detector kept for the load, before the load is forgotten, and
+      ;; must carry the mode all the same.
+      (let ((detector (make-detector)))
+        (step-with detector (lobby-reader))
+        (step-with detector (ttf-reader :start 1 :name-color sandbox))
+        (age-trackers detector 20)
+        (let ((run (first (step-with detector (lobby-reader)))))
+          (check "an abandoned run carries its mode too"
+                 (and run
+                      (getf run :aborted)
+                      (equal "sandbox" (getf run :account-mode))))))))
   ;; A charged gauge / cast Shifta at the start is NOT enough for PB - a
   ;; normal No-PB run often starts that way. It must be No PB.
   (let ((detector (make-detector)))

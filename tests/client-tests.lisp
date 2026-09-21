@@ -64,7 +64,7 @@
 (defun make-player-block (&key name (class-id 0) (floor 0) (warping nil) (pb 0.0)
                                (section-id 0) (level-raw 0) (room 0) (state 1)
                                (hp 0) (max-hp 0) (tp 0) (max-tp 0) (meseta 0)
-                               guild-card)
+                               guild-card (name-color #xFFFFFFFF))
   (let ((bytes (make-array #xE60 :element-type '(unsigned-byte 8)
                                  :initial-element 0)))
     (put-utf16 bytes #x428 (format nil "~aE~a" #\Tab name))
@@ -80,6 +80,7 @@
     (put-u16 bytes #x336 tp)
     (put-u16 bytes #xE44 level-raw)
     (put-u32 bytes #xE4C meseta)
+    (put-u32 bytes #x948 name-color)
     (when guild-card
       (loop :for char :across guild-card
             :for i :from #x930

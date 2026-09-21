@@ -140,7 +140,48 @@
     (check "max hp decoded" (= 1200 (getf me :max-hp)))
     (check "tp decoded" (= 300 (getf me :tp)))
     (check "meseta decoded" (= 123456 (getf me :meseta)))
-    (check "no shifta -> level 0" (= 0 (getf me :shifta))))
+    (check "no shifta -> level 0" (= 0 (getf me :shifta)))
+    (check "name colour decoded (a normal player's is white)"
+           (eql #xFFFFFFFF (getf me :name-color))))
+  ;; The 64 bytes at player+#x930 as a live Ephinea client held them for
+  ;; a Sandbox character (2026-09-22; RAmar, Oran): the guild card
+  ;; string, 8 unused bytes, the name colour, and at +#x30 the
+  ;; section/class word. Byte-exact except for the guild card digits,
+  ;; which are made up - a real account's number has no business in a
+  ;; public source tree, and the layout does not depend on them. If this
+  ;; stops decoding, the offset moved - not the rule.
+  (let* ((live #(#x34 #x32 #x30 #x30 #x30 #x30 #x30 #x31 #x00 #x31 #x00 #x00
+                 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00
+                 #x23 #x94 #xAB #xFF #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00
+                 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00 #x00
+                 #x07 #x03 #x00 #x03 #x45 #x00 #x00 #x00 #x01 #x00 #x00 #x00
+                 #x03 #x00 #x00 #x00))
+         (block (make-player-block :name "a" :floor 1))
+         (me (progn
+               (replace block live :start1 #x930)
+               (snapshot-my-player
+                (read-snapshot (make-game-regions :players (list block)))))))
+    (check "live sandbox bytes: guild card"
+           (equal "42000001" (getf me :guild-card)))
+    (check "live sandbox bytes: class and section"
+           (and (equal "RAmar" (getf me :class))
+                (equal "Oran" (getf me :section-id))))
+    (check "live sandbox bytes: the name colour is the sandbox one"
+           (eql ephinea-ta-client::+sandbox-name-color+ (getf me :name-color)))
+    (check "live sandbox bytes: the verdict is sandbox"
+           (equal "sandbox" (ephinea-ta-client::account-mode-of-color
+                             (getf me :name-color)))))
+  ;; The verdict goes by hue. Alpha is how opaque the name is drawn.
+  (check "the verdict ignores the alpha byte"
+         (and (equal "sandbox"
+                     (ephinea-ta-client::account-mode-of-color #x00AB9423))
+              (equal "sandbox"
+                     (ephinea-ta-client::account-mode-of-color #x80AB9423))
+              (equal "normal"
+                     (ephinea-ta-client::account-mode-of-color #x80FFFFFF))))
+  (check "no colour, and a colour not filled in, are no verdict"
+         (and (null (ephinea-ta-client::account-mode-of-color nil))
+              (null (ephinea-ta-client::account-mode-of-color 0))))
   (check "shifta multiplier -> level"
          ;; level 20 multiplier on Ephinea is 10% + 19 * 1.3% = 0.347
          (= 20 (shifta-level 0.347)))

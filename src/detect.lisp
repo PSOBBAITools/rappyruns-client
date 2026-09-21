@@ -33,6 +33,9 @@
                        ; enemy was actually alive before its kill counts
   (killed-ids '())     ; monster :id values confirmed dead (were alive,
                        ; then observed at 0 hp) this load
+  my-name-color        ; the submitter's own name colour (ARGB) this load -
+                       ; what tells a sandbox account from a normal one;
+                       ; see UPDATE-NAME-COLOR-TRACKING
   telemetry)           ; per-quest TELEMETRY, created with the first tracker
 
 (defun elapsed-ms (start-time)
@@ -130,6 +133,44 @@ itself must not count either, whichever frame the zero lands on."
                (setf (detector-pb-flag detector) t)))
            (setf (detector-my-pb detector) pb)))))
 
+(defun name-color-weight (color)
+  "How much a name COLOR reading settles, for UPDATE-NAME-COLOR-TRACKING:
+3 sandbox, 2 normal, 1 a colour the client does not recognise, 0 none."
+  (let ((mode (account-mode-of-color color)))
+    (cond ((equal mode "sandbox") 3)
+          (mode 2)
+          ((name-color-known-p color) 1)
+          (t 0))))
+
+(defun update-name-color-tracking (detector snapshot)
+  "Keep the submitter's own name colour for the loaded quest: each frame's
+reading replaces the kept one only when it settles more
+(NAME-COLOR-WEIGHT), and a sandbox reading is final.
+
+It belongs to the quest load, like the PB flag, not to a tracker: every
+run of one load was played on one account, so the full clear and its
+segment runs must land on the same board, and a tracker that happened to
+start on a frame where the submitter's block did not read must not go
+unstamped - the server files an unstamped run as normal, which for a
+sandbox account is the very misfiling the colour exists to prevent. And
+it is per load rather than per session because one game process can
+change accounts between quests (log out, log in, no restart);
+RESET-DETECTOR forgets it with everything else the load owned.
+
+The two verdicts are not equally trustworthy, hence the weights. White
+is what a name colour would hold before the game copies the account's
+real one in, so a white reading may be a struct caught mid-setup and
+must stay open to correction for as long as the quest is loaded; the
+sandbox colour cannot turn up by accident (24 exact bits), so once seen
+it stands - a later white or garbage frame does not take it back. Wrong
+in the other direction would need a normal account to show that exact
+yellow, which does not happen."
+  (let ((kept (name-color-weight (detector-my-name-color detector))))
+    (when (< kept 3)
+      (let ((color (getf (snapshot-my-player snapshot) :name-color)))
+        (when (> (name-color-weight color) kept)
+          (setf (detector-my-name-color detector) color))))))
+
 (defun reset-detector (detector)
   (setf (detector-state detector) :idle
         (detector-trackers detector) '()
@@ -138,6 +179,7 @@ itself must not count either, whichever frame the zero lands on."
         (detector-pb-flag detector) nil
         (detector-seen-alive detector) '()
         (detector-killed-ids detector) '()
+        (detector-my-name-color detector) nil
         (detector-telemetry detector) nil))
 
 (defun start-tracker (detector def snapshot)
@@ -151,15 +193,15 @@ itself must not count either, whichever frame the zero lands on."
           (make-telemetry :start-time (get-internal-real-time)
                           :max-party-pb-shifta (max-party-pb-shifta
                                                 (party-of snapshot)))))
-  (let ((tracker (make-tracker :def def
-                               :start-time (get-internal-real-time)
-                               :party (party-of snapshot)
-                               :my-section-id (getf (snapshot-my-player snapshot)
-                                                    :section-id)
-                               :quest-name (getf snapshot :quest-name)
-                               :difficulty (difficulty-label
-                                            (getf snapshot :difficulty)
-                                            (getf snapshot :anguish)))))
+  (let* ((me (snapshot-my-player snapshot))
+         (tracker (make-tracker :def def
+                                :start-time (get-internal-real-time)
+                                :party (party-of snapshot)
+                                :my-section-id (getf me :section-id)
+                                :quest-name (getf snapshot :quest-name)
+                                :difficulty (difficulty-label
+                                             (getf snapshot :difficulty)
+                                             (getf snapshot :anguish)))))
     (setf (detector-trackers detector)
           (append (detector-trackers detector) (list tracker)))
     tracker))
@@ -179,6 +221,9 @@ itself must not count either, whichever frame the zero lands on."
            :players (tracker-party tracker)
            :submitter-section-id (tracker-my-section-id tracker)
            :difficulty (tracker-difficulty tracker)
+           :account-mode (account-mode-of-color
+                          (detector-my-name-color detector))
+           :my-name-color (detector-my-name-color detector)
            :death-count (and telemetry (telemetry-death-count telemetry))
            :telemetry (and telemetry (telemetry-run-data telemetry))
            :finished-at (get-universal-time))
@@ -221,6 +266,9 @@ quest mid-run emits the unfinished trackers as :aborted runs."
            (setf aborted (abandon-trackers detector))
            (reset-detector detector))
          (setf (detector-quest-ptr detector) ptr))
+       ;; From the first loaded frame, before any tracker can start or
+       ;; finish on this one.
+       (update-name-color-tracking detector snapshot)
        (let ((started '())
              (completed (reverse aborted)))
          ;; Start a tracker for each definition whose start trigger fired.

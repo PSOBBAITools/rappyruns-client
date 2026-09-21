@@ -95,6 +95,38 @@ loaded."
                                           reader (getf snapshot :my-index)))))))))
   snapshot)
 
+(defvar *logged-account-mode* nil
+  "(MODE COLOR LOGGED-AT) of the newest account-mode log line, or NIL.")
+
+(defparameter +account-mode-log-interval+ 300
+  "Seconds after which an unchanged account-mode reading is logged again.")
+
+(defun log-account-mode (run &optional (now (get-universal-time)))
+  "The verdict beside the name colour it was read from. If Ephinea ever
+retunes the sandbox colour this is the line that shows it (a colour with
+no verdict). The log's tail accompanies a video upload as capture
+diagnostics, so the line reaches the server too, on purpose: a changed
+colour should be noticeable without asking a player for their log. A
+name colour is nothing private - everyone in the lobby sees it.
+
+Logged when the reading changes, and again once
++ACCOUNT-MODE-LOG-INTERVAL+ has passed. Not once per run: one quest load
+emits a run per matching definition and the log is capped. Not only on
+change either: the uploaded tail is 64 KB of a log that capture lines
+fill quickly, and a line written once at the start of a long session
+would have scrolled out of every later upload."
+  (destructuring-bind (&optional mode color (logged-at 0))
+      *logged-account-mode*
+    (unless (and *logged-account-mode*
+                 (equal mode (getf run :account-mode))
+                 (eql color (getf run :my-name-color))
+                 (< (- now logged-at) +account-mode-log-interval+))
+      (setf *logged-account-mode*
+            (list (getf run :account-mode) (getf run :my-name-color) now))
+      (recording-log "account-mode: ~a (name color ~:[?~;~:*~8,'0x~])"
+                     (or (getf run :account-mode) "no verdict")
+                     (getf run :my-name-color)))))
+
 (defun handle-completed-runs (runs)
   "Queue RUNS and auto-submit; returns the submission results (updated
 entries) so the caller can react to failures, or NIL when not submitting.
@@ -104,6 +136,7 @@ Aborted (mid-quest quit) runs are dropped when :submit-aborted is off."
                    runs
                    (remove-if (lambda (run) (getf run :aborted)) runs)))))
     (dolist (run runs)
+      (log-account-mode run)
       ;; The sole stamp point for tracking-only mode: flags read here
       ;; travel with the queued entry, immune to later settings changes.
       (enqueue-run! (apply-tracking-mode run)))

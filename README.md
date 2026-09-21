@@ -28,6 +28,12 @@ signer *name* is pinned rather than a certificate thumbprint so
 routine certificate renewals keep working; expired-but-timestamped
 signatures stay valid by design.
 
+Runs from an Ephinea **Sandbox** account are filed on the site's sandbox
+boards. The client tells the two kinds of account apart by the colour of
+the player's own character name - Ephinea shows sandbox characters'
+names in yellow - which it reads from the same player data as the name
+and class. Nothing outside the game's memory is consulted for it.
+
 ## Requirements
 
 - LispWorks 8.x (64-bit, Windows) for the GUI, FLI memory reading and
