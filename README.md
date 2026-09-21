@@ -273,7 +273,9 @@ from. The former binary-only repos (`rappyruns-client-releases`,
 repo itself moved from the `psobb-teapot` account to the `PSOBBAITools`
 organization (2026-09-22) - GitHub redirects the old owners/names for
 already-deployed updaters, so those names (including
-`psobb-teapot/rappyruns-client`) must never be reused.
+`psobb-teapot/rappyruns-client`) must never be reused. Forking counts:
+a fork of this repo into the `psobb-teapot` account would recreate that
+name and replace the redirect for every installed client.
 
 Per release: bump `client/VERSION` to the new `X.Y.Z` and commit it
 (release.ps1 refuses a tag that does not match, and deliver.lisp bakes
@@ -294,7 +296,9 @@ download button points at
 `https://github.com/PSOBBAITools/rappyruns-client/releases/latest/download/RappyRunsClient.zip`
 (the repo comes from `ETA_CLIENT_REPO_URL` on the server; `ETA_CLIENT_DOWNLOAD_URL`
 overrides the whole URL). The auto-updater has its own copy of the repo name in
-`src/updater.lisp`, so a repo rename needs a client release too.
+`src/updater.lisp`: after a repo rename or transfer GitHub's redirect keeps
+already-deployed updaters working, and the new name reaches users with the
+next client release (no emergency release needed).
 Pre-releases are excluded from `latest`, so they are safe for test
 builds.
 

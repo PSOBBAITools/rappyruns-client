@@ -19,7 +19,8 @@ from rappyruns-client-releases (2026-07-24) and ephinea-ta-client-releases
 PSOBBAITools organization (2026-09-22); GitHub redirects every old
 owner/name, so clients built before each move keep updating. Those names
 must never be reused for new repositories - in particular psobb-teapot
-must never again own a rappyruns-client - or the redirects break.")
+must never again own a rappyruns-client, and forking this repo into that
+account counts - or the redirects break.")
 
 (defparameter +update-asset-name+ "RappyRunsClient.zip"
   "The release asset the site's download button also points at.")
