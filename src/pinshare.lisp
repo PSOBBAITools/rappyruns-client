@@ -40,6 +40,9 @@
   (status "connecting") ; "connecting" / "connected" / "error" - the addon
                         ; keys its status line off these exact strings
   (status-message "")
+  (addon-seen nil)    ; the addon has written a command to THIS session:
+                      ; proof the running game loaded the script (a fresh
+                      ; install needs Reload in the game's addon menu)
   (dirty t))          ; in.txt needs rewriting
 
 (defun pinshare-clean (value)
@@ -228,6 +231,7 @@ pin placed minutes ago must not pop up after a reconnect."
     (loop :for (seq . fields) :in lines
           :when (> seq (pinshare-relay-last-seq relay))
             :do (setf (pinshare-relay-last-seq relay) seq
+                      (pinshare-relay-addon-seen relay) t
                       (pinshare-relay-dirty relay) t)
                 (let ((command (second fields))
                       (value (and (cddr fields)
@@ -268,6 +272,9 @@ pin placed minutes ago must not pop up after a reconnect."
   "Relay start: whatever already sits in out.txt is stale, so only the
 identity commands are kept and the seq cursor jumps past everything."
   (pinshare-relay-consume relay lines nil)
+  ;; Left over from before this session: says nothing about whether the
+  ;; addon is alive now.
+  (setf (pinshare-relay-addon-seen relay) nil)
   relay)
 
 ;;; --- server messages ----------------------------------------------------
@@ -433,6 +440,7 @@ fresh list is atomic enough.")
       (:connected (values (tr :pinshare-status-connected
                               (first args) (second args))
                           nil))
+      (:connected-no-addon (values (tr :pinshare-status-no-addon) nil))
       (:error (values (tr :pinshare-status-error (first args)) t))
       (:no-addon-plugin (values (tr :pinshare-status-no-plugin) t))
       (:install-failed (values (tr :pinshare-status-install-failed

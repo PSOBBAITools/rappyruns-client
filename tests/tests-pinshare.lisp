@@ -120,6 +120,8 @@
                          "Teapot")
                   (equal (ephinea-ta-client::pinshare-relay-color relay)
                          "FF8C00")))
+      (check "the backlog is not proof the addon is alive now"
+             (not (ephinea-ta-client::pinshare-relay-addon-seen relay)))
       (let ((hello (mapcar #'pinshare-parsed
                            (ephinea-ta-client::pinshare-hello-messages relay))))
         (check "hello introduces channel and name, then the pin color"
@@ -127,12 +129,15 @@
                     (equal (gethash "channel" (first hello)) "secret")
                     (equal (gethash "name" (first hello)) "Teapot")
                     (equal (gethash "color" (second hello)) "FF8C00"))))
-      (check "already-handled seqs are not replayed"
-             (null (ephinea-ta-client::pinshare-relay-consume
-                    relay '((7 "7" "clear_all")) t)))
+      (check "already-handled seqs are not replayed (and prove nothing)"
+             (and (null (ephinea-ta-client::pinshare-relay-consume
+                         relay '((7 "7" "clear_all")) t))
+                  (not (ephinea-ta-client::pinshare-relay-addon-seen relay))))
       (check "commands arriving while disconnected are dropped for good"
              (and (null (ephinea-ta-client::pinshare-relay-consume
                          relay '((8 "8" "clear_all")) nil))
+                  ;; ...but a new command is the addon speaking to us
+                  (ephinea-ta-client::pinshare-relay-addon-seen relay)
                   (null (ephinea-ta-client::pinshare-relay-consume
                          relay '((8 "8" "clear_all")) t))))
       (let ((messages (ephinea-ta-client::pinshare-relay-consume
@@ -247,7 +252,8 @@
                                                status)))))
                            '(:en :ja)))
                   '((:off) (:no-channel) (:waiting-game) (:connecting)
-                    (:connected "secret" 2) (:error "boom")
+                    (:connected "secret" 2) (:connected-no-addon)
+                    (:error "boom")
                     (:no-addon-plugin) (:install-failed "denied")
                     (:broken-link "C:\\Games\\addons\\Pin Share")
                     (:conflict))))))

@@ -419,6 +419,9 @@
     :pinshare-status-connected
     ("Pin Share: connected - ~a (~d in the channel)"
      "Pin Share: 接続済み - ~a (チャンネルに ~d 人)")
+    :pinshare-status-no-addon
+    ("Pin Share: connected - waiting for the in-game addon (just installed? press Reload in the game's addon menu)"
+     "Pin Share: 接続済み - ゲーム内アドオンの応答待ち (配置直後はゲームのアドオンメニューで Reload を押してください)")
     :pinshare-status-error
     ("Pin Share: ~a"
      "Pin Share: ~a")

@@ -34,6 +34,10 @@
 (defparameter +pinshare-tick-seconds+ 0.05)
 (defparameter +pinshare-max-backoff-seconds+ 30)
 
+(defparameter +pinshare-stable-connection-seconds+ 30
+  "A connection that lasted at least this long resets the reconnect
+backoff when it drops; a shorter one counts as a failed attempt.")
+
 (defvar *pinshare-process* nil)
 
 (defvar *pinshare-sessions* '()
@@ -88,7 +92,14 @@ tick."
 (defun pinshare-bundled-addon-path ()
   "The addon shipped with this client: data/pin-share/init.lua next to
 the exe (delivered image) or in the source tree (development), or NIL."
-  (or (exe-adjacent-path "data/pin-share/init.lua")
+  ;; Through LW:LISP-IMAGE-NAME like updater.lisp, not the argv[0]-based
+  ;; EXE-ADJACENT-PATH: a relative argv[0] plus another working directory
+  ;; would leave a fresh user with "init.lua is missing".
+  (or (ignore-errors
+        (probe-file (merge-pathnames
+                     "data/pin-share/init.lua"
+                     (uiop:pathname-directory-pathname
+                      (lw:lisp-image-name)))))
       (ignore-errors
         (probe-file (asdf:system-relative-pathname
                      :ephinea-ta-client "data/pin-share/init.lua")))))
@@ -201,9 +212,16 @@ or (:failed text), then (:message text) per server message, then one
                  (setf (pinshare-link-socket link) socket)))
              (progn
                (mp:mailbox-send mailbox (list :open socket))
-               (loop :for message := (websocket-receive socket)
-                     :until (eq message :closed)
-                     :do (mp:mailbox-send mailbox (list :message message)))
+               ;; :closed goes out however the loop ends: without it the
+               ;; session would sit on a dead socket calling itself
+               ;; connected, and never reconnect.
+               ;; IGNORE-ERRORS rather than UNWIND-PROTECT: an unhandled
+               ;; error in a thread does not unwind on its own.
+               (ignore-errors
+                 (loop :for message := (websocket-receive socket)
+                       :until (eq message :closed)
+                       :do (mp:mailbox-send mailbox
+                                            (list :message message))))
                (mp:mailbox-send mailbox (list :closed)))
              ;; The session ended while we were connecting.
              (websocket-close socket)))))))
@@ -233,6 +251,7 @@ says why it is idle."
         (connecting nil)
         (retry-at 0)
         (backoff 1)
+        (opened-at 0)
         (last-write 0))
     (labels ((status (status message gui)
                (when (pinshare-relay-set-status relay status message)
@@ -240,8 +259,16 @@ says why it is idle."
                (setf *pinshare-status* gui))
              (connected-status ()
                (status "connected" ""
-                       (list :connected (pinshare-relay-channel relay)
-                             (length (pinshare-relay-members relay)))))
+                       (if (pinshare-relay-addon-seen relay)
+                           (list :connected (pinshare-relay-channel relay)
+                                 (length (pinshare-relay-members relay)))
+                           ;; Connected, yet the game has not loaded the
+                           ;; script (fresh install: it needs a Reload).
+                           '(:connected-no-addon))))
+             (back-off ()
+               (setf retry-at (+ (pinshare-seconds) backoff)
+                     backoff (min (* 2 backoff)
+                                  +pinshare-max-backoff-seconds+)))
              (send (messages)
                (handler-case
                    (dolist (message messages)
@@ -254,30 +281,45 @@ says why it is idle."
                  (:open
                   (setf socket (second event)
                         connecting nil
-                        backoff 1)
+                        opened-at (pinshare-seconds))
                   (pinshare-relay-clear-state relay)
                   (connected-status)
                   (send (pinshare-hello-messages relay)))
                  (:failed
-                  (setf connecting nil
-                        retry-at (+ (pinshare-seconds) backoff)
-                        backoff (min (* 2 backoff)
-                                     +pinshare-max-backoff-seconds+))
+                  (setf connecting nil)
+                  (back-off)
                   (let ((text (format nil "connect failed: ~a" (second event))))
                     (status "error" text (list :error text))))
                  (:message
                   (let ((server-error (pinshare-relay-note-message
                                        relay (second event))))
-                    (if server-error
-                        (win32-log "pin share: server says ~a" server-error)
-                        (when socket (connected-status)))))
+                    (cond (server-error
+                           ;; in.txt stays "connected" (it is); the
+                           ;; Settings line shows the refusal until the
+                           ;; next state snapshot, so a rejected command
+                           ;; is not a silent no-op.
+                           (win32-log "pin share: server says ~a"
+                                      server-error)
+                           (setf *pinshare-status*
+                                 (list :error (format nil "server: ~a"
+                                                      server-error))))
+                          (socket (connected-status)))))
                  (:closed
                   (when socket
                     (websocket-close socket)
                     (setf socket nil))
                   (mp:with-lock ((pinshare-link-lock link))
                     (setf (pinshare-link-socket link) nil))
-                  (setf retry-at (+ (pinshare-seconds) 1))
+                  ;; Only a connection that held earns the quick retry. A
+                  ;; server that accepts and drops (crash loop, a proxy
+                  ;; that upgrades then resets) backs off like a failed
+                  ;; connect - every resident client hitting it once a
+                  ;; second would keep it down.
+                  (if (>= (- (pinshare-seconds) opened-at)
+                          +pinshare-stable-connection-seconds+)
+                      (setf backoff 1
+                            retry-at (+ (pinshare-seconds) 1))
+                      (back-off))
                   (pinshare-relay-clear-state relay)
                   (status "error" "disconnected from the server"
                           '(:error "disconnected from the server"))))))
@@ -303,7 +345,14 @@ says why it is idle."
                                        (pinshare-read-text out-path))
                                       (and socket t))))
                        (when (and socket messages)
-                         (send messages)))
+                         (send messages))
+                       ;; The addon's first command to this session flips
+                       ;; the "waiting for the addon" line.
+                       (when (and socket
+                                  (equal *pinshare-status*
+                                         '(:connected-no-addon))
+                                  (pinshare-relay-addon-seen relay))
+                         (connected-status)))
                      (when (or (pinshare-relay-dirty relay)
                                (>= (- (pinshare-seconds) last-write) 1))
                        (when (pinshare-write-inbox relay in-path tmp-path)

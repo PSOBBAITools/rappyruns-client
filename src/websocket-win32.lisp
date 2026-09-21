@@ -77,6 +77,8 @@
 
 (defparameter +websocket-receive-chunk+ 65536)
 
+(defparameter +websocket-send-timeout-ms+ 3000)
+
 (defparameter +websocket-max-message+ (* 4 1024 1024)
   "Upper bound on one reassembled message. The relay's state snapshots
 are a few KB; anything near this is a broken or hostile peer, and the
@@ -86,9 +88,11 @@ connection is dropped rather than buffered without limit.")
   session connection handle
   (lock (mp:make-lock :name "websocket-handles")))
 
-(defun websocket-release (websocket)
-  "Close every WinHTTP handle WEBSOCKET still owns, exactly once even
-when the reader and the relay thread race here."
+(defun websocket-release (websocket &key shutdown)
+  "Close every WinHTTP handle WEBSOCKET still owns, exactly once however
+many threads race here: the handles are taken out of the struct under
+the lock, so only the taker ever touches them again. With SHUTDOWN, a
+best-effort close frame goes out first."
   (let (handles)
     (mp:with-lock ((websocket-lock websocket))
       (setf handles (list (websocket-handle websocket)
@@ -97,6 +101,11 @@ when the reader and the relay thread race here."
             (websocket-handle websocket) nil
             (websocket-connection websocket) nil
             (websocket-session websocket) nil))
+    (when (and shutdown (first handles))
+      (ignore-errors
+        (%win-http-web-socket-shutdown (first handles)
+                                       +winhttp-web-socket-status-normal+
+                                       fli:*null-pointer* 0)))
     (dolist (handle handles)
       (when handle
         (%win-http-close-handle handle)))))
@@ -118,10 +127,15 @@ Signals WINHTTP-ERROR when the transport or the upgrade fails."
                                 (websocket-release websocket))))
           (setf (websocket-session websocket)
                 (check (open-winhttp-session) "WinHttpOpen"))
-          ;; Resolve/connect/send bounded; receive infinite (0) - an idle
-          ;; channel is silent for as long as nobody touches a pin.
+          ;; Everything bounded while connecting, the receive timeout
+          ;; included: a host that accepts TCP but stalls TLS or the
+          ;; upgrade must fail, not hang a thread nobody can cancel.
+          ;; The short send timeout also bounds WEBSOCKET-SEND-TEXT,
+          ;; which the relay calls from the thread that owes the addon
+          ;; a heartbeat every second.
           (%win-http-set-timeouts (websocket-session websocket)
-                                  10000 10000 10000 0)
+                                  10000 10000 +websocket-send-timeout-ms+
+                                  10000)
           (setf (websocket-connection websocket)
                 (check (%win-http-connect (websocket-session websocket)
                                           host port 0)
@@ -145,6 +159,12 @@ Signals WINHTTP-ERROR when the transport or the upgrade fails."
               (error 'winhttp-error
                      :message (format nil "WebSocket upgrade refused (HTTP ~d)"
                                       status))))
+          ;; Handshake done: from here the receive side waits forever (0)
+          ;; - an idle channel is silent for as long as nobody touches a
+          ;; pin. Set on the request so the socket upgraded from it
+          ;; inherits it.
+          (%win-http-set-timeouts request 10000 10000
+                                  +websocket-send-timeout-ms+ 0)
           (setf (websocket-handle websocket)
                 (check (%win-http-web-socket-complete-upgrade request 0)
                        "WinHttpWebSocketCompleteUpgrade"))
@@ -156,18 +176,25 @@ Signals WINHTTP-ERROR when the transport or the upgrade fails."
 (defun websocket-send-text (websocket string)
   "Send STRING as one UTF-8 text message. Signals WINHTTP-ERROR when the
 socket is closed or the send fails."
-  (let ((handle (websocket-handle websocket))
-        (octets (string-to-utf8 string)))
-    (unless handle
-      (error 'winhttp-error :message "WebSocket is closed"))
+  (let ((octets (string-to-utf8 string)))
     (fli:with-dynamic-foreign-objects ()
       (let* ((length (length octets))
              (buffer (fli:allocate-dynamic-foreign-object
                       :type '(:unsigned :byte) :nelems (max 1 length))))
         (dotimes (i length)
           (setf (fli:dereference buffer :index i) (aref octets i)))
-        (let ((code (%win-http-web-socket-send
-                     handle +winhttp-web-socket-utf8-message+ buffer length)))
+        ;; Under the lock so a close on another thread cannot pull the
+        ;; handle out from under the send (it waits at most the send
+        ;; timeout). The receive side cannot do the same - it blocks
+        ;; forever by design, and closing the handle is its cancel.
+        (let ((code (mp:with-lock ((websocket-lock websocket))
+                      (let ((handle (websocket-handle websocket)))
+                        (unless handle
+                          (error 'winhttp-error
+                                 :message "WebSocket is closed"))
+                        (%win-http-web-socket-send
+                         handle +winhttp-web-socket-utf8-message+
+                         buffer length)))))
           (unless (zerop code)
             (error 'winhttp-error
                    :message (format nil "WinHttpWebSocketSend failed (Windows error ~d)"
@@ -201,10 +228,17 @@ WEBSOCKET-CLOSE cancelled the wait. Binary messages are skipped."
                      (vector-push-extend (fli:dereference chunk :index i)
                                          message))
                    (cond ((= buffer-type +winhttp-web-socket-utf8-message+)
-                          (return (utf8-to-string
-                                   (coerce message
-                                           '(simple-array (unsigned-byte 8)
-                                             (*))))))
+                          ;; A frame that is not valid UTF-8 is skipped,
+                          ;; not signalled: one bad message must not
+                          ;; kill the caller's receive loop.
+                          (let ((text (ignore-errors
+                                        (utf8-to-string
+                                         (coerce message
+                                                 '(simple-array
+                                                   (unsigned-byte 8) (*)))))))
+                            (if text
+                                (return text)
+                                (setf (fill-pointer message) 0))))
                          ((= buffer-type +winhttp-web-socket-utf8-fragment+))
                          ;; Binary message or fragment: not ours; drop
                          ;; what was gathered and wait for the next one.
@@ -214,12 +248,6 @@ WEBSOCKET-CLOSE cancelled the wait. Binary messages are skipped."
 (defun websocket-close (websocket)
   "Close WEBSOCKET from any thread; idempotent. A receive blocked on
 another thread returns :CLOSED."
-  (let ((handle (websocket-handle websocket)))
-    (when handle
-      ;; Best-effort close frame; closing the handle below is what
-      ;; actually cancels a pending receive.
-      (ignore-errors
-        (%win-http-web-socket-shutdown handle
-                                       +winhttp-web-socket-status-normal+
-                                       fli:*null-pointer* 0))))
-  (websocket-release websocket))
+  ;; The close frame is best effort; closing the handle is what actually
+  ;; cancels a pending receive.
+  (websocket-release websocket :shutdown t))
