@@ -433,7 +433,7 @@ summary (the values BUILD-FFMPEG-ARGS decides by) plus the recording
 log tail. Never signals; every field degrades to NIL text."
   (let ((path (ignore-errors (recording-log-path))))
     (format nil "client ~a~%os ~a ~a~%ram-gb ~a cores ~a~%~
-                 hw-encoder ~a gpu-chain ~a low-memory ~a~%~a~%~
+                 hw-encoder ~a gpu-chain ~a low-memory ~a~%~
                  --- recording log tail (~a, exists ~a) ---~%~a"
             (client-version)
             (ignore-errors (software-type)) (ignore-errors (software-version))
@@ -442,10 +442,6 @@ log tail. Never signals; every field degrades to NIL text."
             (logical-processor-count)
             *hw-video-encoder* *hw-fullscreen-gpu-chain*
             (low-memory-machine-p)
-            ;; The newest account-mode reading (account-mode.lisp): the
-            ;; verdict beside the ports it was made from. Absent means
-            ;; no quest was loaded while attached this session.
-            (or *account-mode-probe* "account-mode probe: (not run)")
             ;; The path and its existence ride along so an empty tail is
             ;; diagnosable from the server: "the log is where we thought
             ;; and empty" reads very differently from "the path resolved

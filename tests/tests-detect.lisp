@@ -59,16 +59,7 @@
                                      (aref (gethash "events" telemetry) 0)))))
     (check "payload omits unranked and private for a board run"
            (and (null (gethash "unranked" parsed))
-                (null (gethash "private" parsed))))
-    (check "payload omits account_mode without a verdict"
-           (null (nth-value 1 (gethash "account_mode" parsed)))))
-  ;; The account mode read for the quest load (account-mode.lisp).
-  (let ((parsed (com.inuoe.jzon:parse
-                 (ephinea-ta-client::run-json
-                  (list :quest-slug "ep1-test" :time-ms 60000 :party-size 1
-                        :players '() :account-mode "sandbox")))))
-    (check "payload account_mode rides when detected"
-           (equal "sandbox" (gethash "account_mode" parsed))))
+                (null (gethash "private" parsed)))))
   ;; Tracking-only mode's flags (APPLY-TRACKING-MODE) ride the payload.
   (let ((parsed (com.inuoe.jzon:parse
                  (ephinea-ta-client::run-json
@@ -124,16 +115,6 @@
 (defun step-with (detector reader)
   (detector-step detector (read-snapshot reader)))
 
-(defclass mode-reader ()
-  ((answer :initform nil :accessor mode-reader-answer)
-   (calls :initform 0 :accessor mode-reader-calls))
-  (:documentation "Stands in for the live reader's READ-ACCOUNT-MODE: gives
-ANSWER and counts how often it was asked."))
-
-(defmethod ephinea-ta-client::read-account-mode ((reader mode-reader))
-  (incf (mode-reader-calls reader))
-  (mode-reader-answer reader))
-
 (defun run-detect-tests ()
   (format t "~&--- detect ---~%")
   ;; Full TTF flow: lobby -> quest loaded -> start -> finish.
@@ -173,86 +154,6 @@ ANSWER and counts how often it was asked."))
   (let ((detector (make-detector)))
     (step-with detector (ttf-reader :start 1))
     (check "mid-quest attach stays idle" (eq :idle (detector-state detector))))
-  ;; The account mode belongs to the quest load: read after the step
-  ;; (DETECTOR-READ-ACCOUNT-MODE), stamped on the load's runs, forgotten
-  ;; with the load. MODE-READER plays the live reader.
-  (let ((detector (make-detector))
-        (reader (make-instance 'mode-reader))
-        (second internal-time-units-per-second)
-        (now 0))
-    (flet ((frame (game &optional (advance second))
-             ;; One poll frame the way POLL-FRAME-STEP runs it.
-             (incf now advance)
-             (prog1 (step-with detector game)
-               (ephinea-ta-client::detector-read-account-mode
-                detector reader now))))
-      (frame (lobby-reader))
-      (check "no quest loaded, nothing read"
-             (zerop (mode-reader-calls reader)))
-      (setf (mode-reader-answer reader) "sandbox")
-      (frame (ttf-reader))
-      (check "the first loaded frame reads the mode"
-             (= 1 (mode-reader-calls reader)))
-      (frame (ttf-reader :start 1))
-      (frame (ttf-reader :start 1))
-      (check "a load with a verdict is not read again"
-             (= 1 (mode-reader-calls reader)))
-      (check "the run carries the load's mode"
-             (equal "sandbox"
-                    (getf (first (frame (ttf-reader :start 1 :end 1)))
-                          :account-mode)))
-      ;; The account switch: same game process, back through the lobby,
-      ;; and the quest pointer is the very same address.
-      (frame (lobby-reader))
-      (setf (mode-reader-answer reader) "normal")
-      (frame (ttf-reader :start 1))
-      (check "the next load after a lobby visit reads again"
-             (= 2 (mode-reader-calls reader)))
-      (check "and its run carries its own mode"
-             (equal "normal"
-                    (getf (first (frame (ttf-reader :start 1 :end 1)))
-                          :account-mode)))
-      ;; No verdict at first: retried, at most once a second, and a
-      ;; verdict that arrives after the start still stamps the run.
-      (frame (lobby-reader))
-      (setf (mode-reader-answer reader) nil
-            (mode-reader-calls reader) 0)
-      (frame (ttf-reader :start 1))
-      (frame (ttf-reader :start 1) 1)
-      (check "a failed reading is not retried within the second"
-             (= 1 (mode-reader-calls reader)))
-      (setf (mode-reader-answer reader) "sandbox")
-      (frame (ttf-reader :start 1))
-      (check "but is retried after it" (= 2 (mode-reader-calls reader)))
-      (check "a verdict arriving after the start still stamps the run"
-             (equal "sandbox"
-                    (getf (first (frame (ttf-reader :start 1 :end 1)))
-                          :account-mode)))
-      ;; Never a verdict: the readings stop, the run goes unstamped.
-      (frame (lobby-reader))
-      (setf (mode-reader-answer reader) nil
-            (mode-reader-calls reader) 0)
-      (frame (ttf-reader :start 1))
-      (loop :repeat 30 :do (frame (ttf-reader :start 1)))
-      (check "a load without a verdict stops reading after its budget"
-             (= ephinea-ta-client::+account-mode-max-readings+
-                (mode-reader-calls reader)))
-      (let ((run (first (frame (ttf-reader :start 1 :end 1)))))
-        (check "no verdict all load long leaves the run unstamped"
-               (and run (null (getf run :account-mode)))))
-      ;; Game gone mid-load (NIL snapshot): the detector resets, and so
-      ;; does the mode - a new process may reuse the quest pointer.
-      (frame (lobby-reader))
-      (setf (mode-reader-answer reader) "sandbox"
-            (mode-reader-calls reader) 0)
-      (frame (ttf-reader :start 1))
-      (incf now second)
-      (detector-step detector nil)
-      (check "game gone forgets the mode with the load"
-             (null (ephinea-ta-client::detector-read-account-mode
-                    detector reader now)))
-      (check "and asks nothing while no quest is loaded"
-             (= 1 (mode-reader-calls reader)))))
   ;; A charged gauge / cast Shifta at the start is NOT enough for PB - a
   ;; normal No-PB run often starts that way. It must be No PB.
   (let ((detector (make-detector)))

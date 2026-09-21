@@ -72,7 +72,9 @@ need psostats' full sample rate; READ-MONSTERS is one block read per
 monster plus one batched HP read) and :inventory (about once per
 second: one block read per world item) to SNAPSHOT while a quest is
 loaded."
-  (when (snapshot-quest-loaded-p snapshot)
+  (when (and snapshot
+             (getf snapshot :quest-ptr)
+             (plusp (getf snapshot :quest-ptr)))
     (setf snapshot
           (append snapshot
                   (list :monsters (ignore-errors (read-monsters reader)))))
@@ -270,9 +272,6 @@ into the next iteration."
                     reader
                     (ignore-errors (read-snapshot reader))))
          (runs (detector-step detector snapshot)))
-    ;; Sandbox or normal, for the quest load the detector is on. After
-    ;; the step on purpose: see DETECTOR-READ-ACCOUNT-MODE.
-    (detector-read-account-mode detector reader)
     ;; Per-frame read health: a snapshot means the process is readable; its
     ;; absence while attached is the "cannot read memory" signal. Counted
     ;; across frames so a lone failed pointer-chase mid-snapshot (normal at

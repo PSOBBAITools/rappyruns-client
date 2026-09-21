@@ -549,11 +549,6 @@ hold nested location lists that become objects."
       (setf (gethash "death_count" object) (getf run :death-count)))
     (when (getf run :aborted)
       (setf (gethash "aborted" object) t))
-    ;; Sandbox or normal, as read for this quest load (account-mode.lisp);
-    ;; the server ranks the two on separate boards. Without a verdict the
-    ;; field stays off and the server files the run as it always has.
-    (when (getf run :account-mode)
-      (setf (gethash "account_mode" object) (getf run :account-mode)))
     ;; Tracking-only mode (APPLY-TRACKING-MODE): a record-only run,
     ;; never on a leaderboard, optionally private to the submitter.
     (when (getf run :unranked)

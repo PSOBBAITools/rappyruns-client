@@ -33,18 +33,7 @@
                        ; enemy was actually alive before its kill counts
   (killed-ids '())     ; monster :id values confirmed dead (were alive,
                        ; then observed at 0 hp) this load
-  account-mode         ; "sandbox" / "normal" as read for this load, or
-                       ; NIL without a verdict (see account-mode.lisp)
-  account-mode-read-at ; internal real time of this load's last reading
-  (account-mode-readings 0) ; readings spent on this load so far
   telemetry)           ; per-quest TELEMETRY, created with the first tracker
-
-(defun snapshot-quest-loaded-p (snapshot)
-  "Is a quest loaded on SNAPSHOT? NIL for the lobby, a free field and an
-unreadable frame (SNAPSHOT NIL) alike - a caller that must tell the last
-from the others checks SNAPSHOT itself."
-  (let ((ptr (getf snapshot :quest-ptr)))
-    (and ptr (plusp ptr))))
 
 (defun elapsed-ms (start-time)
   (round (* 1000 (- (get-internal-real-time) start-time))
@@ -149,9 +138,6 @@ itself must not count either, whichever frame the zero lands on."
         (detector-pb-flag detector) nil
         (detector-seen-alive detector) '()
         (detector-killed-ids detector) '()
-        (detector-account-mode detector) nil
-        (detector-account-mode-read-at detector) nil
-        (detector-account-mode-readings detector) 0
         (detector-telemetry detector) nil))
 
 (defun start-tracker (detector def snapshot)
@@ -194,48 +180,9 @@ itself must not count either, whichever frame the zero lands on."
            :submitter-section-id (tracker-my-section-id tracker)
            :difficulty (tracker-difficulty tracker)
            :death-count (and telemetry (telemetry-death-count telemetry))
-           :account-mode (detector-account-mode detector)
            :telemetry (and telemetry (telemetry-run-data telemetry))
            :finished-at (get-universal-time))
      (when aborted (list :aborted t)))))
-
-(defconstant +account-mode-max-readings+ 10
-  "Readings one quest load may spend looking for a verdict. A game that
-never yields one - behind a local proxy, say - would otherwise have the
-machine's TCP table walked every second of every quest for nothing.")
-
-(defun account-mode-reading-due-p (detector now)
-  "Should the account mode be read for the loaded quest at NOW? Only
-while a quest is loaded and has no verdict yet, at most once a second,
-and only +ACCOUNT-MODE-MAX-READINGS+ times per load."
-  (and (detector-quest-ptr detector)
-       (null (detector-account-mode detector))
-       (< (detector-account-mode-readings detector)
-          +account-mode-max-readings+)
-       (or (null (detector-account-mode-read-at detector))
-           (>= (- now (detector-account-mode-read-at detector))
-               internal-time-units-per-second))))
-
-(defun detector-read-account-mode (detector reader
-                                   &optional (now (get-internal-real-time)))
-  "Read the account mode for the loaded quest when one is due
-(ACCOUNT-MODE-READING-DUE-P) and keep the verdict for the load's runs;
-returns the mode the detector now holds. Call it AFTER DETECTOR-STEP:
-the reading walks the machine's TCP table, and the trackers' start and
-finish times are taken inside the step - nothing slow may sit between
-the snapshot and them.
-
-The mode belongs to the quest load, like the PB flag. The detector
-already owns that boundary - lobby, quest reload, game gone all go
-through RESET-DETECTOR - so the verdict is forgotten exactly when the
-runs it would stamp are. That is what puts a player who changed accounts
-between two quests, without restarting the game, on the right board:
-there is no second notion of \"the current load\" to fall out of step."
-  (when (account-mode-reading-due-p detector now)
-    (incf (detector-account-mode-readings detector))
-    (setf (detector-account-mode-read-at detector) now
-          (detector-account-mode detector) (read-account-mode reader)))
-  (detector-account-mode detector))
 
 (defparameter +abort-min-ms+ 15000
   "Abandoned quests shorter than this are noise (mis-starts, instant
@@ -260,7 +207,7 @@ quest mid-run emits the unfinished trackers as :aborted runs."
        (setf (detector-armed detector) nil)
        aborted))
     ;; No quest loaded (lobby / free field): reset and arm.
-    ((not (snapshot-quest-loaded-p snapshot))
+    ((not (and (getf snapshot :quest-ptr) (plusp (getf snapshot :quest-ptr))))
      (let ((aborted (abandon-trackers detector)))
        (reset-detector detector)
        (setf (detector-armed detector) t)

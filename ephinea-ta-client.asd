@@ -20,13 +20,6 @@
                              (:file "memory")
                              (:file "win32" :if-feature :lispworks)
                              (:file "winhttp" :if-feature :lispworks)
-                             ;; Account mode (sandbox vs normal): the
-                             ;; portable verdict first, then its Win32
-                             ;; source. Before detect, which stamps the
-                             ;; mode on runs, and recording, whose
-                             ;; diagnostics report carries the reading.
-                             (:file "account-mode")
-                             (:file "account-mode-win32" :if-feature :lispworks)
                              (:file "psobb")
                              (:file "quests")
                              (:file "telemetry")
