@@ -457,8 +457,21 @@ fresh list is atomic enough.")
   "Whether the linked account is in the Pin Share rollout (GET /api/me
 features). Seeded from the cached :pinshare-allowed at startup so the
 Settings group is there on the first frame; CHECK-TOKEN re-verifies and
-the relay thread re-checks every half hour, so the server can widen the
+the permission refresher (PINSHARE-PERMISSION-LOOP, its own thread - not
+the relay's) re-asks every half hour, so the server can widen the
 rollout - or pull the feature - without a client release.")
+
+(defun set-pinshare-permission (allowed)
+  "Record the rollout verdict (flag + cached config); returns true when
+it changed. Touches no window on purpose: the relay obeys the flag within
+a tick, while showing or hiding the Settings group is the GUI's business
+at moments when rebuilding a window is safe (APPLY-ACCOUNT-GATES)."
+  (let ((allowed (and allowed t)))
+    (unless (eq allowed *pinshare-allowed-p*)
+      (setf *pinshare-allowed-p* allowed
+            (config-value :pinshare-allowed) allowed)
+      (save-config!)
+      t)))
 
 (defun pinshare-feature-p (user)
   "True when the /api/me USER hash lists the pinshare feature. A server

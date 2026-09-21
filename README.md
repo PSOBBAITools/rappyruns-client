@@ -225,7 +225,10 @@ only runs - for accounts the server lists: `GET /api/me` answers with
 group is there on the first frame, re-verified at startup and on Save,
 and re-asked every 30 minutes (the client is resident for days), so
 widening the rollout or pulling the feature is a server variable
-change, never a client release. It follows that Pin Share needs a linked
+change, never a client release. The refresher only moves the flag: the
+relay starts or stops within a tick, while the Settings group catches up
+at the next launch or Save - a window rebuilt from a background thread
+would pop out of the tray over a running game. It follows that Pin Share needs a linked
 account while the rollout lasts; an unlinked client or a rejected token
 drops the verdict.
 

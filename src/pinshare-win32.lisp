@@ -414,6 +414,12 @@ runs at startup and on Save: without this, widening the rollout - or
 pulling the feature - would wait for everyone's next restart.")
 
 (defun pinshare-permission-loop ()
+  "Moves the rollout flag and nothing else. No window rebuild from here:
+the client usually sits in the tray while the game has the foreground,
+and a rebuild could also land on an open dialog. The relay obeys the
+flag within a tick; the Settings group catches up at the next moment a
+rebuild is safe (launch, Save - APPLY-ACCOUNT-GATES). The moderator role
+is CHECK-TOKEN's business and is left alone."
   (loop
     (pinshare-wait +pinshare-permission-interval-seconds+)
     (when *stop-requested* (return))
@@ -423,9 +429,13 @@ pulling the feature - would wait for everyone's next restart.")
         ;; must not switch a working relay off.
         (ignore-errors
           (multiple-value-bind (outcome user) (fetch-me :token token)
-            (case outcome
-              (:ok (apply-account-gates *interface* user))
-              (:unauthorized (revoke-pinshare-permission)))))))))
+            ;; The account may have changed while the request was out
+            ;; (Save with another token): a stale answer must not
+            ;; overwrite the verdict CHECK-TOKEN just stored for it.
+            (when (string= token (normalize-token (config-value :api-token)))
+              (case outcome
+                (:ok (set-pinshare-permission (pinshare-feature-p user)))
+                (:unauthorized (set-pinshare-permission nil))))))))))
 
 (defun start-pinshare! ()
   "Start the resident relay supervisor (idle until Pin Share is on) and

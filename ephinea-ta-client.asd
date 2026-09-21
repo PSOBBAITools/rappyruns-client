@@ -50,8 +50,10 @@
                              ;; message-loop FLI bindings.
                              (:file "overlay-win32" :if-feature :lispworks)
                              (:file "autostart-win32" :if-feature :lispworks)
-                             ;; After updater (*stop-requested*) and gui
-                             ;; (*interface*, the account-gate functions
-                             ;; its rollout refresher calls).
+                             ;; Anywhere after updater, whose
+                             ;; *stop-requested* it reads (before that
+                             ;; defvar LispWorks compiles the reference as
+                             ;; an assumed special - silently, under
+                             ;; quickload).
                              (:file "pinshare-win32" :if-feature :lispworks)
                              (:file "main")))))

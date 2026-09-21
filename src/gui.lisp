@@ -25,6 +25,27 @@ Seeded from the cached :MODERATOR config in MAIN so a returning
 moderator's window is right on the first frame, then re-verified from
 /api/me by CHECK-TOKEN, which rebuilds the window if it changed.")
 
+(defvar *pinshare-group-shown-p* nil
+  "Whether the CURRENT window was built with the Pin Share group. Not the
+same as *PINSHARE-ALLOWED-P*: the half-hourly refresher moves the verdict
+without touching the window (a rebuild from a background thread would pop
+a window out of the tray mid-run), so APPLY-ACCOUNT-GATES compares against
+this to know when the window owes a rebuild.")
+
+(defun settings-tab-groups ()
+  "The Settings tab's groups, top to bottom. Pin Share is in staged
+rollout, so its group only joins for accounts the server lists (/api/me
+features) - like the moderator panes, the panes themselves always exist
+so callbacks and REBUILD-INTERFACE can read them either way. Records
+what this window got (*PINSHARE-GROUP-SHOWN-P*)."
+  (setf *pinshare-group-shown-p* *pinshare-allowed-p*)
+  (let ((groups '(language-group connection-group recording-group
+                  ghost-group pinshare-group updates-group tray-group
+                  advanced-group)))
+    (if *pinshare-allowed-p*
+        groups
+        (remove 'pinshare-group groups))))
+
 (defun client-tab-items ()
   "Main-window tab entries as (LABEL PANE-NAME) pairs. The Rooms tab
 lists the live run's rooms and enemies solely to author quest-clear
@@ -456,18 +477,7 @@ who cannot create rules, never see it."
                        '(trigger-log-check))
                    :title (tr :group-advanced) :title-position :frame
                    :title-font *ui-font* :adjust :left)
-   ;; Pin Share is in staged rollout: the group only joins the layout for
-   ;; accounts the server lists (/api/me features), like the moderator
-   ;; panes above. The panes always exist so callbacks and
-   ;; REBUILD-INTERFACE can read them either way.
-   (settings-tab capi:column-layout
-                 (if *pinshare-allowed-p*
-                     '(language-group connection-group
-                       recording-group ghost-group pinshare-group
-                       updates-group tray-group advanced-group)
-                     '(language-group connection-group
-                       recording-group ghost-group
-                       updates-group tray-group advanced-group))
+   (settings-tab capi:column-layout (settings-tab-groups)
                  :adjust :left)
    (rooms-tab capi:column-layout '(rooms-hint rooms-list) :adjust :left)
    (main-tabs capi:tab-layout ()
@@ -572,11 +582,16 @@ to build a fresh window."
 
 (defun rebuild-interface (old)
   "Replace OLD with a freshly built window at the same screen position,
-carrying over unsaved Connection edits and the selected tab.
-*INTERFACE* flips to the new window before OLD is destroyed, so the
-poll loop never picks up a dead interface."
+carrying over unsaved Connection edits, the selected tab and a hidden
+\(in the tray) state: an account-gate rebuild can land while the client
+sits in the tray - right after a --minimized launch, say - and must not
+pop a window over the game. *INTERFACE* flips to the new window before
+OLD is destroyed, so the poll loop never picks up a dead interface."
   (multiple-value-bind (x y) (capi:top-level-interface-geometry old)
-    (let ((new (make-instance 'client-window :best-x x :best-y y)))
+    (let ((new (apply #'make-instance 'client-window :best-x x :best-y y
+                      (when (eq (capi:top-level-interface-display-state old)
+                                :hidden)
+                        '(:display-state :hidden)))))
       (setf (capi:text-input-pane-text (server-url-input new))
             (capi:text-input-pane-text (server-url-input old))
             (capi:text-input-pane-text (api-token-input new))
@@ -1347,33 +1362,27 @@ last known server state if the update failed."
 (defun apply-account-gates (interface user)
   "Sync the account-gated UI to the /api/me USER hash (NIL = no linked
 account): the moderator-only Rooms tab and 'register rule' button, and
-the Pin Share group while that feature is in staged rollout. When either
-verdict changes, cache it and rebuild the window so the panes appear or
-vanish - once, however many gates moved. Only a change triggers the
-rebuild, so the CHECK-TOKEN that REBUILD issues sees none and does not
-loop."
-  (let ((moderator (moderator-role-p (and user (gethash "role" user))))
-        (pinshare (pinshare-feature-p user)))
-    (unless (and (eq moderator *moderator-p*)
-                 (eq pinshare *pinshare-allowed-p*))
+the Pin Share group while that feature is in staged rollout. When a
+verdict changes - or the window still shows an older Pin Share verdict
+than the flag - cache it and rebuild the window so the panes appear or
+vanish, once however many gates moved. The rebuilt window matches both
+verdicts, so the CHECK-TOKEN that REBUILD issues finds nothing owed and
+does not loop. Call it LAST in a flow: whatever is queued on INTERFACE
+after it may be dropped with the old window."
+  (let* ((moderator (moderator-role-p (and user (gethash "role" user))))
+         (moderator-changed (not (eq moderator *moderator-p*))))
+    (set-pinshare-permission (pinshare-feature-p user))
+    (when moderator-changed
       (setf *moderator-p* moderator
-            (config-value :moderator) moderator
-            *pinshare-allowed-p* pinshare
-            (config-value :pinshare-allowed) pinshare)
-      (save-config!)
+            (config-value :moderator) moderator)
+      (save-config!))
+    ;; Pin Share compares against what the WINDOW shows, not the flag
+    ;; just written: the refresher may have moved the verdict long ago
+    ;; and left the window owing this rebuild.
+    (when (or moderator-changed
+              (not (eq *pinshare-allowed-p* *pinshare-group-shown-p*)))
       (capi:execute-with-interface-if-alive
        interface (lambda () (rebuild-interface interface))))))
-
-(defun revoke-pinshare-permission ()
-  "No verified account (unlinked, or a definite 401): the rollout
-verdict cannot stand. Deliberately no window rebuild - this runs next to
-the 401 dialog and the login.txt re-login, which hold the current
-interface; the relay stops at once (PINSHARE-WANTED), the status line
-says why, and the group is gone from the next launch."
-  (when *pinshare-allowed-p*
-    (setf *pinshare-allowed-p* nil
-          (config-value :pinshare-allowed) nil)
-    (save-config!)))
 
 (defun check-token (interface &key on-invalid notify)
   "Verify the configured API token against /api/me on a background
@@ -1386,7 +1395,12 @@ the Save settings flow."
         ;; Unlinked is a supported state, not an error: measuring works,
         ;; runs queue locally, and the status line says how to link.
         (progn
-          (revoke-pinshare-permission)
+          ;; No verified account, no rollout verdict. Flag only, here and
+          ;; on a 401 below - never a rebuild: those paths run beside the
+          ;; 401 dialog and the login.txt re-login, which hold this
+          ;; interface. The relay stops within a tick and its status
+          ;; line says why; the group is gone from the next launch.
+          (set-pinshare-permission nil)
           (set-pane-text interface #'token-status-pane (tr :token-unlinked)))
         (progn
           (set-pane-text interface #'token-status-pane (tr :token-checking))
@@ -1400,7 +1414,6 @@ the Save settings flow."
                       (let ((name (gethash "username" user)))
                         (set-pane-text interface #'token-status-pane
                                        (tr :token-ok name))
-                        (apply-account-gates interface user)
                         (apply-auto-publish interface user)
                         ;; Adopt the anonymous guest's runs the moment
                         ;; a linked token verifies, then drop the guest
@@ -1426,9 +1439,15 @@ the Save settings flow."
                            interface
                            (lambda ()
                              (capi:display-message
-                              "~a" (tr :token-ok-dialog name)))))))
+                              "~a" (tr :token-ok-dialog name)))))
+                        ;; Last on purpose: a changed gate rebuilds the
+                        ;; window, and everything queued on this
+                        ;; interface after that - the dialog above, the
+                        ;; auto-publish checkbox sync - would be dropped
+                        ;; with it.
+                        (apply-account-gates interface user)))
                      (:unauthorized
-                      (revoke-pinshare-permission)
+                      (set-pinshare-permission nil)
                       (set-pane-text interface #'token-status-pane
                                      (tr :token-invalid) :red)
                       (when notify
