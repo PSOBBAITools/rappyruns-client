@@ -37,6 +37,13 @@
                        ; NIL without a verdict (see account-mode.lisp)
   telemetry)           ; per-quest TELEMETRY, created with the first tracker
 
+(defun snapshot-quest-loaded-p (snapshot)
+  "Is a quest loaded on SNAPSHOT? NIL for the lobby, a free field and an
+unreadable frame (SNAPSHOT NIL) alike - a caller that must tell the last
+from the others checks SNAPSHOT itself."
+  (let ((ptr (getf snapshot :quest-ptr)))
+    (and ptr (plusp ptr))))
+
 (defun elapsed-ms (start-time)
   (round (* 1000 (- (get-internal-real-time) start-time))
          internal-time-units-per-second))
@@ -211,7 +218,7 @@ quest mid-run emits the unfinished trackers as :aborted runs."
        (setf (detector-armed detector) nil)
        aborted))
     ;; No quest loaded (lobby / free field): reset and arm.
-    ((not (and (getf snapshot :quest-ptr) (plusp (getf snapshot :quest-ptr))))
+    ((not (snapshot-quest-loaded-p snapshot))
      (let ((aborted (abandon-trackers detector)))
        (reset-detector detector)
        (setf (detector-armed detector) t)

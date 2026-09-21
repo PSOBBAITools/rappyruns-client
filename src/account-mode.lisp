@@ -32,8 +32,8 @@
 ;;; Windows, so the tests can reach them.
 
 (defvar *account-mode-probe* nil
-  "The newest probe line (ACCOUNT-MODE-PROBE-LINE), or NIL before the
-first attach. It rides along in the capture diagnostics so a reading
+  "The newest reading as a line (ACCOUNT-MODE-PROBE-LINE), or NIL before
+the first attach. It rides along in the capture diagnostics so a reading
 reports itself without the player digging a log out of %TEMP% - and it
 is what will notice if the sandbox port band ever moves.")
 
@@ -45,61 +45,66 @@ address and port, owning pid - six DWORDs.")
   "MIB_TCP_STATE_ESTAB. The game holds one established connection to
 its ship; listeners and closing sockets are noise here.")
 
+(defconstant +loopback-first-octet+ 127
+  "127.0.0.0/8. A peer on the player's own machine is a local proxy or
+some tool's service, never a ship, so its port says nothing about the
+mode - in either direction.")
+
 (defconstant +sandbox-port-min+ 14000)
 (defconstant +sandbox-port-max+ 14999
   "The sandbox ship sits on 14000 and its blocks count up from 14001;
 the whole thousand is taken so a second sandbox block is still sandbox.")
 
-(defun tcp-peers-for-pid (bytes pid)
-  "Established IPv4 peers of PID in a MIB_TCPTABLE_OWNER_PID snapshot,
-as (\"a.b.c.d\" . port) conses. BYTES is the raw table: a DWORD row
-count followed by +TCP-ROW-BYTES+ rows. The address and port fields hold
-network byte order inside their DWORDs while the rest of the struct is
-little-endian like everything else, hence the byte-wise reads for those
-two and BYTES-U32 for the others. A short or truncated table yields
-NIL rather than an error.
+(defun tcp-peer-ports-for-pid (bytes pid)
+  "Remote ports of PID's established IPv4 connections in a
+MIB_TCPTABLE_OWNER_PID snapshot, loopback peers left out. BYTES is the
+raw table: a DWORD row count followed by +TCP-ROW-BYTES+ rows. The
+address and port fields hold network byte order inside their DWORDs
+while the rest of the struct is little-endian like everything else,
+hence the byte-wise reads for those two and BYTES-U32 for the others. A
+short or truncated table yields NIL rather than an error.
 
-Only the remote end is kept. The peer is the ship, which is the thing
-being judged; the local address is the player's own machine and has no
-business riding to the server in a diagnostics report."
+Only the port comes out. The address cannot tell the modes apart (they
+share their hosts), and behind a VPN or a proxy it is the player's own
+endpoint rather than a ship - and every reading is logged and uploaded
+with the capture diagnostics. What the verdict does not need does not
+leave this function."
   (when (and bytes (>= (length bytes) 4))
     (loop :with count := (bytes-u32 bytes 0)
           :for i :below count
           :for base := (+ 4 (* i +tcp-row-bytes+))
           :while (<= (+ base +tcp-row-bytes+) (length bytes))
           :when (and (eql pid (bytes-u32 bytes (+ base 20)))
-                     (eql +tcp-state-established+ (bytes-u32 bytes base)))
-            :collect (cons (format nil "~d.~d.~d.~d"
-                                   (aref bytes (+ base 12))
-                                   (aref bytes (+ base 13))
-                                   (aref bytes (+ base 14))
-                                   (aref bytes (+ base 15)))
-                           (+ (* 256 (aref bytes (+ base 16)))
-                              (aref bytes (+ base 17)))))))
+                     (eql +tcp-state-established+ (bytes-u32 bytes base))
+                     (/= +loopback-first-octet+ (aref bytes (+ base 12))))
+            :collect (+ (* 256 (aref bytes (+ base 16)))
+                        (aref bytes (+ base 17))))))
 
-(defun account-mode-from-peers (peers)
-  "The account mode PEERS (TCP-PEERS-FOR-PID) says the session is in:
-\"sandbox\" when any peer sits in the sandbox port band, \"normal\" when
+(defun account-mode-from-ports (ports)
+  "The account mode PORTS (TCP-PEER-PORTS-FOR-PID) says the session is
+in: \"sandbox\" when any sits in the sandbox port band, \"normal\" when
 the game has peers and none does, NIL when there is nothing to judge by
-(the table could not be read, or the game is not connected). NIL means
-no verdict, never normal: the caller omits the field and tries again."
-  (cond ((null peers) nil)
-        ((some (lambda (peer)
-                 (<= +sandbox-port-min+ (cdr peer) +sandbox-port-max+))
-               peers)
+(the table could not be read, the game is not connected, or its only
+peer is a proxy on this machine). NIL means no verdict, never normal:
+the caller omits the field and tries again.
+
+\"normal\" is the weaker of the two verdicts. A game tunnelled through a
+remote proxy shows that proxy's port, not the ship's, and reads as
+normal whichever account it is. That costs nothing a missing verdict
+would not: normal is what the server files a run as without one."
+  (cond ((null ports) nil)
+        ((some (lambda (port)
+                 (<= +sandbox-port-min+ port +sandbox-port-max+))
+               ports)
          "sandbox")
         (t "normal")))
 
-(defun account-mode-probe-line (&key pid peers mode window-title image-path)
-  "One reading as a log line: the verdict next to the raw evidence it
-was made from, so a wrong verdict is diagnosable from the line alone.
-Kept free of Win32 so the tests can build one."
-  (format nil "account-mode probe: pid ~a peers ~:[none~;~:*~{~a~^ ~}~] ~
-               mode ~a title ~s exe ~a"
-          (or pid "?")
-          (loop :for (address . port) :in peers
-                :collect (format nil "~a:~d" address port))
-          (or mode "?") (or window-title "") (or image-path "?")))
+(defun account-mode-probe-line (&key pid ports mode)
+  "One reading as a log line: the verdict next to the ports it was made
+from, so a wrong verdict is diagnosable from the line alone. Kept free
+of Win32 so the tests can build one."
+  (format nil "account-mode probe: pid ~a ports ~:[none~;~:*~{~d~^ ~}~] mode ~a"
+          (or pid "?") ports (or mode "?")))
 
 (defgeneric read-account-mode (reader)
   (:documentation

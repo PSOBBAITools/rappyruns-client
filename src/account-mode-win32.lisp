@@ -28,52 +28,75 @@
   "TCP_TABLE_OWNER_PID_ALL: every connection with its owning pid, which
 is the only reason we walk this table at all.")
 
+(defconstant +error-insufficient-buffer+ 122)
+
 (defconstant +max-tcp-table-bytes+ (* 256 1024)
-  "Refuse to snapshot a table larger than this. The buffer below is
-dynamic-extent (stack), and a machine with an absurd number of open
-sockets must lose the probe rather than overflow the stack - a
-STORAGE-CONDITION is not an ERROR, so the IGNORE-ERRORS around the
-caller would not catch it. 256 KB is ~10k connections.")
+  "Refuse to snapshot a table larger than this: a machine with an absurd
+number of open sockets loses the reading rather than have a diagnostic
+allocate without bound. 256 KB is ~10k connections.")
+
+(defconstant +tcp-table-slack-bytes+ (* 16 +tcp-row-bytes+)
+  "Headroom over the size the sizing call asked for. Any process on the
+machine may open a socket between that call and the one that fills the
+buffer, and an exact-size buffer would then fail on a busy machine.")
 
 (defun tcp-table-bytes ()
-  "A MIB_TCPTABLE_OWNER_PID snapshot as bytes, or NIL. The table can
-grow between the two calls - any process on the machine may open a
-socket meanwhile - and then the second call fails; that costs this
-probe, not the session, so it just returns NIL."
-  (multiple-value-bind (result size)
-      (%get-extended-tcp-table fli:*null-pointer* 0 nil +af-inet+
-                               +tcp-table-owner-pid-all+ 0)
-    ;; RESULT is ERROR_INSUFFICIENT_BUFFER here; SIZE is what we came for.
-    (declare (ignore result))
-    (when (<= 1 size +max-tcp-table-bytes+)
-      (fli:with-dynamic-foreign-objects ()
-        (let ((buffer (fli:allocate-dynamic-foreign-object
-                       :type '(:unsigned :byte) :nelems size)))
-          (multiple-value-bind (result written)
-              (%get-extended-tcp-table buffer size nil +af-inet+
-                                       +tcp-table-owner-pid-all+ 0)
-            (declare (ignore written))
-            (when (zerop result)
-              (let ((bytes (make-array size :element-type '(unsigned-byte 8))))
-                (fli:replace-foreign-array bytes buffer :end2 size)
-                bytes))))))))
+  "A MIB_TCPTABLE_OWNER_PID snapshot as bytes, or NIL. The sizing call
+passes a null table and gets back the size it wants; the table can still
+outgrow the headroom before the filling call, which then answers
+ERROR_INSUFFICIENT_BUFFER with the new size - so that is retried, a
+couple of times, before the reading is given up.
+
+The buffer is heap-allocated on purpose. It can reach hundreds of KB on
+a machine with thousands of sockets, and this runs on the poll thread: a
+stack (dynamic-extent) buffer that size could overflow it, and a stack
+overflow is a STORAGE-CONDITION, not an ERROR - the IGNORE-ERRORS around
+the caller would not catch it and the poll loop would die."
+  (let ((size (nth-value 1 (%get-extended-tcp-table
+                            fli:*null-pointer* 0 nil +af-inet+
+                            +tcp-table-owner-pid-all+ 0))))
+    (loop :repeat 3
+          :while (<= 1 size +max-tcp-table-bytes+)
+          :do (let* ((capacity (+ size +tcp-table-slack-bytes+))
+                     (buffer (fli:allocate-foreign-object
+                              :type '(:unsigned :byte) :nelems capacity)))
+                (unwind-protect
+                     (multiple-value-bind (result wanted)
+                         (%get-extended-tcp-table buffer capacity nil +af-inet+
+                                                  +tcp-table-owner-pid-all+ 0)
+                       (cond ((zerop result)
+                              ;; The whole buffer is copied; the decoder
+                              ;; goes by the table's own row count, so
+                              ;; the unused tail is never read.
+                              (let ((bytes (make-array
+                                            capacity
+                                            :element-type '(unsigned-byte 8))))
+                                (fli:replace-foreign-array bytes buffer
+                                                           :end2 capacity)
+                                (return bytes)))
+                             ((eql result +error-insufficient-buffer+)
+                              (setf size wanted))
+                             (t (return nil))))
+                  (fli:free-foreign-object buffer))))))
 
 (defmethod read-account-mode ((reader live-reader))
   "Judge the mode from the game process's TCP peers, log the reading and
 keep it in *ACCOUNT-MODE-PROBE* for the capture diagnostics. Called on
 attach and once per quest load (ACCOUNT-MODE-FOR-QUEST), never at
 poll-loop rate: walking the machine's whole TCP table is not free.
-Never signals: a reading must not be able to cost anyone a recording."
+Never signals: a reading must not be able to cost anyone a recording.
+
+A reading without a verdict is retried every second for as long as the
+quest stays loaded, so it is logged only when it says something new:
+the recording log is capped and its tail is what a capture diagnostics
+report is cut from, and a game that never yields a verdict must not
+push the recording evidence out of it one identical line at a time."
   (ignore-errors
     (let* ((pid (live-reader-pid reader))
-           (peers (tcp-peers-for-pid (tcp-table-bytes) pid))
-           (mode (account-mode-from-peers peers))
-           (line (account-mode-probe-line
-                  :pid pid
-                  :peers peers
-                  :mode mode
-                  :window-title (reader-window-title reader)
-                  :image-path (ignore-errors (process-image-path reader)))))
+           (ports (tcp-peer-ports-for-pid (tcp-table-bytes) pid))
+           (mode (account-mode-from-ports ports))
+           (line (account-mode-probe-line :pid pid :ports ports :mode mode)))
+      (when (or mode (not (equal line *account-mode-probe*)))
+        (win32-log "~a" line))
       (setf *account-mode-probe* line)
-      (win32-log "~a" line)
       mode)))

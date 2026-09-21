@@ -402,44 +402,65 @@ stores them."
   (format t "~&--- account mode ---~%")
   (let ((table (make-tcp-table '(5 (34 223 124 214) 14001 4242)   ; ours
                                '(5 (35 75 43 206) 5279 999)       ; other pid
-                               '(2 (10 0 0 1) 14000 4242))))      ; not ESTAB
-    (check "tcp peers: only the pid's established rows, port in host order"
-           (equal '(("34.223.124.214" . 14001))
-                  (ephinea-ta-client::tcp-peers-for-pid table 4242)))
-    (check "tcp peers: a truncated table is NIL-safe"
-           (null (ephinea-ta-client::tcp-peers-for-pid
+                               '(2 (10 0 0 1) 14000 4242)         ; not ESTAB
+                               '(5 (127 0 0 1) 14555 4242))))     ; loopback
+    (check "tcp ports: only the pid's established non-loopback rows, host order"
+           (equal '(14001)
+                  (ephinea-ta-client::tcp-peer-ports-for-pid table 4242)))
+    (check "tcp ports: a truncated table is NIL-safe"
+           (null (ephinea-ta-client::tcp-peer-ports-for-pid
                   (subseq table 0 20) 4242)))
-    (check "tcp peers: no table, no peers"
-           (null (ephinea-ta-client::tcp-peers-for-pid nil 4242))))
-  ;; The measured endpoints (2026-08-13). Both modes share the hosts, so
-  ;; the verdict must come from the port alone.
+    (check "tcp ports: a row count past the buffer stops at the buffer"
+           (let ((lying (copy-seq table)))
+             (put-u32 lying 0 9999)
+             (equal '(14001)
+                    (ephinea-ta-client::tcp-peer-ports-for-pid lying 4242))))
+    (check "tcp ports: no table, no ports"
+           (null (ephinea-ta-client::tcp-peer-ports-for-pid nil 4242))))
+  ;; A peer on this machine is a proxy or some tool's service, never a
+  ;; ship: a game seen only through one has no verdict, and a local
+  ;; service that happens to sit in the sandbox band must not move a
+  ;; normal-account run off the normal boards.
+  (check "a game behind a local proxy has no verdict"
+         (null (ephinea-ta-client::account-mode-from-ports
+                (ephinea-ta-client::tcp-peer-ports-for-pid
+                 (make-tcp-table '(5 (127 0 0 1) 1080 4242)) 4242))))
+  (check "a loopback peer in the sandbox band does not make a run sandbox"
+         (equal "normal"
+                (ephinea-ta-client::account-mode-from-ports
+                 (ephinea-ta-client::tcp-peer-ports-for-pid
+                  (make-tcp-table '(5 (127 0 0 1) 14001 4242)
+                                  '(5 (35 75 43 206) 5279 4242))
+                  4242))))
+  ;; The measured ports (2026-08-13). Both modes share their hosts, so
+  ;; the verdict comes from the port alone.
   (check "sandbox block port -> sandbox"
-         (equal "sandbox" (ephinea-ta-client::account-mode-from-peers
-                           '(("34.223.124.214" . 14001)))))
+         (equal "sandbox" (ephinea-ta-client::account-mode-from-ports '(14001))))
   (check "sandbox ship port -> sandbox"
-         (equal "sandbox" (ephinea-ta-client::account-mode-from-peers
-                           '(("34.223.124.214" . 14000)))))
-  (check "normal block on the same host -> normal"
-         (equal "normal" (ephinea-ta-client::account-mode-from-peers
-                          '(("34.223.124.214" . 5279)))))
+         (equal "sandbox" (ephinea-ta-client::account-mode-from-ports '(14000))))
+  (check "normal block port -> normal"
+         (equal "normal" (ephinea-ta-client::account-mode-from-ports '(5279))))
   (check "one sandbox peer among others is still sandbox"
-         (equal "sandbox" (ephinea-ta-client::account-mode-from-peers
-                           '(("1.2.3.4" . 443) ("34.223.124.214" . 14001)))))
+         (equal "sandbox"
+                (ephinea-ta-client::account-mode-from-ports '(443 14001))))
   (check "just outside the band is normal"
-         (and (equal "normal" (ephinea-ta-client::account-mode-from-peers
-                               '(("1.2.3.4" . 13999))))
-              (equal "normal" (ephinea-ta-client::account-mode-from-peers
-                               '(("1.2.3.4" . 15000))))))
-  (check "no peers is no verdict, not normal"
-         (null (ephinea-ta-client::account-mode-from-peers '())))
+         (and (equal "normal"
+                     (ephinea-ta-client::account-mode-from-ports '(13999)))
+              (equal "normal"
+                     (ephinea-ta-client::account-mode-from-ports '(15000)))))
+  (check "no ports is no verdict, not normal"
+         (null (ephinea-ta-client::account-mode-from-ports '())))
   (let ((line (ephinea-ta-client::account-mode-probe-line
-               :pid 4242 :peers '(("34.223.124.214" . 14001))
-               :mode "sandbox" :window-title "Ephinea: PSOBB")))
-    (check "probe line carries the peers and the verdict"
-           (and (search "34.223.124.214:14001" line)
-                (search "mode sandbox" line))))
-  (check "probe line without peers or verdict still formats"
-         (search "peers none mode ?"
+               :pid 4242 :ports '(14001) :mode "sandbox")))
+    (check "probe line carries the ports and the verdict"
+           (and (search "ports 14001" line)
+                (search "mode sandbox" line)))
+    ;; The line is logged and uploaded with the capture diagnostics.
+    (check "probe line carries nothing but pid, ports and verdict"
+           (equal "account-mode probe: pid 4242 ports 14001 mode sandbox"
+                  line)))
+  (check "probe line without ports or verdict still formats"
+         (search "ports none mode ?"
                  (ephinea-ta-client::account-mode-probe-line :pid 1)))
   ;; One reading per quest load; a NIL reading retries, rate-limited.
   (let ((calls 0)

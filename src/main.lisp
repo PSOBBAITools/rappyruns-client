@@ -75,13 +75,9 @@ loaded."
   ;; A readable frame with no quest loaded ends the load the last
   ;; account-mode reading was for. An unreadable frame (SNAPSHOT NIL,
   ;; normal at warps) says nothing about the load and keeps it.
-  (when (and snapshot
-             (not (and (getf snapshot :quest-ptr)
-                       (plusp (getf snapshot :quest-ptr)))))
+  (when (and snapshot (not (snapshot-quest-loaded-p snapshot)))
     (forget-account-mode-reading))
-  (when (and snapshot
-             (getf snapshot :quest-ptr)
-             (plusp (getf snapshot :quest-ptr)))
+  (when (snapshot-quest-loaded-p snapshot)
     (setf snapshot
           (append snapshot
                   (list :monsters (ignore-errors (read-monsters reader)))))

@@ -443,7 +443,7 @@ log tail. Never signals; every field degrades to NIL text."
             *hw-video-encoder* *hw-fullscreen-gpu-chain*
             (low-memory-machine-p)
             ;; The newest account-mode reading (account-mode.lisp): the
-            ;; verdict beside the peers it was made from. Absent means
+            ;; verdict beside the ports it was made from. Absent means
             ;; the client never attached this session, which is itself
             ;; the answer to "why did nothing get detected".
             (or *account-mode-probe* "account-mode probe: (not run)")
