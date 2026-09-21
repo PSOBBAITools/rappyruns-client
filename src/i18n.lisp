@@ -389,6 +389,51 @@
      "ランクイン時にデスクトップ通知を表示 (暫定1位・トップ3・自己ベスト)")
 
     ;; Ghost race
+    :group-pinshare
+    ("Pin Share"
+     "Pin Share (ピン共有)")
+    :pinshare-enabled-label
+    ("Share ground pins and arrows with your party (adds the Pin Share addon to the game)"
+     "パーティーと地面のピン・矢印を共有する (ゲームに Pin Share アドオンを追加します)")
+    :pinshare-channel-label
+    ("Party passphrase"
+     "合言葉")
+    :pinshare-channel-save-button
+    ("Apply passphrase"
+     "合言葉を適用")
+    :pinshare-channel-note
+    ("Same passphrase = shared pins. Anyone who knows it can see and remove them; make it hard to guess."
+     "同じ合言葉の人同士でピンを共有します。知っている人は誰でも見たり消したりできるので、推測されにくいものに。")
+    :pinshare-status-off
+    ("Pin Share: off"
+     "Pin Share: オフ")
+    :pinshare-status-no-channel
+    ("Pin Share: enter a party passphrase"
+     "Pin Share: 合言葉を入力してください")
+    :pinshare-status-waiting-game
+    ("Pin Share: waiting for the game"
+     "Pin Share: ゲームの起動を待っています")
+    :pinshare-status-connecting
+    ("Pin Share: connecting..."
+     "Pin Share: 接続中...")
+    :pinshare-status-connected
+    ("Pin Share: connected - ~a (~d in the channel)"
+     "Pin Share: 接続済み - ~a (チャンネルに ~d 人)")
+    :pinshare-status-error
+    ("Pin Share: ~a"
+     "Pin Share: ~a")
+    :pinshare-status-no-plugin
+    ("Pin Share: the game has no addon plugin (addons\\init.lua not found)"
+     "Pin Share: ゲームに addon プラグインがありません (addons\\init.lua が見つかりません)")
+    :pinshare-status-install-failed
+    ("Pin Share: could not install the addon (~a)"
+     "Pin Share: アドオンを配置できませんでした (~a)")
+    :pinshare-status-broken-link
+    ("Pin Share: ~a is a link to a folder that no longer exists - delete or re-create the link"
+     "Pin Share: ~a はリンク先がなくなったリンクです - リンクを削除するか作り直してください")
+    :pinshare-status-conflict
+    ("Pin Share: the old relay client is still running - close its black window"
+     "Pin Share: 旧中継クライアントが起動中です - 黒いウィンドウを閉じてください")
     :group-ghost
     ("Ghost race"
      "ゴーストレース")

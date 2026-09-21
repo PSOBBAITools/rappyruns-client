@@ -295,6 +295,38 @@ who cannot create rules, never see it."
                        :callback-type :interface
                        :font *ui-font*
                        :accessor ghost-marker-check)
+   ;; Pin Share relay (pinshare.lisp). The checkbox applies immediately
+   ;; like every other; the passphrase is free text, so it gets its own
+   ;; apply button instead of riding Connection's Save & verify.
+   (pinshare-enabled-check capi:check-button
+                           :text (tr :pinshare-enabled-label)
+                           :selected (config-value :pinshare-enabled)
+                           :selection-callback 'toggle-pinshare-callback
+                           :retract-callback 'toggle-pinshare-callback
+                           :callback-type :interface
+                           :font *ui-font*
+                           :accessor pinshare-enabled-check)
+   (pinshare-channel-input capi:text-input-pane
+                           :title (tr :pinshare-channel-label)
+                           :text (config-value :pinshare-channel)
+                           :max-characters 64
+                           :callback 'apply-pinshare-channel-callback
+                           :callback-type :interface
+                           :font *ui-font*
+                           :title-font *ui-font*
+                           :accessor pinshare-channel-input)
+   (pinshare-channel-button capi:push-button
+                            :text (tr :pinshare-channel-save-button)
+                            :callback 'apply-pinshare-channel-callback
+                            :callback-type :interface
+                            :font *ui-font*)
+   (pinshare-channel-note capi:title-pane
+                          :text (tr :pinshare-channel-note)
+                          :font *ui-font*)
+   (pinshare-status-pane capi:title-pane
+                         :text (pinshare-status-text *pinshare-status*)
+                         :font *ui-font*
+                         :accessor pinshare-status-pane)
    ;; Which corner of the game window the overlay panel occupies: the
    ;; top-right default sits on PSO's own minimap once the ghost panel
    ;; grows its room-split rows, so it is movable.
@@ -396,6 +428,14 @@ who cannot create rules, never see it."
                   overlay-corner-pane)
                 :title (tr :group-ghost) :title-position :frame
                 :title-font *ui-font* :adjust :left)
+   (pinshare-channel-row capi:row-layout
+                         '(pinshare-channel-input pinshare-channel-button)
+                         :adjust :center)
+   (pinshare-group capi:column-layout
+                   '(pinshare-enabled-check pinshare-channel-row
+                     pinshare-channel-note pinshare-status-pane)
+                   :title (tr :group-pinshare) :title-position :frame
+                   :title-font *ui-font* :adjust :left)
    (updates-group capi:column-layout
                   '(update-status-pane auto-update-check
                     check-updates-button)
@@ -418,7 +458,8 @@ who cannot create rules, never see it."
                    :title-font *ui-font* :adjust :left)
    (settings-tab capi:column-layout
                  '(language-group connection-group
-                   recording-group ghost-group updates-group tray-group
+                   recording-group ghost-group pinshare-group updates-group
+                   tray-group
                    advanced-group)
                  :adjust :left)
    (rooms-tab capi:column-layout '(rooms-hint rooms-list) :adjust :left)
@@ -532,7 +573,9 @@ poll loop never picks up a dead interface."
       (setf (capi:text-input-pane-text (server-url-input new))
             (capi:text-input-pane-text (server-url-input old))
             (capi:text-input-pane-text (api-token-input new))
-            (capi:text-input-pane-text (api-token-input old)))
+            (capi:text-input-pane-text (api-token-input old))
+            (capi:text-input-pane-text (pinshare-channel-input new))
+            (capi:text-input-pane-text (pinshare-channel-input old)))
       ;; Carry over the selected tab by identity, not index: a
       ;; moderator-status rebuild changes the tab set (the Rooms tab
       ;; appears or vanishes), so the old index can point at a different
@@ -1107,6 +1150,22 @@ flag."
         (capi:button-selected (ghost-marker-check interface)))
   (save-config!))
 
+(defun toggle-pinshare-callback (interface)
+  "Apply the Pin Share toggle immediately: the relay thread re-reads the
+setting every tick, so it starts (installing the addon first) or stops
+within a second. Turning it on also applies whatever passphrase is in
+the field, so enable-then-type and type-then-enable both work."
+  (setf (config-value :pinshare-enabled)
+        (capi:button-selected (pinshare-enabled-check interface)))
+  (apply-pinshare-channel-callback interface))
+
+(defun apply-pinshare-channel-callback (interface)
+  "Save the passphrase (the button, or Enter in the field). The relay
+notices the change on its next tick and rejoins under the new one."
+  (setf (config-value :pinshare-channel)
+        (capi:text-input-pane-text (pinshare-channel-input interface)))
+  (save-config!))
+
 (defun overlay-corner-items ()
   "Option-pane items for the overlay-position choice: (label . corner),
 in reading order over the position grid, plus the Ctrl+drag custom
@@ -1616,6 +1675,11 @@ silent, exactly like the old silent startup check."
                  (ghost-title-suffix)
                  recording-p)
          "Rappy Runs Client"))
+    ;; Pin Share relay status (SET-PANE-TEXT no-ops while unchanged).
+    (multiple-value-bind (text error-p)
+        (pinshare-status-text *pinshare-status*)
+      (set-pane-text interface #'pinshare-status-pane text
+                     (and error-p :red)))
     ;; The floating in-game overlay follows the same 4 Hz cadence.
     ;; FUNCALL by name: overlay-win32.lisp loads after this file.
     (ignore-errors (funcall 'update-ghost-overlay detector recording-p))

@@ -220,7 +220,11 @@ NIL to keep searching."
           ((and *psobb-rejection* (not (find-psobb-window)))
            (setf *psobb-rejection* nil)))
     (setf *audio-target-pid*
-          (and reader (live-reader-pid reader)))
+          (and reader (live-reader-pid reader))
+          ;; Only a verified game gets the Pin Share relay (and the addon
+          ;; file written next to it).
+          *pinshare-game-exe*
+          (and reader (process-image-path reader)))
     (if reader
         (detector-step detector nil) ; fresh attach: disarm
         (progn
@@ -250,7 +254,8 @@ NIL to keep searching."
 disarm the detector; the recorder gets one step to wind down. The
 caller forgets the reader and the previous snapshot."
   (close-reader reader)
-  (setf *audio-target-pid* nil)
+  (setf *audio-target-pid* nil
+        *pinshare-game-exe* nil)
   (detector-step detector nil)
   (ignore-errors
     (recorder-step recorder (detector-state detector)
@@ -430,6 +435,9 @@ are persisted incrementally, so an abrupt exit loses nothing."
     ;; Resident-app tray icon: keeps running when the window is closed
     ;; (CLIENT-CONFIRM-DESTROY hides to the tray) and offers Show / Quit.
     (start-tray!)
+    ;; Pin Share relay supervisor: idle until the setting is on and a
+    ;; game is attached.
+    (start-pinshare!)
     ;; Stamp the recording log with the build/machine context every
     ;; later log line (and diagnostics upload) is read against.
     (log-session-info)

@@ -30,6 +30,13 @@
                              (:file "ffmpeg-win32" :if-feature :lispworks)
                              (:file "trigger-log")
                              (:file "api-client")
+                             ;; After api-client (parse-websocket-url and
+                             ;; the UTF-8 helpers).
+                             (:file "websocket-win32" :if-feature :lispworks)
+                             ;; Pin Share relay: the pure half, then the
+                             ;; thread that moves the bytes.
+                             (:file "pinshare")
+                             (:file "pinshare-win32" :if-feature :lispworks)
                              ;; Pure logic of the GUI's quest-rule form,
                              ;; portable so client-tests can reach it.
                              (:file "rule-form")

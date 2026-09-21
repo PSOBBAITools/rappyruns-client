@@ -85,6 +85,18 @@ opposed to a definite 401, which the caller words itself)."
                      (t 80))))
     (values scheme host port path)))
 
+(defun parse-websocket-url (url)
+  "Returns (values secure-p host port path) for a ws:// or wss:// URL,
+with the http(s) default ports (80 / 443)."
+  (let ((http-url (cond ((eql 0 (search "wss://" url))
+                         (concatenate 'string "https" (subseq url 3)))
+                        ((eql 0 (search "ws://" url))
+                         (concatenate 'string "http" (subseq url 2)))
+                        (t (error 'api-error
+                                  :message (format nil "Bad URL: ~a" url))))))
+    (multiple-value-bind (scheme host port path) (parse-url http-url)
+      (values (string= scheme "https") host port path))))
+
 #-lispworks
 (defun open-http-stream (scheme host port)
   "Binary stream to HOST:PORT (plain http only)."

@@ -192,13 +192,53 @@ which matches on single-GPU machines; a multi-adapter setup could pick
 the wrong monitor there (still a recoverable recording, unlike black
 frames).
 
+## Pin Share relay
+
+Pin Share lets a party share ground pins and arrows: one player marks a
+spot and everyone sees it at the same place in the game world. Drawing
+and input live in a Lua addon inside the game
+(`data/pin-share/init.lua`, run by the Solybum addon plugin Ephinea
+ships), because only in-process drawing is frame-synchronous, works in
+exclusive fullscreen and receives clicks reliably. The addon cannot open
+sockets, so the client is its network half:
+
+```
+addon --exchange\out.txt--> client --WebSocket--> relay server
+addon <--exchange\in.txt--- client <------------- (whole pin list on every change)
+```
+
+With **Settings → Pin Share** on and a passphrase entered (everyone with
+the same passphrase shares pins), the client - once a verified game is
+attached - copies the bundled `init.lua` into the game's
+`addons\Pin Share\` (only that file; `options.lua` with the player's key
+bindings is never touched, and a developer's junction to a working copy
+is detected and left alone), then relays until the setting changes or
+the game exits. This is the one place the client writes next to the
+game, which is why the feature is off by default; the game *process* is
+still never touched.
+
+`src/pinshare.lisp` is the pure half (file formats, JSON translation,
+reconnect state; SBCL-tested), `src/pinshare-win32.lisp` the relay
+thread, `src/websocket-win32.lisp` the WebSocket client over WinHTTP
+(TLS from the OS, like the rest of the client's HTTP). The relay server
+is a separate small Node service
+([PSOBBAITools/psobb-pin-share](https://github.com/PSOBBAITools/psobb-pin-share),
+`server/`): it keeps pins in memory only and stays apart from the
+leaderboard server on purpose. `:pinshare-server` in `config.sexp`
+points the client at a local one (`ws://localhost:8787`).
+
+The addon ships under `data/` rather than a folder of its own because
+already-deployed self-updaters copy `data\*` recursively and nothing
+else.
+
 ## Packaging
 
 ```
 powershell -File client/package.ps1
 ```
 
-Bundles the exe and `data/quest-triggers.sexp` (from `client/data/`, the
+Bundles the exe, `data/quest-triggers.sexp` and
+`data/pin-share/init.lua` (from `client/data/`, the
 source of truth) into `client/dist/RappyRunsClient.zip`, plus
 `ffmpeg/ffmpeg.exe` when `client/vendor/ffmpeg/` is populated (see
 below); without it the zip is built with a warning and recording needs a

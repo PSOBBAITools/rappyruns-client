@@ -1,0 +1,5 @@
+# A developer may junction the game's addons\Pin Share to this folder so
+# edits to init.lua reach the game on Reload; the addon then writes its
+# runtime files here.
+exchange/
+options.lua

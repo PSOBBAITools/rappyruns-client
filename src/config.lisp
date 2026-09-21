@@ -38,6 +38,9 @@
         :ghost-marker t     ; in-world ghost marker: project the ghost's position through the game camera and draw a dot + name pill where it stands (needs :ghost-overlay; overlay-win32.lisp OVERLAY-DRAW-GHOST-MARKER)
         :overlay-corner :top-right ; where the overlay panel sits in the game's client area: a corner (:top-right :top-left :bottom-right :bottom-left), an edge midpoint (:middle-right :middle-left :top-center :bottom-center), or :custom (a Ctrl+dragged spot, see :overlay-position) - movable because the tall ghost panel covers PSO's own minimap at the top-right default
         :overlay-position nil ; the Ctrl+dragged panel spot as (x-frac y-frac), each axis the 0..1 fraction of the client area's slack; only read while :overlay-corner is :custom (overlay-panel-origin)
+        :pinshare-enabled nil ; Pin Share relay (pinshare.lisp): stand in for the addon's network half and keep the bundled addon installed in the game's addons folder; off by default - turning it on is the consent to write that one file there
+        :pinshare-channel "" ; the party's shared passphrase; everyone with the same one shares pins
+        :pinshare-server ""  ; blank = the public relay (+PINSHARE-DEFAULT-SERVER+); a ws:// or wss:// override for a local server, not shown in the GUI
         :start-minimized nil ; launch straight to the tray with no window (also forced for a single launch by --minimized; see STARTUP-MINIMIZED-P)
         :debug nil))        ; developer knobs in the GUI (see DEBUG-MODE-P)
 
