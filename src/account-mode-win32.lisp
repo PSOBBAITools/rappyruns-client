@@ -24,9 +24,12 @@
 
 (defconstant +af-inet+ 2)
 
-(defconstant +tcp-table-owner-pid-all+ 5
-  "TCP_TABLE_OWNER_PID_ALL: every connection with its owning pid, which
-is the only reason we walk this table at all.")
+(defconstant +tcp-table-owner-pid-connections+ 4
+  "TCP_TABLE_OWNER_PID_CONNECTIONS: every connection with its owning pid,
+which is the only reason we walk this table at all. Not the _ALL class:
+that one adds every listening socket on the machine, which can only push
+a busy machine's table towards +MAX-TCP-TABLE-BYTES+ - and an unreadable
+table now costs a sandbox run its board, not just a diagnostic.")
 
 (defconstant +error-insufficient-buffer+ 122)
 
@@ -54,7 +57,7 @@ overflow is a STORAGE-CONDITION, not an ERROR - the IGNORE-ERRORS around
 the caller would not catch it and the poll loop would die."
   (let ((size (nth-value 1 (%get-extended-tcp-table
                             fli:*null-pointer* 0 nil +af-inet+
-                            +tcp-table-owner-pid-all+ 0))))
+                            +tcp-table-owner-pid-connections+ 0))))
     (loop :repeat 3
           :while (<= 1 size +max-tcp-table-bytes+)
           :do (let* ((capacity (+ size +tcp-table-slack-bytes+))
@@ -63,7 +66,7 @@ the caller would not catch it and the poll loop would die."
                 (unwind-protect
                      (multiple-value-bind (result wanted)
                          (%get-extended-tcp-table buffer capacity nil +af-inet+
-                                                  +tcp-table-owner-pid-all+ 0)
+                                                  +tcp-table-owner-pid-connections+ 0)
                        (cond ((zerop result)
                               ;; The whole buffer is copied; the decoder
                               ;; goes by the table's own row count, so
@@ -81,13 +84,13 @@ the caller would not catch it and the poll loop would die."
 
 (defmethod read-account-mode ((reader live-reader))
   "Judge the mode from the game process's TCP peers, log the reading and
-keep it in *ACCOUNT-MODE-PROBE* for the capture diagnostics. Called on
-attach and once per quest load (ACCOUNT-MODE-FOR-QUEST), never at
-poll-loop rate: walking the machine's whole TCP table is not free.
-Never signals: a reading must not be able to cost anyone a recording.
+keep it in *ACCOUNT-MODE-PROBE* for the capture diagnostics. Called per
+quest load (DETECTOR-READ-ACCOUNT-MODE), never at poll-loop rate:
+walking the machine's TCP table is not free. Never signals: a reading
+must not be able to cost anyone a recording.
 
-A reading without a verdict is retried every second for as long as the
-quest stays loaded, so it is logged only when it says something new:
+A reading without a verdict is retried, so it is logged only when it
+says something new:
 the recording log is capped and its tail is what a capture diagnostics
 report is cut from, and a game that never yields a verdict must not
 push the recording evidence out of it one identical line at a time."

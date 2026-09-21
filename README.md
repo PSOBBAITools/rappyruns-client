@@ -28,6 +28,17 @@ signer *name* is pinned rather than a certificate thumbprint so
 routine certificate renewals keep working; expired-but-timestamped
 signatures stay valid by design.
 
+Besides the game's memory, the client asks Windows one thing about the
+game process: which remote **ports** it is connected to
+(`GetExtendedTcpTable`, filtered to the game's pid, once per quest
+load). Ephinea's Sandbox accounts connect to ships on ports 14000+ and
+normal accounts on 5278+, and that is how a run is filed on the sandbox
+or the normal boards. It reads no traffic and opens no connection of its
+own for this. Only the ports and the verdict are kept - no addresses -
+and that one line (`account-mode probe: pid … ports … mode …`) is
+written to the recording log, whose tail accompanies a video upload as
+capture diagnostics.
+
 ## Requirements
 
 - LispWorks 8.x (64-bit, Windows) for the GUI, FLI memory reading and

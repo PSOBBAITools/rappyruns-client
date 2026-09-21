@@ -444,8 +444,7 @@ log tail. Never signals; every field degrades to NIL text."
             (low-memory-machine-p)
             ;; The newest account-mode reading (account-mode.lisp): the
             ;; verdict beside the ports it was made from. Absent means
-            ;; the client never attached this session, which is itself
-            ;; the answer to "why did nothing get detected".
+            ;; no quest was loaded while attached this session.
             (or *account-mode-probe* "account-mode probe: (not run)")
             ;; The path and its existence ride along so an empty tail is
             ;; diagnosable from the server: "the log is where we thought

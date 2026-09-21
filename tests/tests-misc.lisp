@@ -433,23 +433,28 @@ stores them."
                                   '(5 (35 75 43 206) 5279 4242))
                   4242))))
   ;; The measured ports (2026-08-13). Both modes share their hosts, so
-  ;; the verdict comes from the port alone.
-  (check "sandbox block port -> sandbox"
-         (equal "sandbox" (ephinea-ta-client::account-mode-from-ports '(14001))))
-  (check "sandbox ship port -> sandbox"
-         (equal "sandbox" (ephinea-ta-client::account-mode-from-ports '(14000))))
-  (check "normal block port -> normal"
-         (equal "normal" (ephinea-ta-client::account-mode-from-ports '(5279))))
-  (check "one sandbox peer among others is still sandbox"
-         (equal "sandbox"
-                (ephinea-ta-client::account-mode-from-ports '(443 14001))))
-  (check "just outside the band is normal"
-         (and (equal "normal"
-                     (ephinea-ta-client::account-mode-from-ports '(13999)))
-              (equal "normal"
-                     (ephinea-ta-client::account-mode-from-ports '(15000)))))
-  (check "no ports is no verdict, not normal"
-         (null (ephinea-ta-client::account-mode-from-ports '())))
+  ;; the verdict comes from the port alone - and it needs a ship: the
+  ;; game process can hold sockets that are not the ship's.
+  (flet ((mode (&rest ports)
+           (ephinea-ta-client::account-mode-from-ports ports)))
+    (check "sandbox block port -> sandbox" (equal "sandbox" (mode 14001)))
+    (check "sandbox ship port -> sandbox" (equal "sandbox" (mode 14000)))
+    (check "normal ship and block ports -> normal"
+           (and (equal "normal" (mode 5278))
+                (equal "normal" (mode 5279))
+                (equal "normal" (mode 5280))))
+    (check "an unrelated socket beside the ship does not change the verdict"
+           (and (equal "sandbox" (mode 443 14001))
+                (equal "normal" (mode 443 5279))))
+    (check "an unrelated socket alone is no verdict, not normal"
+           (null (mode 443)))
+    (check "a 14xxx socket beside a normal ship is a contradiction, not sandbox"
+           (null (mode 5279 14001)))
+    (check "just outside the sandbox band is no verdict"
+           (and (null (mode 13999)) (null (mode 15000))))
+    (check "just outside the normal band is no verdict"
+           (and (null (mode 5277)) (null (mode 6000))))
+    (check "no ports is no verdict, not normal" (null (mode))))
   (let ((line (ephinea-ta-client::account-mode-probe-line
                :pid 4242 :ports '(14001) :mode "sandbox")))
     (check "probe line carries the ports and the verdict"
@@ -462,35 +467,5 @@ stores them."
   (check "probe line without ports or verdict still formats"
          (search "ports none mode ?"
                  (ephinea-ta-client::account-mode-probe-line :pid 1)))
-  ;; One reading per quest load; a NIL reading retries, rate-limited.
-  (let ((calls 0)
-        (answer "sandbox")
-        (second internal-time-units-per-second))
-    (flet ((mode-at (ptr now)
-             (ephinea-ta-client::account-mode-for-quest
-              ptr (lambda () (incf calls) answer) now)))
-      (ephinea-ta-client::forget-account-mode-reading)
-      (check "first frame of a load reads the mode"
-             (and (equal "sandbox" (mode-at 100 0)) (= 1 calls)))
-      (check "later frames of the load reuse it"
-             (and (equal "sandbox" (mode-at 100 (* 60 second))) (= 1 calls)))
-      (setf answer "normal")
-      (check "a different quest pointer reads again"
-             (and (equal "normal" (mode-at 200 (* 61 second))) (= 2 calls)))
-      ;; The account switch: same process, back through the lobby.
-      (ephinea-ta-client::forget-account-mode-reading)
-      (setf answer "sandbox")
-      (check "the same pointer after a lobby visit reads again"
-             (and (equal "sandbox" (mode-at 200 (* 62 second))) (= 3 calls)))
-      (ephinea-ta-client::forget-account-mode-reading)
-      (setf answer nil)
-      (check "a failed reading is no verdict"
-             (and (null (mode-at 300 (* 70 second))) (= 4 calls)))
-      (check "and is not retried within the second"
-             (and (null (mode-at 300 (+ (* 70 second) 1))) (= 4 calls)))
-      (setf answer "sandbox")
-      (check "but is retried after it"
-             (and (equal "sandbox" (mode-at 300 (* 71 second))) (= 5 calls)))
-      (ephinea-ta-client::forget-account-mode-reading)))
   (check "a reader with no process has no verdict"
          (null (ephinea-ta-client::read-account-mode (lobby-reader)))))

@@ -24,8 +24,10 @@
 ;;;
 ;;; One game process can change modes - a player logs out and into
 ;;; another account without restarting - so a reading taken at attach
-;;; goes stale. The mode is read again for every quest load
-;;; (ACCOUNT-MODE-FOR-QUEST) and stamped on that load's runs.
+;;; goes stale. The mode belongs to the quest load, and the detector
+;;; owns that boundary: it asks for a reading once a quest is loaded
+;;; (DETECTOR-READ-ACCOUNT-MODE in detect.lisp) and forgets it with
+;;; everything else the load owned.
 ;;;
 ;;; The Win32 half (walking the system TCP table) lives in
 ;;; account-mode-win32.lisp; the decoding and the verdict stay here, off
@@ -55,6 +57,43 @@ mode - in either direction.")
   "The sandbox ship sits on 14000 and its blocks count up from 14001;
 the whole thousand is taken so a second sandbox block is still sandbox.")
 
+(defconstant +normal-port-min+ 5278)
+(defconstant +normal-port-max+ 5999
+  "The normal ships sit on 5278 and their blocks count up from 5279
+(5279 and 5280 were measured). Where the blocks stop is not known, so
+the band is generous - and being wrong about it is cheap: a normal ship
+outside it only loses the verdict, and normal is what the server files
+a run as without one.")
+
+(defun port-in-band-p (port min max)
+  (<= min port max))
+
+(defun account-mode-from-ports (ports)
+  "The account mode PORTS (TCP-PEER-PORTS-FOR-PID) says the session is
+in, or NIL for no verdict. A verdict needs a ship: \"sandbox\" when a
+peer sits in the sandbox band and none in the normal one, \"normal\" the
+other way round.
+
+Everything else is NIL. The game process can hold sockets that are not
+the ship's - an overlay's HTTPS connection, an injected tool's - so a
+port outside both bands is not evidence of anything: it must not read as
+normal before the ship connection shows up, and it must not read as
+sandbox because some unrelated service listens on 14xxx while the ship
+is plainly a normal one. Both bands at once is a contradiction, not a
+sandbox session. NIL means no verdict, never normal: the caller omits
+the field and reads again."
+  (let ((sandbox (some (lambda (port)
+                         (port-in-band-p port +sandbox-port-min+
+                                         +sandbox-port-max+))
+                       ports))
+        (normal (some (lambda (port)
+                        (port-in-band-p port +normal-port-min+
+                                        +normal-port-max+))
+                      ports)))
+    (cond ((and sandbox (not normal)) "sandbox")
+          ((and normal (not sandbox)) "normal")
+          (t nil))))
+
 (defun tcp-peer-ports-for-pid (bytes pid)
   "Remote ports of PID's established IPv4 connections in a
 MIB_TCPTABLE_OWNER_PID snapshot, loopback peers left out. BYTES is the
@@ -80,25 +119,6 @@ leave this function."
             :collect (+ (* 256 (aref bytes (+ base 16)))
                         (aref bytes (+ base 17))))))
 
-(defun account-mode-from-ports (ports)
-  "The account mode PORTS (TCP-PEER-PORTS-FOR-PID) says the session is
-in: \"sandbox\" when any sits in the sandbox port band, \"normal\" when
-the game has peers and none does, NIL when there is nothing to judge by
-(the table could not be read, the game is not connected, or its only
-peer is a proxy on this machine). NIL means no verdict, never normal:
-the caller omits the field and tries again.
-
-\"normal\" is the weaker of the two verdicts. A game tunnelled through a
-remote proxy shows that proxy's port, not the ship's, and reads as
-normal whichever account it is. That costs nothing a missing verdict
-would not: normal is what the server files a run as without one."
-  (cond ((null ports) nil)
-        ((some (lambda (port)
-                 (<= +sandbox-port-min+ port +sandbox-port-max+))
-               ports)
-         "sandbox")
-        (t "normal")))
-
 (defun account-mode-probe-line (&key pid ports mode)
   "One reading as a log line: the verdict next to the ports it was made
 from, so a wrong verdict is diagnosable from the line alone. Kept free
@@ -114,29 +134,3 @@ reader has a process to ask; everything else has no verdict.")
   (:method (reader)
     (declare (ignore reader))
     nil))
-
-(defvar *account-mode-reading* nil
-  "(QUEST-PTR MODE READ-AT) of the newest per-quest reading, or NIL
-while no quest is loaded. See ACCOUNT-MODE-FOR-QUEST.")
-
-(defun forget-account-mode-reading ()
-  "No quest is loaded (or the game went away): the next load reads the
-mode afresh. This is what makes an account change between quests land
-on the right board."
-  (setf *account-mode-reading* nil))
-
-(defun account-mode-for-quest (quest-ptr read-mode
-                               &optional (now (get-internal-real-time)))
-  "The account mode for the quest load QUEST-PTR, calling READ-MODE (a
-thunk) only when it has to. The mode cannot change while a quest stays
-loaded, so one successful reading serves the whole load - walking the
-machine's TCP table at poll rate would buy nothing. A reading that came
-back NIL is retried, but at most once per second."
-  (destructuring-bind (&optional ptr mode read-at) *account-mode-reading*
-    (if (and (eql ptr quest-ptr)
-             (or mode
-                 (< (- now read-at) internal-time-units-per-second)))
-        mode
-        (let ((mode (funcall read-mode)))
-          (setf *account-mode-reading* (list quest-ptr mode now))
-          mode))))
