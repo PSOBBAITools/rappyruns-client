@@ -463,9 +463,9 @@ rollout - or pull the feature - without a client release.")
 
 (defun set-pinshare-permission (allowed)
   "Record the rollout verdict (flag + cached config); returns true when
-it changed. Touches no window on purpose: the relay obeys the flag within
-a tick, while showing or hiding the Settings group is the GUI's business
-at moments when rebuilding a window is safe (APPLY-ACCOUNT-GATES)."
+it changed. Touches no window: the relay obeys the flag within a tick,
+and the GUI's status tick shows or hides the Settings group in place
+\(SYNC-PINSHARE-GROUP)."
   (let ((allowed (and allowed t)))
     (unless (eq allowed *pinshare-allowed-p*)
       (setf *pinshare-allowed-p* allowed

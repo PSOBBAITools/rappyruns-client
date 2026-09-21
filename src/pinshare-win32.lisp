@@ -414,12 +414,12 @@ runs at startup and on Save: without this, widening the rollout - or
 pulling the feature - would wait for everyone's next restart.")
 
 (defun pinshare-permission-loop ()
-  "Moves the rollout flag and nothing else. No window rebuild from here:
-the client usually sits in the tray while the game has the foreground,
-and a rebuild could also land on an open dialog. The relay obeys the
-flag within a tick; the Settings group catches up at the next moment a
-rebuild is safe (launch, Save - APPLY-ACCOUNT-GATES). The moderator role
-is CHECK-TOKEN's business and is left alone."
+  "Moves the rollout flag and nothing else - this file knows nothing of
+the GUI. The relay obeys the flag within a tick, and the GUI's status
+tick shows or hides the Settings group in place (SYNC-PINSHARE-GROUP), so
+a widened rollout reaches a client that has been resident for days
+without a restart and without a window rebuild. The moderator role is
+CHECK-TOKEN's business and is left alone."
   (loop
     (pinshare-wait +pinshare-permission-interval-seconds+)
     (when *stop-requested* (return))

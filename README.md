@@ -225,12 +225,19 @@ only runs - for accounts the server lists: `GET /api/me` answers with
 group is there on the first frame, re-verified at startup and on Save,
 and re-asked every 30 minutes (the client is resident for days), so
 widening the rollout or pulling the feature is a server variable
-change, never a client release. The refresher only moves the flag: the
-relay starts or stops within a tick, while the Settings group catches up
-at the next launch or Save - a window rebuilt from a background thread
-would pop out of the tray over a running game. It follows that Pin Share needs a linked
-account while the rollout lasts; an unlinked client or a rejected token
-drops the verdict.
+change, never a client release. A moved verdict only changes a flag: the
+relay starts or stops within a tick, and the status tick adds or removes
+the group in place by swapping the Settings tab's layout description
+(`sync-pinshare-group`) - deliberately not a window rebuild, which from
+a background thread would pop a window out of the tray over a running
+game and destroy the owner of any open dialog.
+
+Two limits to know. Pin Share needs a linked account while the rollout
+lasts - an unlinked client or a rejected token drops the verdict, and
+`*` means every *linked* account (opening it to account-less guests is a
+client release that removes the gate). And the gate controls who is
+*offered* the feature, not who can reach the relay: the relay server
+itself accepts any client that knows a passphrase, as it always has.
 
 `src/pinshare.lisp` is the pure half (file formats, JSON translation,
 reconnect state; SBCL-tested), `src/pinshare-win32.lisp` the relay
