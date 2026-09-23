@@ -10,7 +10,9 @@ for %%r in ("%ProgramFiles%" "%ProgramFiles(x86)%") do for %%d in (Community Pro
   if not defined VSDIR if exist "%%~r\Microsoft Visual Studio\2022\%%d\VC\Auxiliary\Build\vcvars32.bat" set "VSDIR=%%~r\Microsoft Visual Studio\2022\%%d"
 )
 if "%VSDIR%"=="" (echo Visual Studio 2022 C++ tools not found & exit /b 1)
-call "%VSDIR%\VC\Auxiliary\Build\vcvars32.bat" >nul
+rem vcvars prints a harmless "vswhere.exe is not recognized" on stderr; keep it
+rem quiet, since package.ps1 runs with $ErrorActionPreference = "Stop".
+call "%VSDIR%\VC\Auxiliary\Build\vcvars32.bat" >nul 2>&1
 if errorlevel 1 (echo vcvars32.bat failed & exit /b 1)
 set OBJ=%TEMP%\pinshare-input-build
 if not exist "%OBJ%" mkdir "%OBJ%"
