@@ -417,6 +417,29 @@
     (let ((run (first (step-with detector en1-in))))
       (check "warp-in quest completes" (equal "ep1-endless-nightmare-1"
                                               (getf run :quest-slug)))))
+  ;; A quest NPC in a player slot (A New Hope's Mr.X) neither starts a
+  ;; warp-in run on its own nor joins the party.
+  (flet ((regions (my-floor &rest registers)
+           (make-game-regions
+            :players (list (make-player-block :name "Ryu" :class-id 2
+                                              :floor my-floor
+                                              :guild-card "42001234")
+                           (make-player-block :name "Mr.X" :class-id 1
+                                              :floor 1 :guild-card "Mr.X"))
+            :quest-name "Endless Nightmare #1" :quest-number 108
+            :register-values registers)))
+    (let ((detector (make-detector)))
+      (step-with detector (lobby-reader))
+      (step-with detector (regions 0))
+      (check "warp-in: a landed NPC alone does not start"
+             (eq :idle (detector-state detector)))
+      (step-with detector (regions 1))
+      (let ((run (first (step-with detector (regions 1 '(30 . 1))))))
+        (check "warp-in: NPC excluded from the party"
+               (and (eql 1 (getf run :party-size))
+                    (equal '("Ryu")
+                           (mapcar (lambda (p) (getf p :name))
+                                   (getf run :players))))))))
   ;; Unknown quests never start.
   (let ((detector (make-detector))
         (unknown (make-game-regions

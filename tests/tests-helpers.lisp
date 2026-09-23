@@ -51,6 +51,25 @@
                     '(:warp-in) '(:players ((:floor 1 :warping t)))))
               (not (ephinea-ta-client::trigger-met-p
                     '(:warp-in) '(:players ((:floor 0 :warping nil)))))))
+  (check "trigger-met-p warp-in ignores a landed quest NPC"
+         (not (ephinea-ta-client::trigger-met-p
+               '(:warp-in) '(:players ((:floor 0 :warping nil)
+                                       (:floor 1 :warping nil :npc t))))))
+  ;; NPCs (A New Hope's Mr.X etc.) occupy player slots but never count
+  ;; toward the party.
+  (check "npc-guild-card-p: name bytes are an NPC, digits and none are not"
+         (and (ephinea-ta-client::npc-guild-card-p "Mr.X")
+              (ephinea-ta-client::npc-guild-card-p "Ch@osM@g")
+              (not (ephinea-ta-client::npc-guild-card-p "42115973"))
+              (not (ephinea-ta-client::npc-guild-card-p nil))))
+  (check "party-of drops quest NPCs"
+         (equal '("teapot")
+                (mapcar (lambda (p) (getf p :name))
+                        (ephinea-ta-client::party-of
+                         '(:players ((:name "teapot" :class "RAmar"
+                                      :guild-card "42115973")
+                                     (:name "Mr.X" :class "HUcast"
+                                      :guild-card "Mr.X" :npc t)))))))
   (check "trigger-met-p monster-dead consults killed ids"
          (and (ephinea-ta-client::trigger-met-p
                '(:monster-dead 42) '() '(41 42))

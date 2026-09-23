@@ -294,6 +294,21 @@ without a verdict as normal."
           :when (<= 32 byte 126)
             :do (write-char (code-char byte) out))))
 
+;;; Quest NPCs live in the same player array as people. Ephinea's solo
+;;; quest "A New Hope" loads partners (Mr.X, Rico, Heathcliff,
+;;; Ch@osM@gnum) into free slots, and which of them are present on the
+;;; warp-in frame varies run to run - so its solo runs were filed as 1P
+;;; through 4P. An NPC has no guild card number: its guild card field
+;;; holds the first bytes of its name instead ("Mr.X", "Ch@osM@g",
+;;; "Heatclif" in every such row on the server as of 2026-09-23), while
+;;; every person's is a string of digits.
+
+(defun npc-guild-card-p (guild-card)
+  "Does GUILD-CARD mark an NPC? Only a present, non-numeric card does;
+a missing one is no evidence either way and stays a person."
+  (and guild-card
+       (notevery #'digit-char-p guild-card)))
+
 (defun read-player (reader address)
   "Decode one player struct from a single block read; NIL when unreadable."
   (let ((block (read-block reader (+ address +player-block-start+)
@@ -318,6 +333,7 @@ without a verdict as normal."
                 :section-id (section-name-for-id (logand class-bits #xFF))
                 :level (1+ (u16 +player-level-offset+))
                 :guild-card (and (string/= guild-card "") guild-card)
+                :npc (npc-guild-card-p guild-card)
                 :name-color (u32 +player-name-color-offset+)
                 :floor (u16 +player-floor-offset+)
                 :room (u16 +player-room-offset+)

@@ -134,6 +134,7 @@
     (check "section id decoded" (equal "Skyly" (getf me :section-id)))
     (check "level decoded (+1)" (= 42 (getf me :level)))
     (check "guild card decoded" (equal "42001234" (getf me :guild-card)))
+    (check "a numeric guild card is a person" (not (getf me :npc)))
     (check "room decoded" (= 7 (getf me :room)))
     (check "action state decoded" (= 4 (getf me :state)))
     (check "hp decoded" (= 945 (getf me :hp)))

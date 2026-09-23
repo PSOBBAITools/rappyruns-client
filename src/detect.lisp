@@ -65,8 +65,11 @@ consults it, so start-trigger checks may pass it as NIL."
     (:register (snapshot-register-set-p snapshot (second trigger)))
     (:floor-switch (snapshot-floor-switch-set-p
                     snapshot (second trigger) (third trigger)))
+    ;; People only: a quest NPC can stand on the field before anyone
+    ;; has warped in (see NPC-GUILD-CARD-P).
     (:warp-in (some (lambda (player)
-                      (and (plusp (getf player :floor 0))
+                      (and (not (getf player :npc))
+                           (plusp (getf player :floor 0))
                            (not (getf player :warping))))
                     (getf snapshot :players)))
     ;; A specific enemy (by entity :id) has died this run. The room is
@@ -96,7 +99,8 @@ so an enemy that merely spawns at 0 hp never false-fires a clear."
 
 (defun party-of (snapshot)
   (loop :for player :in (getf snapshot :players)
-        :when (getf player :class)
+        ;; Quest NPCs fill player slots but are not party members.
+        :when (and (getf player :class) (not (getf player :npc)))
           :collect (list :name (getf player :name)
                          :class (getf player :class)
                          :level (getf player :level)
