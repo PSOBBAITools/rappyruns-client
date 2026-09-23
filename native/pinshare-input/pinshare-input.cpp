@@ -72,7 +72,7 @@ static CRITICAL_SECTION g_padCs;
 static DWORD g_padMain[MAX_PAD_BINDINGS], g_padMod[MAX_PAD_BINDINGS];
 static int g_padCount;
 static volatile LONG g_fired;                   // binding index bits pressed since the last poll
-static volatile LONG g_padRaw;                  // latest unmasked buttons (any user)
+static volatile LONG g_padRaw[4];               // latest unmasked buttons per XInput user (0 = none/disconnected)
 static volatile LONG g_status;                  // bit 0 keyboard hooked, bit 1 controller hooked, bit 2 init done
 
 static bool Alive() { return (LONG)(GetTickCount() - (DWORD)g_heartbeat) < HEARTBEAT_MS; }
@@ -194,7 +194,7 @@ static void FilterPad(DWORD user, XINPUT_STATE* st)
     if (g->bRightTrigger >= TRIGGER_DOWN || ((g_prev[user] & PAD_RT) && g->bRightTrigger > TRIGGER_UP)) raw |= PAD_RT;
     DWORD pressed = raw & ~g_prev[user];
     g_prev[user] = raw;
-    InterlockedExchange(&g_padRaw, (LONG)raw);
+    InterlockedExchange(&g_padRaw[user], (LONG)raw);
 
     if (!Alive()) { g_hidden[user] = g_pendingSingle[user] = g_usedAsMod[user] = 0; return; }
     // A button is hidden from the press that matched a binding until it is released,
@@ -224,13 +224,16 @@ static void FilterPad(DWORD user, XINPUT_STATE* st)
         g_hidden[user] |= taken;
     }
     if (released) {
+        DWORD taken = 0;                                   // like the press path: first binding wins
         for (int i = 0; i < g_padCount; i++) {
             DWORD main = g_padMain[i];
-            if (!g_padMod[i] && (released & main) && !(g_usedAsMod[user] & main)) fired |= 1u << i;
+            if (g_padMod[i] || !(released & main) || (taken & main)) continue;
+            taken |= main;
+            if (!(g_usedAsMod[user] & main)) fired |= 1u << i;
         }
         g_pendingSingle[user] &= ~released;
-        g_usedAsMod[user] &= ~released;
     }
+    g_usedAsMod[user] &= raw;                              // a modifier's mark ends with its press
     LeaveCriticalSection(&g_padCs);
     if (fired) _InterlockedOr(&g_fired, (LONG)fired);
     DWORD hide = g_hidden[user];
@@ -243,7 +246,7 @@ static void FilterPad(DWORD user, XINPUT_STATE* st)
 
 static XGetState_t g_origX[4];
 #define XHOOK(n) static DWORD WINAPI XHook##n(DWORD user, XINPUT_STATE* st) { \
-        DWORD rc = g_origX[n](user, st); if (rc == ERROR_SUCCESS) FilterPad(user, st); return rc; }
+        DWORD rc = g_origX[n](user, st);         if (rc == ERROR_SUCCESS) FilterPad(user, st); else if (user < 4) InterlockedExchange(&g_padRaw[user], 0);         return rc; }
 XHOOK(0) XHOOK(1) XHOOK(2) XHOOK(3)
 static void* g_xhooks[4] = { XHook0, XHook1, XHook2, XHook3 };
 static int g_nx;
@@ -332,6 +335,19 @@ static int VkToDik(UINT vk)
     return (int)sc;
 }
 
+// A generic VK (Ctrl, Alt, Shift, Enter) stands for two physical keys; hide both.
+static int VkToDiks(UINT vk, int out[2])
+{
+    switch (vk) {
+    case VK_CONTROL: out[0] = DIK_LCONTROL; out[1] = DIK_RCONTROL; return 2;
+    case VK_MENU:    out[0] = DIK_LMENU;    out[1] = DIK_RMENU;    return 2;
+    case VK_SHIFT:   out[0] = DIK_LSHIFT;   out[1] = DIK_RSHIFT;   return 2;
+    case VK_RETURN:  out[0] = DIK_RETURN;   out[1] = DIK_NUMPADENTER; return 2;
+    }
+    out[0] = VkToDik(vk);
+    return 1;
+}
+
 // ---------------------------------------------------------------- exports (cdecl, for LuaJIT ffi)
 EXPORT int __cdecl pinshare_input_version(void) { return PINSHARE_INPUT_VERSION; }
 
@@ -343,8 +359,9 @@ EXPORT void __cdecl pinshare_input_set_keys(const int* vks, int n)
 {
     LONG next[256] = { 0 };
     for (int i = 0; vks && i < n; i++) {
-        int dik = VkToDik((UINT)vks[i]);
-        if (dik > 0 && dik < 256) next[dik] = 1;
+        int diks[2];
+        for (int k = VkToDiks((UINT)vks[i], diks) - 1; k >= 0; k--)
+            if (diks[k] > 0 && diks[k] < 256) next[diks[k]] = 1;
     }
     for (int dik = 0; dik < 256; dik++) InterlockedExchange(&g_keyMask[dik], next[dik]);
     Beat();
@@ -377,7 +394,10 @@ EXPORT unsigned __cdecl pinshare_input_poll(void)
 }
 
 // The controller buttons held right now, before any hiding (for the binding UI).
-EXPORT unsigned __cdecl pinshare_input_pad_raw(void) { return (unsigned)g_padRaw; }
+EXPORT unsigned __cdecl pinshare_input_pad_raw(void)
+{
+    return (unsigned)(g_padRaw[0] | g_padRaw[1] | g_padRaw[2] | g_padRaw[3]);
+}
 
 BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID)
 {

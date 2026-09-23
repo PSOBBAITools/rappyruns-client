@@ -757,7 +757,11 @@ do
             unsigned pinshare_input_pad_raw(void);
         ]])
         local loaded, lib = pcall(ffi.load, "addons\\Pin Share\\pinshare-input.dll")
-        if loaded then
+        -- 起動中のゲームは読み込んだ DLL を持ち続ける (クライアントの更新は次の起動から効く)。
+        -- 版が合わない組み合わせでは使わない
+        if loaded and lib.pinshare_input_version() ~= 1 then
+            inputLoadError = "version"
+        elseif loaded then
             inputFfi, inputLib = ffi, lib
         else
             inputLoadError = tostring(lib)
@@ -783,7 +787,11 @@ local function padButtonName(bits)
     return string.format("0x%X", bits)
 end
 
+-- ゲームから隠すキー。押しながら使う arrowKey / deleteKey は隠さない (Shift などをゲームから奪わない)
+local hiddenKeyOptions = { cursorKey = true, feetKey = true, clearKey = true, filterKey = true, frontKey = true }
+
 local padCapture = nil      -- { key, order = {押した順のビット}, seen } コントローラー割り当て待ち
+local inputSignature = nil  -- 最後に DLL に渡した割り当て (設定の保存が割り当てと無関係なら渡し直さない)
 
 local function setPadCapture(capture)
     padCapture = capture
@@ -796,10 +804,10 @@ local function syncInputBindings()
     inputDirty = false
     local keys, mains, mods = {}, {}, {}
     if options.enable then
-        -- 押しながら使う arrowKey / deleteKey は隠さない (Shift などをゲームから奪わない)
-        for _, name in ipairs({ "cursorKey", "feetKey", "clearKey", "filterKey", "frontKey" }) do
+        for name in pairs(hiddenKeyOptions) do
             if options[name] ~= 0 then table.insert(keys, options[name]) end
         end
+        table.sort(keys)  -- pairs の順は不定なので、署名の比較のために並べる
         -- 割り当て待ちの間は、既存の割り当てが反応しないよう全部外す
         if padCapture == nil then
             for i, key in ipairs(padActionKeys) do
@@ -808,6 +816,9 @@ local function syncInputBindings()
             end
         end
     end
+    local signature = table.concat(keys, ",") .. "|" .. table.concat(mains, ",") .. "|" .. table.concat(mods, ",")
+    if signature == inputSignature then return end
+    inputSignature = signature
     inputLib.pinshare_input_set_keys(#keys > 0 and inputFfi.new("int[?]", #keys, keys) or nil, #keys)
     inputLib.pinshare_input_set_pad(#mains > 0 and inputFfi.new("unsigned[?]", #mains, mains) or nil,
         #mods > 0 and inputFfi.new("unsigned[?]", #mods, mods) or nil, #mains)
@@ -1504,7 +1515,13 @@ local function keyName(vk)
 end
 
 local function keyRow(label, optionKey)
-    imgui.Text(string.format("%-16s %s", label, keyName(options[optionKey])))
+    local vk = options[optionKey]
+    imgui.Text(string.format("%-16s %s", label, keyName(vk)))
+    -- 割り当てたキーはゲームから隠す (pinshare-input.dll) ので、文字キーはチャットでも打てなくなる
+    if inputLib ~= nil and hiddenKeyOptions[optionKey] and ((vk >= 48 and vk <= 57) or (vk >= 65 and vk <= 90)) then
+        imgui.SameLine()
+        imgui.TextColored(1.0, 0.8, 0.3, 1.0, "(also blocked in chat)")
+    end
     imgui.SameLine(260)
     imgui.PushID(optionKey)
     if capturingKey == optionKey then
@@ -1568,7 +1585,9 @@ local function drawInputSection()
     imgui.Separator()
     imgui.Text("Controller")
     if inputLib == nil then
-        imgui.TextColored(1.0, 0.6, 0.4, 1.0, "Not available: pinshare-input.dll is missing (update Rappy Runs Client)")
+        imgui.TextColored(1.0, 0.6, 0.4, 1.0, inputLoadError == "version"
+            and "Not available: restart the game to use the updated pinshare-input.dll"
+            or "Not available: pinshare-input.dll is missing (update Rappy Runs Client)")
         imgui.TextColored(0.7, 0.7, 0.7, 1.0, "Without it, bound keys also trigger the game's own functions")
         return
     end
@@ -1583,6 +1602,10 @@ local function drawInputSection()
         if bit.band(status, 1) == 0 then
             imgui.TextColored(1.0, 0.6, 0.4, 1.0, "Bound keys may also trigger the game's own functions (keyboard hook failed)")
         end
+    end
+    if bit.band(status, 4) ~= 0 and bit.band(status, 2) == 0 then
+        if padCapture ~= nil then setPadCapture(nil) end
+        return
     end
     for _, key in ipairs(padActionKeys) do
         padRow(padActionLabels[key], key)
@@ -1957,7 +1980,7 @@ local function keyPressed(key)
         return
     end
 
-    if not options.enable or key == 0 or padCapture ~= nil then return end
+    if not options.enable or key == 0 then return end
 
     if key == options.cursorKey then
         placePinAtCursor()

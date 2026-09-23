@@ -176,13 +176,21 @@ deleted once nothing holds them."
                          (equalp wanted (pinshare-file-octets installed)))
               (handler-case (pinshare-write-octets installed wanted)
                 (error ()
-                  ;; In use by the game: move it aside and write anew.
-                  (rename-file installed
-                               (merge-pathnames
+                  ;; Presumably in use by the game: move it aside and write
+                  ;; anew. If that write fails too, the cause was not the
+                  ;; lock (antivirus, permissions) - put the working copy
+                  ;; back rather than leave an aside file the next install
+                  ;; would delete.
+                  (let ((aside (merge-pathnames
                                 (format nil "pinshare-input.dll.old-~d"
                                         (get-universal-time))
-                                addon-dir))
-                  (pinshare-write-octets installed wanted)))
+                                addon-dir)))
+                    (rename-file installed aside)
+                    (handler-case (pinshare-write-octets installed wanted)
+                      (error (condition)
+                        (ignore-errors (delete-file installed))
+                        (rename-file aside installed)
+                        (error condition))))))
               (win32-log "pin share: input dll installed at ~a" installed)))
         (error (condition)
           (win32-log "pin share: input dll not installed: ~a" condition))))))
