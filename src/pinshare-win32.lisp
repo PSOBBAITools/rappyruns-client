@@ -147,17 +147,28 @@ ERROR_PATH_NOT_FOUND, where a live folder says ERROR_FILE_NOT_FOUND."
                        :element-type '(unsigned-byte 8))
     (write-sequence octets out)))
 
+(defun pinshare-old-input-dlls (addon-dir)
+  "Copies of pinshare-input.dll moved aside by earlier updates."
+  (remove-if-not (lambda (path)
+                   (let ((name (file-namestring path)))
+                     (and (>= (length name) 22)
+                          (string-equal "pinshare-input.dll.old" name :end2 22))))
+                 (ignore-errors (directory (merge-pathnames "*.*" addon-dir)))))
+
 (defun pinshare-install-input-dll (addon-dir)
   "Install or update pinshare-input.dll (lets the addon's bindings take
 priority over the game) next to the addon. Best effort: without it the
 addon still works, bound keys just reach the game too, so failures are
 only logged. A running game keeps the DLL loaded and locked; Windows
-still allows renaming a loaded DLL, so the old one moves aside to .old
-and the new one takes effect the next time the game starts."
+still allows renaming a loaded DLL, so the old one moves aside to a
+fresh pinshare-input.dll.old-<time> (a fresh name, since an earlier
+aside copy may itself still be loaded by another game window) and the
+new one takes effect the next time the game starts. Aside copies are
+deleted once nothing holds them."
   (let ((bundled (pinshare-bundled-file "pinshare-input.dll"))
-        (installed (merge-pathnames "pinshare-input.dll" addon-dir))
-        (aside (merge-pathnames "pinshare-input.dll.old" addon-dir)))
-    (ignore-errors (when (probe-file aside) (delete-file aside)))
+        (installed (merge-pathnames "pinshare-input.dll" addon-dir)))
+    (dolist (old (pinshare-old-input-dlls addon-dir))
+      (ignore-errors (delete-file old)))
     (when bundled
       (handler-case
           (let ((wanted (pinshare-file-octets bundled)))
@@ -166,8 +177,11 @@ and the new one takes effect the next time the game starts."
               (handler-case (pinshare-write-octets installed wanted)
                 (error ()
                   ;; In use by the game: move it aside and write anew.
-                  (when (probe-file aside) (delete-file aside))
-                  (rename-file installed aside)
+                  (rename-file installed
+                               (merge-pathnames
+                                (format nil "pinshare-input.dll.old-~d"
+                                        (get-universal-time))
+                                addon-dir))
                   (pinshare-write-octets installed wanted)))
               (win32-log "pin share: input dll installed at ~a" installed)))
         (error (condition)

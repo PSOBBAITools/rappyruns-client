@@ -73,7 +73,7 @@ static DWORD g_padMain[MAX_PAD_BINDINGS], g_padMod[MAX_PAD_BINDINGS];
 static int g_padCount;
 static volatile LONG g_fired;                   // binding index bits pressed since the last poll
 static volatile LONG g_padRaw;                  // latest unmasked buttons (any user)
-static volatile LONG g_status;                  // bit 0 keyboard hooked, bit 1 controller hooked
+static volatile LONG g_status;                  // bit 0 keyboard hooked, bit 1 controller hooked, bit 2 init done
 
 static bool Alive() { return (LONG)(GetTickCount() - (DWORD)g_heartbeat) < HEARTBEAT_MS; }
 static void Beat() { InterlockedExchange(&g_heartbeat, (LONG)GetTickCount()); }
@@ -154,6 +154,7 @@ static bool HookKeyboard()
 {
     HMODULE mods[512]; DWORD cb = 0;
     if (!EnumProcessModules(GetCurrentProcess(), mods, sizeof mods, &cb)) return false;
+    if (cb > sizeof mods) cb = sizeof mods;      // cb is what all modules would need
     for (DWORD i = 0; i < cb / sizeof(HMODULE); i++) {
         char path[MAX_PATH];
         if (!GetModuleFileNameA(mods[i], path, MAX_PATH)) continue;
@@ -180,6 +181,8 @@ static bool HookKeyboard()
 // ---------------------------------------------------------------- controller (XInput)
 typedef DWORD (WINAPI *XGetState_t)(DWORD, XINPUT_STATE*);
 static DWORD g_prev[4], g_hidden[4];
+static DWORD g_pendingSingle[4];                // held single-bound modifiers waiting for release
+static DWORD g_usedAsMod[4];                    // ...of which a combo was fired while held
 
 // Runs on every XInputGetState the game makes (~120 Hz from ephinea.dll).
 static void FilterPad(DWORD user, XINPUT_STATE* st)
@@ -193,27 +196,43 @@ static void FilterPad(DWORD user, XINPUT_STATE* st)
     g_prev[user] = raw;
     InterlockedExchange(&g_padRaw, (LONG)raw);
 
-    if (!Alive()) { g_hidden[user] = 0; return; }
+    if (!Alive()) { g_hidden[user] = g_pendingSingle[user] = g_usedAsMod[user] = 0; return; }
     // A button is hidden from the press that matched a binding until it is released,
     // so the game never sees half a press when the modifier is let go first.
     g_hidden[user] &= raw;
+    DWORD released = g_pendingSingle[user] & ~raw;
+    DWORD fired = 0;
+    EnterCriticalSection(&g_padCs);
+    DWORD mods = 0;                                        // buttons some combo uses as modifier
+    for (int i = 0; i < g_padCount; i++) mods |= g_padMod[i];
     if (pressed) {
-        EnterCriticalSection(&g_padCs);
-        DWORD fired = 0, taken = 0;
+        DWORD taken = 0;
         for (int pass = 0; pass < 2; pass++) {             // combos first, then single buttons
             for (int i = 0; i < g_padCount; i++) {
                 DWORD main = g_padMain[i], mod = g_padMod[i];
-                if ((pass == 0) != (mod != 0)) continue;
+                if (!main || (pass == 0) != (mod != 0)) continue;
                 if (!(pressed & main) || (taken & main)) continue;
                 if (mod && (raw & mod) != mod) continue;
-                fired |= 1u << i;
                 taken |= main;
+                if (mod) { g_usedAsMod[user] |= mod; fired |= 1u << i; }
+                // Bound alone but also a combo's modifier: decide on release, so pressing
+                // the combo does not also run the single action.
+                else if (main & mods) g_pendingSingle[user] |= main;
+                else fired |= 1u << i;
             }
         }
-        LeaveCriticalSection(&g_padCs);
         g_hidden[user] |= taken;
-        if (fired) _InterlockedOr(&g_fired, (LONG)fired);
     }
+    if (released) {
+        for (int i = 0; i < g_padCount; i++) {
+            DWORD main = g_padMain[i];
+            if (!g_padMod[i] && (released & main) && !(g_usedAsMod[user] & main)) fired |= 1u << i;
+        }
+        g_pendingSingle[user] &= ~released;
+        g_usedAsMod[user] &= ~released;
+    }
+    LeaveCriticalSection(&g_padCs);
+    if (fired) _InterlockedOr(&g_fired, (LONG)fired);
     DWORD hide = g_hidden[user];
     if (hide) {
         g->wButtons &= (WORD)~(hide & 0xFFFF);
@@ -283,18 +302,40 @@ static DWORD WINAPI InitThread(LPVOID)
 {
     if (HookController()) _InterlockedOr(&g_status, 2);
     // The plugin is loaded before any addon runs, but be patient on a slow start.
-    for (int i = 0; i < 50; i++) {
-        if (HookKeyboard()) { _InterlockedOr(&g_status, 1); return 0; }
-        Sleep(200);
+    bool hooked = false;
+    for (int i = 0; i < 50 && !hooked; i++) {
+        hooked = HookKeyboard();
+        if (!hooked) Sleep(200);
     }
-    LogF("keyboard: ImguiDInputDevice not found (addon plugin too old or too new?)");
+    if (hooked) _InterlockedOr(&g_status, 1);
+    else LogF("keyboard: ImguiDInputDevice not found (addon plugin too old or too new?)");
+    _InterlockedOr(&g_status, 4);
     return 0;
+}
+
+// DirectInput key codes are scan codes with the 0xE0 extended prefix folded into bit 7
+// (Delete = 0xD3, not numpad '.' 0x53). MapVirtualKey cannot tell the navigation cluster
+// from the numpad (it answers 0x53 for VK_DELETE even with VSC_EX), so those are listed.
+static int VkToDik(UINT vk)
+{
+    static const struct { UINT vk; int dik; } fixed[] = {
+        { VK_INSERT, DIK_INSERT }, { VK_DELETE, DIK_DELETE }, { VK_HOME, DIK_HOME }, { VK_END, DIK_END },
+        { VK_PRIOR, DIK_PRIOR }, { VK_NEXT, DIK_NEXT }, { VK_LEFT, DIK_LEFT }, { VK_UP, DIK_UP },
+        { VK_RIGHT, DIK_RIGHT }, { VK_DOWN, DIK_DOWN }, { VK_DIVIDE, DIK_DIVIDE }, { VK_SNAPSHOT, DIK_SYSRQ },
+        { VK_PAUSE, DIK_PAUSE }, { VK_NUMLOCK, DIK_NUMLOCK }, { VK_RCONTROL, DIK_RCONTROL },
+        { VK_RMENU, DIK_RMENU }, { VK_LWIN, DIK_LWIN }, { VK_RWIN, DIK_RWIN }, { VK_APPS, DIK_APPS },
+    };
+    for (int i = 0; i < (int)(sizeof fixed / sizeof fixed[0]); i++) if (fixed[i].vk == vk) return fixed[i].dik;
+    UINT sc = MapVirtualKeyA(vk, MAPVK_VK_TO_VSC_EX);
+    if ((sc & 0xFF00) == 0xE000) return 0x80 | (sc & 0x7F);
+    if (sc & 0xFF00) return 0;                   // 0xE1 sequences: no DirectInput equivalent
+    return (int)sc;
 }
 
 // ---------------------------------------------------------------- exports (cdecl, for LuaJIT ffi)
 EXPORT int __cdecl pinshare_input_version(void) { return PINSHARE_INPUT_VERSION; }
 
-// bit 0 = keyboard hooked, bit 1 = controller hooked
+// bit 0 = keyboard hooked, bit 1 = controller hooked, bit 2 = done trying (bits 0-1 are final)
 EXPORT int __cdecl pinshare_input_status(void) { return (int)g_status; }
 
 // The virtual-key codes to hide from the game (replaces the previous set).
@@ -302,8 +343,8 @@ EXPORT void __cdecl pinshare_input_set_keys(const int* vks, int n)
 {
     LONG next[256] = { 0 };
     for (int i = 0; vks && i < n; i++) {
-        UINT sc = MapVirtualKeyA((UINT)vks[i], MAPVK_VK_TO_VSC);
-        if (sc > 0 && sc < 256) next[sc] = 1;
+        int dik = VkToDik((UINT)vks[i]);
+        if (dik > 0 && dik < 256) next[dik] = 1;
     }
     for (int dik = 0; dik < 256; dik++) InterlockedExchange(&g_keyMask[dik], next[dik]);
     Beat();
@@ -328,8 +369,11 @@ EXPORT void __cdecl pinshare_input_set_pad(const unsigned* mains, const unsigned
 // Call every frame: keeps the masks alive and returns the bindings pressed since the last call.
 EXPORT unsigned __cdecl pinshare_input_poll(void)
 {
+    bool wasAlive = Alive();
     Beat();
-    return (unsigned)InterlockedExchange(&g_fired, 0);
+    LONG fired = InterlockedExchange(&g_fired, 0);
+    // Presses from before a lapse (addon off, errored, reloading) are stale: drop them.
+    return wasAlive ? (unsigned)fired : 0;
 }
 
 // The controller buttons held right now, before any hiding (for the binding UI).

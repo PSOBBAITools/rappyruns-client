@@ -60,13 +60,18 @@ options.arrowCustomColor = options.arrowCustomColor or 0x66E0FF
 options.frontKey      = options.frontKey or 0     -- キャラの正面にピンを立てるキー。既定: 割り当てなし
 options.frontDist     = options.frontDist or 100  -- 正面ピンの距離 (ゲーム内単位。10 = 1m)
 -- コントローラーの割り当て。pad<操作> がボタン (0 = なし)、pad<操作>Mod はそれと同時に押しておくボタン
--- (0 = 単独)。値は XInput のボタンのビット、LT = 0x10000、RT = 0x20000 (pinshare-input.dll と同じ)
-for _, name in ipairs({ "padFeet", "padClear", "padFilter", "padFront" }) do
+-- (0 = 単独)。値は XInput のボタンのビット、LT = 0x10000、RT = 0x20000 (pinshare-input.dll と同じ)。
+-- 並び順が DLL に渡す割り当て番号 (poll が返すビットの位置) になる
+local padActionKeys = { "padFeet", "padClear", "padFilter", "padFront" }
+for _, name in ipairs(padActionKeys) do
     options[name] = options[name] or 0
     options[name .. "Mod"] = options[name .. "Mod"] or 0
 end
 
+local inputDirty = true  -- 割り当てが変わった (pinshare-input.dll に渡し直す)
+
 local function SaveOptions()
+    inputDirty = true
     local file = io.open(optionsFileName, "w")
     if file ~= nil then
         io.output(file)
@@ -97,7 +102,7 @@ local function SaveOptions()
         io.write(string.format("    arrowCustomColor = 0x%06X,\n", options.arrowCustomColor))
         io.write(string.format("    frontKey = %d,\n", options.frontKey))
         io.write(string.format("    frontDist = %d,\n", options.frontDist))
-        for _, name in ipairs({ "padFeet", "padClear", "padFilter", "padFront" }) do
+        for _, name in ipairs(padActionKeys) do
             io.write(string.format("    %s = 0x%X,\n", name, options[name]))
             io.write(string.format("    %sMod = 0x%X,\n", name, options[name .. "Mod"]))
         end
@@ -760,12 +765,8 @@ do
     end
 end
 
--- コントローラーで使える操作 (並び順が DLL に渡す割り当て番号 = poll が返すビットの位置)
-local padActions = {
-    { key = "padFeet",   label = "Pin at feet:" },
-    { key = "padClear",  label = "Clear mine:" },
-    { key = "padFilter", label = "Cycle filter:" },
-    { key = "padFront",  label = "Pin in front:" },
+local padActionLabels = {
+    padFeet = "Pin at feet:", padClear = "Clear mine:", padFilter = "Cycle filter:", padFront = "Pin in front:",
 }
 
 local padButtonNames = {
@@ -783,11 +784,16 @@ local function padButtonName(bits)
 end
 
 local padCapture = nil      -- { key, order = {押した順のビット}, seen } コントローラー割り当て待ち
-local inputSignature = nil  -- 最後に DLL に渡した割り当て (変わったときだけ渡し直す)
+
+local function setPadCapture(capture)
+    padCapture = capture
+    inputDirty = true
+end
 
 -- 割り当て中のキーとボタンを DLL に渡す。毎フレーム呼んでよい (変化が無ければ何もしない)
 local function syncInputBindings()
-    if inputLib == nil then return end
+    if inputLib == nil or not inputDirty then return end
+    inputDirty = false
     local keys, mains, mods = {}, {}, {}
     if options.enable then
         -- 押しながら使う arrowKey / deleteKey は隠さない (Shift などをゲームから奪わない)
@@ -796,15 +802,12 @@ local function syncInputBindings()
         end
         -- 割り当て待ちの間は、既存の割り当てが反応しないよう全部外す
         if padCapture == nil then
-            for i, action in ipairs(padActions) do
-                mains[i] = options[action.key]
-                mods[i] = options[action.key .. "Mod"]
+            for i, key in ipairs(padActionKeys) do
+                mains[i] = options[key]
+                mods[i] = options[key .. "Mod"]
             end
         end
     end
-    local signature = table.concat(keys, ",") .. "|" .. table.concat(mains, ",") .. "|" .. table.concat(mods, ",")
-    if signature == inputSignature then return end
-    inputSignature = signature
     inputLib.pinshare_input_set_keys(#keys > 0 and inputFfi.new("int[?]", #keys, keys) or nil, #keys)
     inputLib.pinshare_input_set_pad(#mains > 0 and inputFfi.new("unsigned[?]", #mains, mains) or nil,
         #mods > 0 and inputFfi.new("unsigned[?]", #mods, mods) or nil, #mains)
@@ -826,7 +829,7 @@ local function updatePadCapture()
         local order = padCapture.order
         options[padCapture.key] = order[#order]
         options[padCapture.key .. "Mod"] = (#order >= 2) and order[1] or 0
-        padCapture = nil
+        setPadCapture(nil)
         SaveOptions()
     end
 end
@@ -1510,7 +1513,7 @@ local function keyRow(label, optionKey)
         if imgui.Button("Cancel") then capturingKey = nil end
     else
         if imgui.Button("Set") then
-            padCapture = nil
+            if padCapture ~= nil then setPadCapture(nil) end
             capturingKey = optionKey
         end
         imgui.SameLine()
@@ -1536,11 +1539,11 @@ local function padRow(label, optionKey)
     if padCapture ~= nil and padCapture.key == optionKey then
         imgui.TextColored(1.0, 0.8, 0.2, 1.0, "Press...")
         imgui.SameLine()
-        if imgui.Button("Cancel") then padCapture = nil end
+        if imgui.Button("Cancel") then setPadCapture(nil) end
     else
         if imgui.Button("Set") then
             capturingKey = nil
-            padCapture = { key = optionKey, order = {}, seen = 0 }
+            setPadCapture({ key = optionKey, order = {}, seen = 0 })
         end
         imgui.SameLine()
         if imgui.Button("Unbind") then
@@ -1569,15 +1572,20 @@ local function drawInputSection()
         imgui.TextColored(0.7, 0.7, 0.7, 1.0, "Without it, bound keys also trigger the game's own functions")
         return
     end
+    -- bit 0 = キーボード、bit 1 = コントローラー、bit 2 = 準備完了 (それまでの 0 は失敗ではない)
     local status = inputLib.pinshare_input_status()
-    if bit.band(status, 2) == 0 then
-        imgui.TextColored(1.0, 0.6, 0.4, 1.0, "Not available: the game's controller input could not be hooked")
+    if bit.band(status, 4) == 0 then
+        imgui.TextColored(0.7, 0.7, 0.7, 1.0, "Starting...")
+    else
+        if bit.band(status, 2) == 0 then
+            imgui.TextColored(1.0, 0.6, 0.4, 1.0, "Not available: the game's controller input could not be hooked")
+        end
+        if bit.band(status, 1) == 0 then
+            imgui.TextColored(1.0, 0.6, 0.4, 1.0, "Bound keys may also trigger the game's own functions (keyboard hook failed)")
+        end
     end
-    if bit.band(status, 1) == 0 then
-        imgui.TextColored(1.0, 0.6, 0.4, 1.0, "Bound keys may also trigger the game's own functions (keyboard hook failed)")
-    end
-    for _, action in ipairs(padActions) do
-        padRow(action.label, action.key)
+    for _, key in ipairs(padActionKeys) do
+        padRow(padActionLabels[key], key)
     end
     imgui.TextColored(0.7, 0.7, 0.7, 1.0, "Set, then press one button, or hold a button and press another for a combo")
     imgui.TextColored(0.7, 0.7, 0.7, 1.0, "Bound buttons are held back from the game (for a combo, only the second button)")
@@ -1867,6 +1875,8 @@ local pollInput  -- 下の「キー入力」で定義 (cycleFilter などを使�
 
 local function present()
     local now = pso.get_tick_count()
+    -- 割り当て待ちのままウィンドウを閉じたら取り消す (放置するとキー操作もコントローラーも止まったままになる)
+    if padCapture ~= nil and not configWindowOpen then setPadCapture(nil) end
     updatePadCapture()
     syncInputBindings()
     pollInput()
@@ -1967,9 +1977,9 @@ pollInput = function()
     if inputLib == nil then return end
     local fired = inputLib.pinshare_input_poll()
     if fired == 0 or not options.enable then return end
-    local run = { placePinAtFeet, clearMyPins, cycleFilter, placePinInFront }
-    for i = 1, #padActions do
-        if bit.band(fired, bit.lshift(1, i - 1)) ~= 0 then run[i]() end
+    local run = { padFeet = placePinAtFeet, padClear = clearMyPins, padFilter = cycleFilter, padFront = placePinInFront }
+    for i, key in ipairs(padActionKeys) do
+        if bit.band(fired, bit.lshift(1, i - 1)) ~= 0 then run[key]() end
     end
 end
 
