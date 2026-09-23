@@ -411,8 +411,10 @@ them; a data frame is recorded once per second."
       (when monsters
         (update-monster-tracking telemetry monsters elapsed-ms)))
     ;; Anyone still warping while fast burst is on (psostats FastWarps).
+    ;; Quest NPCs are not anyone.
     (when (and (getf snapshot :fast-burst)
-               (some (lambda (player) (getf player :warping))
+               (some (lambda (player)
+                       (and (getf player :warping) (not (getf player :npc))))
                      (getf snapshot :players)))
       (setf (telemetry-fast-warps telemetry) t))
     (when me

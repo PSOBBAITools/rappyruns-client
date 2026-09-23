@@ -307,7 +307,8 @@ without a verdict as normal."
   "Does GUILD-CARD mark an NPC? Only a present, non-numeric card does;
 a missing one is no evidence either way and stays a person."
   (and guild-card
-       (notevery #'digit-char-p guild-card)))
+       ;; ASCII digits only, like migration 033's GLOB '[0-9]'.
+       (notevery (lambda (char) (char<= #\0 char #\9)) guild-card)))
 
 (defun read-player (reader address)
   "Decode one player struct from a single block read; NIL when unreadable."

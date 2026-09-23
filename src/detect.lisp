@@ -68,7 +68,7 @@ consults it, so start-trigger checks may pass it as NIL."
     ;; People only: a quest NPC can stand on the field before anyone
     ;; has warped in (see NPC-GUILD-CARD-P).
     (:warp-in (some (lambda (player)
-                      (and (not (getf player :npc))
+                      (and (person-p player snapshot)
                            (plusp (getf player :floor 0))
                            (not (getf player :warping))))
                     (getf snapshot :players)))
@@ -97,10 +97,20 @@ so an enemy that merely spawns at 0 hp never false-fires a clear."
                        :name (getf snapshot :quest-name))
       '()))
 
-(defun party-of (snapshot)
+(defun person-p (player snapshot)
+  "Is PLAYER a person rather than a quest NPC? The local player always
+is, whatever their guild-card bytes read as on this frame."
+  (or (not (getf player :npc))
+      (let ((index (getf player :index)))
+        (and index (eql index (getf snapshot :my-index))))))
+
+(defun party-of (snapshot &key include-npcs)
+  "The party on SNAPSHOT. Quest NPCs fill player slots but are not party
+members; INCLUDE-NPCS keeps them, for the Shifta ceiling - an NPC
+partner's buffs are legitimate."
   (loop :for player :in (getf snapshot :players)
-        ;; Quest NPCs fill player slots but are not party members.
-        :when (and (getf player :class) (not (getf player :npc)))
+        :when (and (getf player :class)
+                   (or include-npcs (person-p player snapshot)))
           :collect (list :name (getf player :name)
                          :class (getf player :class)
                          :level (getf player :level)
@@ -196,7 +206,8 @@ yellow, which does not happen."
           (detector-telemetry detector)
           (make-telemetry :start-time (get-internal-real-time)
                           :max-party-pb-shifta (max-party-pb-shifta
-                                                (party-of snapshot)))))
+                                                (party-of snapshot
+                                                          :include-npcs t)))))
   (let* ((me (snapshot-my-player snapshot))
          (tracker (make-tracker :def def
                                 :start-time (get-internal-real-time)

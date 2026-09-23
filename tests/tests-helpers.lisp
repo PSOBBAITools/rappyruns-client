@@ -70,6 +70,23 @@
                                       :guild-card "42115973")
                                      (:name "Mr.X" :class "HUcast"
                                       :guild-card "Mr.X" :npc t)))))))
+  (check "party-of keeps the local player whatever their card reads as"
+         (equal '("Ryu")
+                (mapcar (lambda (p) (getf p :name))
+                        (ephinea-ta-client::party-of
+                         '(:my-index 0
+                           :players ((:index 0 :name "Ryu" :class "HUcast"
+                                      :guild-card "x1" :npc t)
+                                     (:index 1 :name "Mr.X" :class "HUcast"
+                                      :guild-card "Mr.X" :npc t)))))))
+  (check "party-of :include-npcs keeps NPCs (Shifta ceiling)"
+         (= 2 (length (ephinea-ta-client::party-of
+                       '(:players ((:name "a" :class "RAmar")
+                                   (:name "Rico" :class "FOnewearl" :npc t)))
+                       :include-npcs t))))
+  (check "npc-guild-card-p: only ASCII digits make a person"
+         (ephinea-ta-client::npc-guild-card-p
+          (coerce (list (code-char #xFF14) (code-char #xFF12)) 'string)))
   (check "trigger-met-p monster-dead consults killed ids"
          (and (ephinea-ta-client::trigger-met-p
                '(:monster-dead 42) '() '(41 42))
