@@ -367,6 +367,22 @@ who cannot create rules, never see it."
                          :text (pinshare-status-text *pinshare-status*)
                          :font *ui-font*
                          :accessor pinshare-status-pane)
+   ;; Pin sets (pinshare.lisp): the set chosen on the site for the
+   ;; loaded quest, and saving the channel's pins as one.
+   (pinshare-pin-set-pane capi:title-pane
+                          :text (pinshare-pin-set-text)
+                          :font *ui-font*
+                          :accessor pinshare-pin-set-pane)
+   (pinshare-save-new-button capi:push-button
+                             :text (tr :pinshare-save-new-button)
+                             :callback 'save-pin-set-new-callback
+                             :callback-type :interface
+                             :font *ui-font*)
+   (pinshare-save-overwrite-button capi:push-button
+                                   :text (tr :pinshare-save-overwrite-button)
+                                   :callback 'save-pin-set-overwrite-callback
+                                   :callback-type :interface
+                                   :font *ui-font*)
    ;; Which corner of the game window the overlay panel occupies: the
    ;; top-right default sits on PSO's own minimap once the ghost panel
    ;; grows its room-split rows, so it is movable.
@@ -471,9 +487,12 @@ who cannot create rules, never see it."
    (pinshare-channel-row capi:row-layout
                          '(pinshare-channel-input pinshare-channel-button)
                          :adjust :center)
+   (pinshare-save-row capi:row-layout
+                      '(pinshare-save-new-button pinshare-save-overwrite-button))
    (pinshare-group capi:column-layout
                    '(pinshare-enabled-check pinshare-channel-row
-                     pinshare-channel-note pinshare-status-pane)
+                     pinshare-channel-note pinshare-status-pane
+                     pinshare-pin-set-pane pinshare-save-row)
                    :title (tr :group-pinshare) :title-position :frame
                    :title-font *ui-font* :adjust :left)
    (updates-group capi:column-layout
@@ -1207,6 +1226,78 @@ notices the change on its next tick and rejoins under the new one."
         (capi:text-input-pane-text (pinshare-channel-input interface)))
   (save-config!))
 
+(defun pinshare-pin-set-text ()
+  "The Settings line naming the pin set drawn for the loaded quest."
+  (let ((set *pinshare-pin-set*))
+    (cond (set (tr :pinshare-pin-set-active
+                   (gethash "name" set) (gethash "author" set)))
+          (*pinshare-quest-slugs* (tr :pinshare-pin-set-none))
+          (t (tr :pinshare-pin-set-none-idle)))))
+
+(defun save-pin-set-in-background (interface body &optional set-id)
+  "POST the pin set off the GUI thread; report back on it."
+  (mp:process-run-function
+   "eta-client-pin-set-save" '()
+   (lambda ()
+     (let ((report
+             (handler-case
+                 (multiple-value-bind (outcome payload)
+                     (save-pin-set body :set-id set-id)
+                   (flet ((field (key)
+                            (and (hash-table-p payload) (gethash key payload))))
+                     (case outcome
+                       (:created (tr :pinshare-save-created (field "url")))
+                       (:updated
+                        (refetch-pin-set)
+                        (tr :pinshare-save-updated
+                            (or (field "pins") 0) (or (field "arrows") 0)))
+                       (t (tr :pinshare-save-failed
+                              (or (field "message") (field "error")
+                                  (string-downcase (symbol-name outcome))))))))
+               (error (condition)
+                 (tr :pinshare-save-failed (princ-to-string condition))))))
+       (capi:execute-with-interface-if-alive
+        interface (lambda () (capi:display-message "~a" report)))))))
+
+(defun pinshare-save-precheck ()
+  "(values slug pins arrows) for a save, or NIL after telling the user
+why not (no quest loaded / nothing in the channel)."
+  (let ((slug (first *pinshare-quest-slugs*))
+        (items *pinshare-channel-items*))
+    (cond ((null slug)
+           (capi:display-message "~a" (tr :pinshare-save-no-quest))
+           nil)
+          ((or (null items)
+               (and (zerop (length (car items))) (zerop (length (cdr items)))))
+           (capi:display-message "~a" (tr :pinshare-save-no-items))
+           nil)
+          (t (values slug (car items) (cdr items))))))
+
+(defun save-pin-set-new-callback (interface)
+  "Save the channel's current pins and arrows as a new private set on
+the loaded quest; naming and publishing happen on the site."
+  (multiple-value-bind (slug pins arrows) (pinshare-save-precheck)
+    (when slug
+      (save-pin-set-in-background interface
+                                  (pinshare-save-body slug pins arrows)))))
+
+(defun save-pin-set-overwrite-callback (interface)
+  "Replace the items of the set in use - the user's own only - with the
+channel's current pins, after a confirmation (everyone using the set
+gets the change)."
+  (let ((set *pinshare-pin-set*))
+    (if (not (and set (eql (gethash "mine" set) 1)))
+        (capi:display-message "~a" (tr :pinshare-save-not-mine))
+        (multiple-value-bind (slug pins arrows) (pinshare-save-precheck)
+          (when (and slug
+                     (capi:confirm-yes-or-no
+                      "~a" (tr :pinshare-save-confirm-overwrite
+                               (gethash "name" set)
+                               (length pins) (length arrows))))
+            (save-pin-set-in-background
+             interface (pinshare-save-body slug pins arrows)
+             (gethash "id" set)))))))
+
 (defun overlay-corner-items ()
   "Option-pane items for the overlay-position choice: (label . corner),
 in reading order over the position grid, plus the Ctrl+drag custom
@@ -1736,6 +1827,8 @@ silent, exactly like the old silent startup check."
         (pinshare-status-text *pinshare-status*)
       (set-pane-text interface #'pinshare-status-pane text
                      (and error-p :red)))
+    (set-pane-text interface #'pinshare-pin-set-pane (pinshare-pin-set-text)
+                   nil)
     ;; The floating in-game overlay follows the same 4 Hz cadence.
     ;; FUNCALL by name: overlay-win32.lisp loads after this file.
     (ignore-errors (funcall 'update-ghost-overlay detector recording-p))

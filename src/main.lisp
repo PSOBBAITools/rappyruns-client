@@ -328,6 +328,10 @@ into the next iteration."
     ;; loads (the load screen hides the round trip) and feed the live
     ;; room delta. Neither ever interferes with detection.
     (ignore-errors (maybe-start-ghost-fetch snapshot))
+    ;; Pin sets: the one chosen on the site for this quest, drawn by
+    ;; the Pin Share relay (pinshare-win32.lisp). FUNCALL by name
+    ;; like the overlay: the relay file is LispWorks-only.
+    (ignore-errors (funcall 'maybe-start-pin-set-fetch snapshot))
     (ignore-errors (ghost-race-step detector snapshot))
     (when runs
       (run-completion-sounds runs)

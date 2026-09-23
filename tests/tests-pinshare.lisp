@@ -244,6 +244,82 @@
                         (ephinea-ta-client::parse-websocket-url
                          "ws://localhost:8787"))
                        '(nil "localhost" 8787 "/"))))
+    ;; pin sets (saved on the site, drawn locally)
+    (let* ((set (pinshare-parsed
+                 "{\"id\":7,\"name\":\"TTF route\",\"mine\":1,
+                   \"items\":{\"pins\":[
+                     {\"area\":10101,\"room\":3,\"x\":1,\"y\":2.5,\"z\":-3,
+                      \"label\":\"start\",\"color\":\"ff8c00\"},
+                     {\"area\":10101,\"room\":3,\"x\":4,\"y\":0,\"z\":0},
+                     {\"area\":10102,\"x\":5,\"y\":0,\"z\":0}],
+                   \"arrows\":[
+                     {\"area\":10101,\"room\":4,\"x1\":0,\"y1\":0,\"z1\":0,
+                      \"x2\":10,\"y2\":0,\"z2\":10,\"xm\":5,\"ym\":0,\"zm\":6}]}}"))
+           (relay (ephinea-ta-client::make-pinshare-relay :channel "secret"
+                                                          :session "abc"))
+           (text (ephinea-ta-client::render-pinshare-inbox relay 1 set)))
+      (check "pin-set pins join in.txt locked, negative ids, set name as owner"
+             (and (search (pinshare-tab-line "pin" -1 "TTF route" 10101 1 "2.5" -3 -1
+                                             "start" 1 1 "ff8c00" 1 3 1)
+                          text)
+                  (search (pinshare-tab-line "pin" -2 "TTF route" 10101 4 0 0 -1
+                                             "" 2 2 "" 2 3 1)
+                          text)
+                  ;; a pin with no room numbers on its own
+                  (search (pinshare-tab-line "pin" -3 "TTF route" 10102 5 0 0 -1
+                                             "" 3 3 "" 1 "" 1)
+                          text)))
+      (check "pin-set arrows keep their bend, room and the locked flag last"
+             (search (pinshare-tab-line "arrow" -4 "TTF route" 10101 0 0 0 10 0 10
+                                        -1 "" 5 0 6 4 1)
+                     text))
+      (check "the addon is told which set it is drawing, before end"
+             (search (format nil "~a~a"
+                             (pinshare-tab-line "pinset" "TTF route")
+                             (pinshare-tab-line "end"))
+                     text))
+      (check "no set, no pinset line and no local items"
+             (let ((plain (ephinea-ta-client::render-pinshare-inbox relay 1)))
+               (and (not (search "pinset" plain))
+                    (not (search (format nil "pin~c-1" #\Tab) plain)))))
+      (check "a long set name is cut where it stands in for the owner"
+             (let ((long (pinshare-parsed
+                          "{\"name\":\"A very long pin set name indeed\",
+                            \"items\":{\"pins\":[{\"area\":1,\"x\":0,\"y\":0,\"z\":0}]}}")))
+               (search (format nil "pin~c-1~cA very long pin set ~c"
+                               #\Tab #\Tab #\Tab)
+                       (ephinea-ta-client::render-pinshare-inbox relay 1 long)))))
+    (let ((relay (ephinea-ta-client::make-pinshare-relay :channel "secret")))
+      (check "moves and removes of pin-set items never reach the server"
+             (and (null (ephinea-ta-client::pinshare-relay-consume
+                         relay
+                         '((1 "1" "remove" "-2") (2 "2" "arrow_remove" "-4")
+                           (3 "3" "move" "-1" "1" "2" "3")
+                           (4 "4" "arrow_move" "-4" "0" "0" "0" "1" "1" "1"))
+                         t))
+                  (= 1 (length (ephinea-ta-client::pinshare-relay-consume
+                                relay '((5 "5" "remove" "12")) t))))))
+    (let ((body (pinshare-parsed
+                 (ephinea-ta-client::pinshare-save-body
+                  "ep1-towards-the-future"
+                  (pinshare-parsed "[{\"id\":3,\"owner\":\"Teapot\",\"floor\":10101,
+                                     \"x\":1,\"y\":2,\"z\":3}]")
+                  nil))))
+      (check "save body files the channel's snapshot under the quest slug"
+             (and (equal (gethash "quest" body) "ep1-towards-the-future")
+                  (= (gethash "floor" (aref (gethash "pins" (gethash "items" body)) 0))
+                     10101)
+                  (equalp (gethash "arrows" (gethash "items" body)) #())
+                  (null (nth-value 1 (gethash "name" body))))))
+    (let ((ephinea-ta-client::*pinshare-pin-set* :stale)
+          (ephinea-ta-client::*pinshare-quest-slugs* '("x"))
+          (ephinea-ta-client::*pinshare-set-fetch-ptr* 1234))
+      (check "no quest loaded forgets the set, the slugs and the load"
+             (and (null (ephinea-ta-client::pinshare-set-fetch-wanted
+                         '(:quest-ptr 0)))
+                  (null ephinea-ta-client::*pinshare-pin-set*)
+                  (null ephinea-ta-client::*pinshare-quest-slugs*)
+                  (null ephinea-ta-client::*pinshare-set-fetch-ptr*))))
     ;; staged rollout
     (check "an older server's /api/me (no features) and no account mean no"
            (and (not (ephinea-ta-client::pinshare-feature-p
@@ -263,6 +339,7 @@
                   '((:off) (:not-allowed) (:no-channel) (:waiting-game)
                     (:connecting)
                     (:connected "secret" 2) (:connected-no-addon)
+                    (:local-only "TTF route")
                     (:error "boom")
                     (:no-addon-plugin) (:install-failed "denied")
                     (:broken-link "C:\\Games\\addons\\Pin Share")

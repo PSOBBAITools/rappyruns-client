@@ -76,7 +76,8 @@ reads a half-written list. Returns true on success; a failure (the addon
 has the file open this instant) leaves the relay dirty for the next
 tick."
   (let ((octets (string-to-utf8
-                 (render-pinshare-inbox relay (pinshare-unix-time)))))
+                 (render-pinshare-inbox relay (pinshare-unix-time)
+                                        *pinshare-pin-set*))))
     (when (ignore-errors
             (with-open-file (out tmp-path :direction :output
                                           :if-exists :supersede
@@ -237,8 +238,12 @@ says why it is idle."
     (cond ((not (config-value :pinshare-enabled)) (values nil '(:off)))
           ;; Staged rollout: the server decides who may use the relay.
           ((not *pinshare-allowed-p*) (values nil '(:not-allowed)))
-          ((string= channel "") (values nil '(:no-channel)))
           ((null exe) (values nil '(:waiting-game)))
+          ;; No passphrase: nothing to share, but a pin set chosen on
+          ;; the site is still drawn - a session with channel "" writes
+          ;; in.txt and never connects.
+          ((and (string= channel "") (null *pinshare-pin-set*))
+           (values nil '(:no-channel)))
           (t (values (list exe channel (pinshare-server-url)) nil)))))
 
 (defun pinshare-session-current-p (wanted)
@@ -254,7 +259,9 @@ says why it is idle."
         (retry-at 0)
         (backoff 1)
         (opened-at 0)
-        (last-write 0))
+        (last-write 0)
+        (local-only (string= (second wanted) ""))
+        (drawn-set :none))
     (labels ((status (status message gui)
                (when (pinshare-relay-set-status relay status message)
                  (win32-log "pin share: ~a ~a" status message))
@@ -325,9 +332,13 @@ says why it is idle."
                   (pinshare-relay-clear-state relay)
                   (status "error" "disconnected from the server"
                           '(:error "disconnected from the server"))))))
+      (when local-only
+        (status "local" "" (list :local-only
+                                 (and *pinshare-pin-set*
+                                      (gethash "name" *pinshare-pin-set*)))))
       (unwind-protect
            (loop :while (pinshare-session-current-p wanted)
-                 :do (when (and (null socket) (not connecting)
+                 :do (when (and (null socket) (not connecting) (not local-only)
                                 (>= (pinshare-seconds) retry-at))
                        (setf connecting t)
                        (status "connecting" url '(:connecting))
@@ -341,6 +352,22 @@ says why it is idle."
                                         (mp:mailbox-read mailbox))
                            :while event
                            :do (handle event))
+                     ;; What Save files: the server's latest lists, only
+                     ;; while they are live.
+                     (setf *pinshare-channel-items*
+                           (and socket
+                                (cons (pinshare-relay-pins relay)
+                                      (pinshare-relay-arrows relay))))
+                     ;; A set fetched (or dropped) mid-session redraws at
+                     ;; once rather than on the next heartbeat.
+                     (unless (eq drawn-set *pinshare-pin-set*)
+                       (setf drawn-set *pinshare-pin-set*
+                             (pinshare-relay-dirty relay) t)
+                       (when local-only
+                         (status "local" ""
+                                 (list :local-only
+                                       (and drawn-set
+                                            (gethash "name" drawn-set))))))
                      (let ((messages (pinshare-relay-consume
                                       relay
                                       (parse-pinshare-outbox
@@ -359,6 +386,7 @@ says why it is idle."
                                (>= (- (pinshare-seconds) last-write) 1))
                        (when (pinshare-write-inbox relay in-path tmp-path)
                          (setf last-write (pinshare-seconds)))))
+        (setf *pinshare-channel-items* nil)
         (pinshare-link-cancel link)))))
 
 (defun pinshare-run-session (wanted)
@@ -406,6 +434,39 @@ says why it is idle."
                   (progn
                     (setf *pinshare-status* status)
                     (pinshare-wait 1))))))
+
+(defun maybe-start-pin-set-fetch (snapshot)
+  "Fetch the pin set chosen on the site when a quest just loaded (the
+same once-per-load rule as the ghost, PINSHARE-SET-FETCH-WANTED). The
+result lands only if that quest load is still current; the relay picks
+it up on its next tick."
+  (let ((slugs (pinshare-set-fetch-wanted snapshot)))
+    (when slugs
+      (let ((ptr *pinshare-set-fetch-ptr*))
+        (mp:process-run-function
+         "eta-client-pin-set-fetch" '()
+         (lambda ()
+           (let ((set (handler-case
+                          (multiple-value-bind (outcome payload)
+                              (fetch-pin-set (first slugs)
+                                             :extra-slugs (rest slugs))
+                            (and (eq outcome :ok)
+                                 (hash-table-p payload)
+                                 (hash-table-p (gethash "items" payload))
+                                 payload))
+                        (error (condition)
+                          (win32-log "pin set fetch failed: ~a" condition)
+                          nil))))
+             (when (eql ptr *pinshare-set-fetch-ptr*)
+               (setf *pinshare-pin-set* set)
+               (when set
+                 (win32-log "pin share: drawing pin set ~s"
+                            (gethash "name" set)))))))))))
+
+(defun refetch-pin-set ()
+  "Ask again for the loaded quest's set on the next poll (after an
+overwrite, so the locked copy shows the new pins)."
+  (setf *pinshare-set-fetch-ptr* nil))
 
 (defparameter +pinshare-permission-interval-seconds+ 1800
   "How often a linked client re-asks /api/me whether it is in the Pin

@@ -8,6 +8,8 @@
 --   exchange/out.txt : アドオン -> クライアント。1 行 1 命令 (<seq>\t<命令>\t<引数...>)
 --   exchange/in.txt  : クライアント -> アドオン。ピン一覧と接続状態 (1 秒ごとに更新)
 -- ピンの正本は中継サーバーが持ち、期限切れの削除もサーバーが行う。
+-- 例外はピンセット (サイトで選んだそのクエスト用の保存済みピン): クライアントが
+-- 負の ID と locked 印を付けて in.txt に混ぜる。動かせず消せず、サーバーには送らない。
 --
 -- 構造は Key Timer / Monster Reader (Wave Marker) と同じ作法に従う。
 
@@ -353,6 +355,7 @@ local relay = {
     message = "",
     channel = "",
     members = {},
+    pinSet = nil,        -- 表示中のピンセットの名前 (サイトで選んだもの)。無ければ nil
 }
 local pins = {}          -- { id, owner, area, room, x, y, z, remaining, label }
 local pinFirstSeen = {}  -- id -> 初めて見た tick。出現時のアニメーション用
@@ -435,6 +438,8 @@ local function readInbox()
             newRelay.message = f[3] or ""
         elseif kind == "channel" then
             newRelay.channel = f[2] or ""
+        elseif kind == "pinset" then
+            newRelay.pinSet = f[2]
         elseif kind == "member" then
             table.insert(newRelay.members, f[2] or "")
         elseif kind == "pin" and #f >= 8 then
@@ -452,6 +457,7 @@ local function readInbox()
                 color = tonumber(f[12] or "", 16),  -- 持ち主が選んだ色 (0xRRGGBB)。古い版なら nil
                 orderRoom = tonumber(f[13] or ""),  -- サーバーが振った部屋ごとの番号
                 room = tonumber(f[14] or ""),       -- 置いた人がいた部屋 (Room ID)。古い版なら nil
+                locked = f[15] == "1",              -- ピンセットのピン: 動かせない・消せない
             }
             if p.id and p.area and p.x and p.y and p.z then
                 table.insert(newPins, p)
@@ -468,6 +474,7 @@ local function readInbox()
                 -- 曲げたときに通る真ん中の点。曲げに対応していないサーバー・クライアントなら両端の中点
                 xm = tonumber(f[13] or ""), ym = tonumber(f[14] or ""), zm = tonumber(f[15] or ""),
                 room = tonumber(f[16] or ""),   -- 引いた人がいた部屋 (Room ID)。古い版なら nil
+                locked = f[17] == "1",          -- ピンセットの矢印: 動かせない・消せない
             }
             if a.id and a.area and a.x1 and a.y1 and a.z1 and a.x2 and a.y2 and a.z2 then
                 if not (a.xm and a.ym and a.zm) then
@@ -485,6 +492,7 @@ local function readInbox()
     relay.message = newRelay.message or ""
     relay.channel = newRelay.channel or ""
     relay.members = newRelay.members
+    relay.pinSet = newRelay.pinSet
     pins = newPins
     arrows = newArrows
 
@@ -1221,7 +1229,7 @@ local function drawArrows(view)
     if imgui.Begin("PinShare##arrows", nil, markerWindowParams) then
         for _, a in ipairs(visible) do
             local g = arrowPosition(a)
-            local movable = a.owner == myName or options.moveOthers
+            local movable = not a.locked and (a.owner == myName or options.moveOthers)
             local s = drawArrowShape(g, rgbToImU32(pinColor(a)), movable)
             if movable then
                 -- 消すときは線のどこを指してもよい
@@ -1299,7 +1307,7 @@ local function drawPins()
             local color = rgbToImU32(pinColor(p))
             local text = pinText(p, dist)
             -- 掴める・クリックで消せるのは自分のピンだけ (設定で他の人のピンも)
-            local movable = p.owner == myName or options.moveOthers
+            local movable = not p.locked and (p.owner == myName or options.moveOthers)
 
             if not offscreen then
                 local tipX, tipY = resW * 0.5 + sx, resH * 0.5 + sy
@@ -1452,6 +1460,9 @@ local function drawConfig()
     else
         if relay.status == "connected" then
             imgui.TextColored(0.4, 1.0, 0.4, 1.0, "Server: connected")
+        elseif relay.status == "local" then
+            -- 合言葉なしでピンセットだけ表示している
+            imgui.TextColored(1.0, 0.8, 0.3, 1.0, "Server: not connected (no passphrase) - pin set only")
         elseif relay.status == "error" then
             imgui.TextColored(1.0, 0.4, 0.4, 1.0, "Server: " .. relay.message)
         else
@@ -1459,6 +1470,9 @@ local function drawConfig()
         end
         imgui.Text("Channel: " .. relay.channel)
         imgui.Text("Members: " .. table.concat(relay.members, ", "))
+        if relay.pinSet ~= nil then
+            imgui.Text("Pin set: " .. relay.pinSet .. " (chosen on the site; locked)")
+        end
     end
 
     imgui.Separator()

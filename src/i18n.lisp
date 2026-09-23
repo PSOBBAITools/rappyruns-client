@@ -413,6 +413,45 @@
     :pinshare-status-no-channel
     ("Pin Share: enter a party passphrase"
      "Pin Share: 合言葉を入力してください")
+    :pinshare-status-local-only
+    ("Pin Share: showing pin set \"~a\" (no passphrase - not sharing with the party)"
+     "Pin Share: ピンセット「~a」を表示中 (合言葉なし - パーティーとは共有していません)")
+    :pinshare-pin-set-none
+    ("Pin set: none for this quest (choose one on the quest's Pin sets tab on the site)"
+     "ピンセット: このクエストでは未選択 (サイトのクエストページの「ピンセット」タブで選べます)")
+    :pinshare-pin-set-none-idle
+    ("Pin set: load a quest to use the one chosen on the site"
+     "ピンセット: クエストを読み込むと、サイトで選んだセットを表示します")
+    :pinshare-pin-set-active
+    ("Pin set: \"~a\" by ~a"
+     "ピンセット: 「~a」(作者 ~a)")
+    :pinshare-save-new-button
+    ("Save pins as a new set"
+     "今のピンを新しいセットとして保存")
+    :pinshare-save-overwrite-button
+    ("Overwrite my set in use"
+     "使用中の自分のセットに上書き")
+    :pinshare-save-no-quest
+    ("Load the quest first: a pin set is saved for the quest you are in."
+     "先にクエストを読み込んでください。ピンセットは今いるクエストに保存されます。")
+    :pinshare-save-no-items
+    ("There are no pins or arrows in the channel to save. Place them in-game first (Pin Share must be connected)."
+     "保存するピンや矢印がチャンネルにありません。先にゲーム内で置いてください (Pin Share の接続が必要です)。")
+    :pinshare-save-not-mine
+    ("The set in use is not yours (or none is in use), so there is nothing to overwrite. Save a new set instead."
+     "使用中のセットが自分のものではない (または未使用) ため、上書きできません。新しいセットとして保存してください。")
+    :pinshare-save-confirm-overwrite
+    ("Replace every pin and arrow of \"~a\" with the ~d pin(s) and ~d arrow(s) in the channel now? Everyone using the set gets the new ones."
+     "「~a」のピンと矢印を、今チャンネルにあるピン ~d 本・矢印 ~d 本で置き換えますか? このセットを使っている全員に反映されます。")
+    :pinshare-save-created
+    ("Saved as a private pin set. Name it, describe it and choose who can see it on the site:~%~a"
+     "非公開のピンセットとして保存しました。名前・説明・公開範囲はサイトで設定できます:~%~a")
+    :pinshare-save-updated
+    ("Pin set updated (~d pins, ~d arrows)."
+     "ピンセットを更新しました (ピン ~d 本、矢印 ~d 本)。")
+    :pinshare-save-failed
+    ("Could not save the pin set: ~a"
+     "ピンセットを保存できませんでした: ~a")
     :pinshare-status-waiting-game
     ("Pin Share: waiting for the game"
      "Pin Share: ゲームの起動を待っています")

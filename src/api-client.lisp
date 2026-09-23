@@ -710,6 +710,48 @@ failures."
         (t (error 'api-error
                   :message (format nil "GET ~a -> ~a" path status)))))))
 
+(defun fetch-pin-set (slug &key extra-slugs
+                                 (server-url (config-value :server-url))
+                                 (token (normalize-token (config-value :api-token))))
+  "GET /api/quests/:slug/pins: the pin set the user chose on the site
+for the loaded quest (EXTRA-SLUGS: its other category slugs, as for the
+ghost). (values :ok payload) on 200, (values :none nil) on 404 - none
+chosen, or the set went private; API-ERROR on auth and transport
+failures."
+  (let ((path (format nil "/api/quests/~a/pins~@[?slugs=~{~a~^,~}~]"
+                      slug extra-slugs)))
+    (multiple-value-bind (status body)
+        (http-request "GET" (api-url server-url path) :token token)
+      (case status
+        (200 (values :ok (ignore-errors (jzon:parse body))))
+        (404 (values :none nil))
+        (401 (error 'api-error :message "Invalid or revoked API token"))
+        (t (error 'api-error
+                  :message (format nil "GET ~a -> ~a" path status)))))))
+
+(defun save-pin-set (body &key set-id
+                              (server-url (config-value :server-url))
+                              (token (normalize-token (config-value :api-token))))
+  "POST a pin set: BODY (PINSHARE-SAVE-BODY's JSON) as a new private set,
+or - with SET-ID - over that set's items (the user's own only).
+Returns (values outcome payload): :created / :updated, :rejected (400,
+403 - payload has the server's message) or :not-found. API-ERROR on auth
+and transport failures."
+  (let ((path (if set-id
+                  (format nil "/api/pin-sets/~d/items" set-id)
+                  "/api/pin-sets")))
+    (multiple-value-bind (status response)
+        (http-request "POST" (api-url server-url path) :body body :token token)
+      (let ((payload (ignore-errors (jzon:parse response))))
+        (case status
+          (201 (values :created payload))
+          (200 (values :updated payload))
+          ((400 403) (values :rejected payload))
+          (404 (values :not-found payload))
+          (401 (error 'api-error :message "Invalid or revoked API token"))
+          (t (error 'api-error
+                    :message (format nil "POST ~a -> ~a" path status))))))))
+
 (defun video-file-path (server-id offset-ms)
   (format nil "/api/runs/~d/video-file~@[?offset_ms=~d~]" server-id offset-ms))
 

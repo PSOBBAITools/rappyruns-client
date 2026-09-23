@@ -245,6 +245,21 @@ client release that removes the gate). And the gate controls who is
 *offered* the feature, not who can reach the relay: the relay server
 itself accepts any client that knows a passphrase, as it always has.
 
+**Pin sets.** A quest's pins and arrows can be saved on the site as a
+pin set (private, unlisted or public; the site's quest page lists them
+on a Pin sets tab) and each player chooses at most one per quest. At
+quest load the client fetches the chosen one (`GET
+/api/quests/:slug/pins`, with the same `slugs=` family as the ghost)
+and the relay draws it locally: its items join `in.txt` with negative
+ids and a trailing `locked` field, so the addon never lets them be
+dragged or deleted, and nothing about them reaches the relay server -
+each party member sees their own choice. With no passphrase but a set
+to draw, the relay runs a server-less session (`status local`) just to
+keep `in.txt` fresh. Settings has two save buttons: the channel's
+current pins as a new private set on the loaded quest (named and
+published on the site), or over the set in use when it is the user's
+own. Pin sets ride the same rollout as Pin Share.
+
 `src/pinshare.lisp` is the pure half (file formats, JSON translation,
 reconnect state; SBCL-tested), `src/pinshare-win32.lisp` the relay
 thread, `src/websocket-win32.lisp` the WebSocket client over WinHTTP

@@ -261,12 +261,25 @@ pin placed minutes ago must not pop up after a reconnect."
                                        (list (pinshare-json
                                               "t" "arrow_color"
                                               "color" value)))))))
+                    ((pinshare-local-item-command-p fields)
+                     ;; A pin-set item is drawn from the site's copy, not
+                     ;; the server's list: there is nothing to move or
+                     ;; remove there (the addon locks them anyway).
+                     nil)
                     (connected
                      (let ((message (pinshare-command-message fields)))
                        (when message
                          (setf messages
                                (append messages (list message)))))))))
     messages))
+
+(defun pinshare-local-item-command-p (fields)
+  "True for a move / remove of a negative id: the pin-set items the
+relay draws locally (PINSHARE-LOCAL-ITEMS)."
+  (and (member (second fields) '("move" "remove" "arrow_move" "arrow_remove")
+               :test #'string=)
+       (let ((id (and (third fields) (parse-pinshare-integer (third fields)))))
+         (and id (minusp id)))))
 
 (defun pinshare-relay-skip-backlog (relay lines)
   "Relay start: whatever already sits in out.txt is stale, so only the
@@ -366,8 +379,10 @@ position."
           (loop :for key :in extra-keys
                 :collect (pinshare-field (gethash key item)))))))))
 
-(defun render-pinshare-inbox (relay unix-time)
-  "The full text of in.txt for RELAY's current state."
+(defun render-pinshare-inbox (relay unix-time &optional pin-set)
+  "The full text of in.txt for RELAY's current state, plus PIN-SET's
+items (the set chosen on the site for the loaded quest, or NIL) drawn
+as locked local pins."
   (with-output-to-string (out)
     (flet ((line (&rest fields)
              (write-string (pinshare-join fields) out)
@@ -396,6 +411,22 @@ position."
                                '("remaining" "color")
                                '("xm" "ym" "zm" "room")))
             :when text :do (line text))
+      (when pin-set
+        (multiple-value-bind (pins arrows) (pinshare-local-items pin-set)
+          (loop :for pin :across pins
+                :for text := (pinshare-item-line
+                              "pin" pin '("x" "y" "z")
+                              '("remaining" "label" "no" "ownerNo"
+                                "color" "roomNo" "room" "locked"))
+                :when text :do (line text))
+          (loop :for arrow :across arrows
+                :for text := (pinshare-item-line
+                              "arrow" arrow
+                              '("x1" "y1" "z1" "x2" "y2" "z2")
+                              '("remaining" "color")
+                              '("xm" "ym" "zm" "room" "locked"))
+                :when text :do (line text)))
+        (line "pinset" (pinshare-clean (gethash "name" pin-set))))
       (line "end"))))
 
 (defun pinshare-inbox-heartbeat (text)
@@ -442,6 +473,8 @@ fresh list is atomic enough.")
                               (first args) (second args))
                           nil))
       (:connected-no-addon (values (tr :pinshare-status-no-addon) nil))
+      ;; No passphrase, but a pin set to draw: in.txt without a server.
+      (:local-only (values (tr :pinshare-status-local-only (first args)) nil))
       (:error (values (tr :pinshare-status-error (first args)) t))
       (:no-addon-plugin (values (tr :pinshare-status-no-plugin) t))
       (:install-failed (values (tr :pinshare-status-install-failed
@@ -505,3 +538,125 @@ while a game is there to draw pins.")
   (merge-pathnames
    (make-pathname :directory '(:relative "addons" "Pin Share"))
    (uiop:pathname-directory-pathname (pathname game-exe-path))))
+
+;;; --- pin sets (saved on the site) ------------------------------------------
+;;;
+;;; A pin set is a quest's pins and arrows saved on the site (GET
+;;; /api/quests/:slug/pins returns the one the player chose there). The
+;;; relay draws it locally: its items join in.txt with negative ids -
+;;; the server's ids are positive, so they never collide - and a
+;;; trailing locked field the addon reads as "not yours to drag or
+;;; delete". Nothing about them goes to the relay server; the party
+;;; each sees their own chosen set.
+
+(defparameter +pinshare-set-owner-chars+ 20
+  "The set name stands in for the owner on every local pin's label;
+cut so a long name does not bury the pin's own label.")
+
+(defun pinshare-local-items (pin-set)
+  "(values pins arrows): PIN-SET's items (the GET payload's items
+object) as relay-shaped hash tables - negative ids, the set name as
+owner, the area under \"floor\", numbers in stored order (per room for
+roomNo), never expiring, locked."
+  (let* ((items (gethash "items" pin-set))
+         (name (let ((name (pinshare-clean (gethash "name" pin-set))))
+                 (subseq name 0 (min +pinshare-set-owner-chars+ (length name)))))
+         (pins (let ((value (and (hash-table-p items) (gethash "pins" items))))
+                 (if (vectorp value) value #())))
+         (arrows (let ((value (and (hash-table-p items) (gethash "arrows" items))))
+                   (if (vectorp value) value #())))
+         (room-counts (make-hash-table :test 'equal))
+         (next-id 0))
+    (flet ((local (item keys)
+             (when (hash-table-p item)
+               (let ((copy (make-hash-table :test 'equal))
+                     (area (or (gethash "area" item) (gethash "floor" item))))
+                 (setf (gethash "id" copy) (decf next-id)
+                       (gethash "owner" copy) name
+                       (gethash "floor" copy) area
+                       (gethash "remaining" copy) -1
+                       (gethash "locked" copy) 1)
+                 (dolist (key keys)
+                   (setf (gethash key copy) (gethash key item)))
+                 copy))))
+      (values
+       (let ((n 0))
+         (remove nil
+                 (map 'vector
+                      (lambda (pin)
+                        (let ((copy (local pin '("x" "y" "z" "label" "color" "room"))))
+                          (when copy
+                            (incf n)
+                            (setf (gethash "no" copy) n
+                                  (gethash "ownerNo" copy) n
+                                  (gethash "roomNo" copy)
+                                  (incf (gethash (list (gethash "floor" copy)
+                                                       (gethash "room" copy))
+                                                 room-counts 0))))
+                          copy))
+                      pins)))
+       (remove nil
+               (map 'vector
+                    (lambda (arrow)
+                      (local arrow '("x1" "y1" "z1" "x2" "y2" "z2"
+                                     "xm" "ym" "zm" "color" "room")))
+                    arrows))))))
+
+(defun pinshare-save-body (slug pins arrows &optional name)
+  "The POST /api/pin-sets body saving the channel's current PINS and
+ARROWS (the server's snapshot, as parsed) under quest SLUG. The server
+keeps what a set needs - area (it reads the relay's \"floor\"),
+coordinates, room, label, color - and drops owners, ids and numbers."
+  (let ((items (make-hash-table :test 'equal))
+        (body (make-hash-table :test 'equal)))
+    (setf (gethash "pins" items) (or pins #())
+          (gethash "arrows" items) (or arrows #())
+          (gethash "quest" body) slug
+          (gethash "items" body) items)
+    (when name (setf (gethash "name" body) name))
+    (jzon:stringify body)))
+
+(defvar *pinshare-pin-set* nil
+  "The pin set chosen on the site for the loaded quest (the GET
+payload), or NIL. Written by the fetch thread, read by the relay.")
+
+(defvar *pinshare-quest-slugs* nil
+  "Every category slug matching the loaded quest, primary first; NIL
+while no quest is loaded. What Save files a new set under.")
+
+(defvar *pinshare-set-fetch-ptr* nil
+  "The quest pointer the pin-set fetch last ran for (see
+PINSHARE-SET-FETCH-WANTED); NIL forces a fetch on the next poll.")
+
+(defvar *pinshare-channel-items* nil
+  "(pins . arrows): the relay server's latest snapshot, for Save on the
+GUI thread. NIL while no relay session is connected.")
+
+(defun pinshare-set-fetch-wanted (snapshot)
+  "The category slugs to fetch a pin set for when SNAPSHOT's quest has
+just loaded, else NIL. The same once-per-load pointer rule as the
+ghost fetch (GHOST-FETCH-WANTED): no quest loaded forgets the set, so
+a quest's pins never show up in the next one."
+  (let ((ptr (and snapshot (getf snapshot :quest-ptr))))
+    (cond
+      ((not (and ptr (plusp ptr)))
+       (setf *pinshare-set-fetch-ptr* nil
+             *pinshare-quest-slugs* nil
+             *pinshare-pin-set* nil)
+       nil)
+      ((and (getf snapshot :quest-name)
+            (not (eql ptr *pinshare-set-fetch-ptr*)))
+       (setf *pinshare-set-fetch-ptr* ptr
+             *pinshare-pin-set* nil)
+       (let ((slugs (mapcar #'quest-def-slug
+                            (find-quest-defs :number (getf snapshot :quest-number)
+                                             :episode (getf snapshot :episode)
+                                             :name (getf snapshot :quest-name)))))
+         (setf *pinshare-quest-slugs* slugs)
+         (and slugs
+              (config-value :pinshare-enabled)
+              *pinshare-allowed-p*
+              ;; Choosing a set needs a linked account; a guest has none.
+              (string/= (normalize-token (config-value :api-token)) "")
+              slugs))))))
+
