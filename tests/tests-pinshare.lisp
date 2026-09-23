@@ -260,15 +260,19 @@
            (text (ephinea-ta-client::render-pinshare-inbox relay 1 set)))
       (check "pin-set pins join in.txt locked, negative ids, set name as owner"
              (and (search (pinshare-tab-line "pin" -1 "TTF route" 10101 1 "2.5" -3 -1
-                                             "start" 1 1 "ff8c00" 1 3 1)
+                                             "start" "" 1 "ff8c00" "" 3 1)
                           text)
                   (search (pinshare-tab-line "pin" -2 "TTF route" 10101 4 0 0 -1
-                                             "" 2 2 "" 2 3 1)
+                                             "" "" 2 "" "" 3 1)
                           text)
-                  ;; a pin with no room numbers on its own
                   (search (pinshare-tab-line "pin" -3 "TTF route" 10102 5 0 0 -1
-                                             "" 3 3 "" 1 "" 1)
+                                             "" "" 3 "" "" "" 1)
                           text)))
+      (check "set pins carry only the per-owner number (no clash with the channel's)"
+             (not (search (format nil "start~c1~c" #\Tab #\Tab) text)))
+      (check "the set's local items are built once per set, not per render"
+             (eq (ephinea-ta-client::pinshare-local-items set)
+                 (ephinea-ta-client::pinshare-local-items set)))
       (check "pin-set arrows keep their bend, room and the locked flag last"
              (search (pinshare-tab-line "arrow" -4 "TTF route" 10101 0 0 0 10 0 10
                                         -1 "" 5 0 6 4 1)
@@ -311,9 +315,27 @@
                      10101)
                   (equalp (gethash "arrows" (gethash "items" body)) #())
                   (null (nth-value 1 (gethash "name" body))))))
+    (let* ((body (pinshare-parsed
+                  (ephinea-ta-client::pinshare-save-body
+                   "q" #()
+                   (pinshare-parsed "[{\"floor\":1,\"x1\":0,\"y1\":0,\"z1\":0,
+                                      \"x2\":4,\"y2\":2,\"z2\":-6},
+                                     {\"floor\":1,\"x1\":0,\"y1\":0,\"z1\":0,
+                                      \"x2\":4,\"y2\":2,\"z2\":-6,
+                                      \"xm\":9,\"ym\":9,\"zm\":9}]"))))
+           (arrows (gethash "arrows" (gethash "items" body))))
+      (check "an arrow from a pre-bend server gets its straight midpoint"
+             (and (= (gethash "xm" (aref arrows 0)) 2)
+                  (= (gethash "ym" (aref arrows 0)) 1)
+                  (= (gethash "zm" (aref arrows 0)) -3)
+                  (= (gethash "xm" (aref arrows 1)) 9))))
     (let ((ephinea-ta-client::*pinshare-pin-set* :stale)
           (ephinea-ta-client::*pinshare-quest-slugs* '("x"))
           (ephinea-ta-client::*pinshare-set-fetch-ptr* 1234))
+      (check "a failed read (NIL snapshot) keeps the set and the load"
+             (and (null (ephinea-ta-client::pinshare-set-fetch-wanted nil))
+                  (eq ephinea-ta-client::*pinshare-pin-set* :stale)
+                  (eql ephinea-ta-client::*pinshare-set-fetch-ptr* 1234)))
       (check "no quest loaded forgets the set, the slugs and the load"
              (and (null (ephinea-ta-client::pinshare-set-fetch-wanted
                          '(:quest-ptr 0)))

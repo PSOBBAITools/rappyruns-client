@@ -238,12 +238,12 @@ says why it is idle."
     (cond ((not (config-value :pinshare-enabled)) (values nil '(:off)))
           ;; Staged rollout: the server decides who may use the relay.
           ((not *pinshare-allowed-p*) (values nil '(:not-allowed)))
-          ((null exe) (values nil '(:waiting-game)))
           ;; No passphrase: nothing to share, but a pin set chosen on
           ;; the site is still drawn - a session with channel "" writes
           ;; in.txt and never connects.
           ((and (string= channel "") (null *pinshare-pin-set*))
            (values nil '(:no-channel)))
+          ((null exe) (values nil '(:waiting-game)))
           (t (values (list exe channel (pinshare-server-url)) nil)))))
 
 (defun pinshare-session-current-p (wanted)
@@ -332,10 +332,6 @@ says why it is idle."
                   (pinshare-relay-clear-state relay)
                   (status "error" "disconnected from the server"
                           '(:error "disconnected from the server"))))))
-      (when local-only
-        (status "local" "" (list :local-only
-                                 (and *pinshare-pin-set*
-                                      (gethash "name" *pinshare-pin-set*)))))
       (unwind-protect
            (loop :while (pinshare-session-current-p wanted)
                  :do (when (and (null socket) (not connecting) (not local-only)
@@ -387,7 +383,14 @@ says why it is idle."
                        (when (pinshare-write-inbox relay in-path tmp-path)
                          (setf last-write (pinshare-seconds)))))
         (setf *pinshare-channel-items* nil)
-        (pinshare-link-cancel link)))))
+        (pinshare-link-cancel link)
+        ;; Leave in.txt without items: its heartbeat stays fresh for a few
+        ;; seconds, and the addon would keep drawing the last list - the
+        ;; previous quest's set, most visibly, after leaving it.
+        (ignore-errors
+          (pinshare-relay-clear-state relay)
+          (let ((*pinshare-pin-set* nil))
+            (pinshare-write-inbox relay in-path tmp-path)))))))
 
 (defun pinshare-run-session (wanted)
   (let* ((addon-dir (pinshare-addon-dir (first wanted)))

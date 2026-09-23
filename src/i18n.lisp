@@ -441,8 +441,8 @@
     ("The set in use is not yours (or none is in use), so there is nothing to overwrite. Save a new set instead."
      "使用中のセットが自分のものではない (または未使用) ため、上書きできません。新しいセットとして保存してください。")
     :pinshare-save-confirm-overwrite
-    ("Replace every pin and arrow of \"~a\" with the ~d pin(s) and ~d arrow(s) in the channel now? Everyone using the set gets the new ones."
-     "「~a」のピンと矢印を、今チャンネルにあるピン ~d 本・矢印 ~d 本で置き換えますか? このセットを使っている全員に反映されます。")
+    ("Replace every pin and arrow of \"~a\" with the ~d pin(s) and ~d arrow(s) in the channel now? The set's own locked pins on screen are NOT kept - only what is in the channel. Everyone using the set gets the new ones."
+     "「~a」のピンと矢印を、今チャンネルにあるピン ~d 本・矢印 ~d 本で置き換えますか? 画面に出ているこのセットの固定ピンは含まれません (チャンネルにあるものだけが保存されます)。このセットを使っている全員に反映されます。")
     :pinshare-save-created
     ("Saved as a private pin set. Name it, describe it and choose who can see it on the site:~%~a"
      "非公開のピンセットとして保存しました。名前・説明・公開範囲はサイトで設定できます:~%~a")

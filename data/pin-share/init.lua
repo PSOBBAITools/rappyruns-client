@@ -1623,7 +1623,10 @@ local function drawConfig()
     imgui.Text(listTitle("Pins", #shownPins, #pins))
     for _, p in ipairs(shownPins) do
         imgui.PushID("pin" .. p.id)
-        if imgui.Button("Delete") then
+        if p.locked then
+            -- ピンセットのピンはサイトで選んだもの。ここでは消せない
+            imgui.TextDisabled("Locked")
+        elseif imgui.Button("Delete") then
             sendCommand({ "remove", p.id })
         end
         imgui.SameLine()
@@ -1638,7 +1641,9 @@ local function drawConfig()
     imgui.Text(listTitle("Arrows", #shownArrows, #arrows))
     for _, a in ipairs(shownArrows) do
         imgui.PushID("arrow" .. a.id)
-        if imgui.Button("Delete") then
+        if a.locked then
+            imgui.TextDisabled("Locked")
+        elseif imgui.Button("Delete") then
             sendCommand({ "arrow_remove", a.id })
         end
         imgui.SameLine()

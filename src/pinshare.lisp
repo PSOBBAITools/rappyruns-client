@@ -553,11 +553,25 @@ while a game is there to draw pins.")
   "The set name stands in for the owner on every local pin's label;
 cut so a long name does not bury the pin's own label.")
 
+(defvar *pinshare-local-items-cache* nil
+  "(pin-set pins . arrows) for the set PINSHARE-LOCAL-ITEMS last built.
+Only the relay thread renders, so one slot and no lock.")
+
 (defun pinshare-local-items (pin-set)
+  (let ((cache *pinshare-local-items-cache*))
+    (if (and cache (eq (first cache) pin-set))
+        (values (second cache) (cddr cache))
+        (multiple-value-bind (pins arrows) (build-pinshare-local-items pin-set)
+          (setf *pinshare-local-items-cache* (list* pin-set pins arrows))
+          (values pins arrows)))))
+
+(defun build-pinshare-local-items (pin-set)
   "(values pins arrows): PIN-SET's items (the GET payload's items
 object) as relay-shaped hash tables - negative ids, the set name as
-owner, the area under \"floor\", numbers in stored order (per room for
-roomNo), never expiring, locked."
+owner, the area under \"floor\", the per-owner number in stored order,
+never expiring, locked. Cached on the set object: the relay renders
+in.txt at least once a second and the set only changes when a fetch
+lands."
   (let* ((items (gethash "items" pin-set))
          (name (let ((name (pinshare-clean (gethash "name" pin-set))))
                  (subseq name 0 (min +pinshare-set-owner-chars+ (length name)))))
@@ -565,7 +579,6 @@ roomNo), never expiring, locked."
                  (if (vectorp value) value #())))
          (arrows (let ((value (and (hash-table-p items) (gethash "arrows" items))))
                    (if (vectorp value) value #())))
-         (room-counts (make-hash-table :test 'equal))
          (next-id 0))
     (flet ((local (item keys)
              (when (hash-table-p item)
@@ -586,13 +599,11 @@ roomNo), never expiring, locked."
                       (lambda (pin)
                         (let ((copy (local pin '("x" "y" "z" "label" "color" "room"))))
                           (when copy
-                            (incf n)
-                            (setf (gethash "no" copy) n
-                                  (gethash "ownerNo" copy) n
-                                  (gethash "roomNo" copy)
-                                  (incf (gethash (list (gethash "floor" copy)
-                                                       (gethash "room" copy))
-                                                 room-counts 0))))
+                            ;; Per-owner number only: the owner is the set,
+                            ;; so its own 1..n never collides. The all /
+                            ;; room numbers are the channel's sequence -
+                            ;; set pins would repeat a party member's #1.
+                            (setf (gethash "ownerNo" copy) (incf n)))
                           copy))
                       pins)))
        (remove nil
@@ -602,6 +613,22 @@ roomNo), never expiring, locked."
                                      "xm" "ym" "zm" "color" "room")))
                     arrows))))))
 
+(defun pinshare-arrow-with-mid (arrow)
+  "ARROW with its bend point: a relay server from before bent arrows
+sends none, and the site requires one - the straight midpoint, as the
+addon assumes."
+  (if (and (hash-table-p arrow) (not (realp (gethash "xm" arrow)))
+           (every (lambda (key) (realp (gethash key arrow)))
+                  '("x1" "y1" "z1" "x2" "y2" "z2")))
+      (let ((copy (make-hash-table :test 'equal)))
+        (maphash (lambda (key value) (setf (gethash key copy) value)) arrow)
+        (loop :for (mid a b) :in '(("xm" "x1" "x2") ("ym" "y1" "y2")
+                                   ("zm" "z1" "z2"))
+              :do (setf (gethash mid copy)
+                        (/ (+ (gethash a arrow) (gethash b arrow)) 2.0d0)))
+        copy)
+      arrow))
+
 (defun pinshare-save-body (slug pins arrows &optional name)
   "The POST /api/pin-sets body saving the channel's current PINS and
 ARROWS (the server's snapshot, as parsed) under quest SLUG. The server
@@ -610,7 +637,8 @@ coordinates, room, label, color - and drops owners, ids and numbers."
   (let ((items (make-hash-table :test 'equal))
         (body (make-hash-table :test 'equal)))
     (setf (gethash "pins" items) (or pins #())
-          (gethash "arrows" items) (or arrows #())
+          (gethash "arrows" items) (map 'vector #'pinshare-arrow-with-mid
+                                        (or arrows #()))
           (gethash "quest" body) slug
           (gethash "items" body) items)
     (when name (setf (gethash "name" body) name))
@@ -636,9 +664,12 @@ GUI thread. NIL while no relay session is connected.")
   "The category slugs to fetch a pin set for when SNAPSHOT's quest has
 just loaded, else NIL. The same once-per-load pointer rule as the
 ghost fetch (GHOST-FETCH-WANTED): no quest loaded forgets the set, so
-a quest's pins never show up in the next one."
+a quest's pins never show up in the next one. A NIL SNAPSHOT is a
+failed read (normal for a frame at warps) and changes nothing - taking
+it for \"no quest\" would drop and refetch the set on every warp."
   (let ((ptr (and snapshot (getf snapshot :quest-ptr))))
     (cond
+      ((null snapshot) nil)
       ((not (and ptr (plusp ptr)))
        (setf *pinshare-set-fetch-ptr* nil
              *pinshare-quest-slugs* nil
