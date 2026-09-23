@@ -216,12 +216,35 @@ addon <--exchange\in.txt--- client <------------- (whole pin list on every chang
 With **Settings → Pin Share** on and a passphrase entered (everyone with
 the same passphrase shares pins), the client - once a verified game is
 attached - copies the bundled `init.lua` into the game's
-`addons\Pin Share\` (only that file; `options.lua` with the player's key
-bindings is never touched, and a developer's junction to a working copy
-is detected and left alone), then relays until the setting changes or
-the game exits. This is the one place the client writes next to the
-game, which is why the feature is off by default; the game *process* is
-still never touched.
+`addons\Pin Share\` (with `pinshare-input.dll`, below; `options.lua`
+with the player's key bindings is never touched, and a developer's
+junction to a working copy is detected and left alone), then relays
+until the setting changes or the game exits. This is the one place the
+client writes next to the game, which is why the feature is off by
+default. The client itself never touches the game process; the addon's
+DLL (below) does, from inside it.
+
+**Input priority.** Addons cannot consume a key: the plugin's
+`key_pressed` hook discards return values and the game reads the same
+key through DirectInput, so F6 used to place a pin *and* fire the
+game's own F6 function. `pinshare-input.dll` (source in
+`native/pinshare-input/`, loaded by the addon with LuaJIT `ffi.load`)
+hides exactly the bound inputs from the game. Keyboard: it patches
+`GetDeviceState` in the plugin's DirectInput wrapper
+(`ImguiDInputDevice`, found through RTTI), after the plugin has seen
+the key, so the addon still gets `key_pressed` and only the game's copy
+is cleared. Controller: `ephinea.dll` reads the pad through
+`XInputGetState` (xinput1_4), which the DLL hooks at Windows' hot-patch
+point to report bound presses to the addon (the plugin has no pad
+events) and clear those buttons from the game's state; a combo
+(modifier + button) hides only the button, the modifier still reaches
+the game. Unbound keys and buttons are never touched, and every mask
+lapses 2 seconds after the addon stops polling (disabled, errored,
+reloading). Without the DLL the addon works as before. A running game
+keeps the DLL locked; the client renames it aside and writes the new
+one, which loads at the next game start. Like any in-process mod,
+check it against Ephinea's client-modification rules before widening
+the rollout.
 
 **Staged rollout.** The Pin Share group only appears - and the relay
 only runs - for accounts the server lists: `GET /api/me` answers with
@@ -282,7 +305,11 @@ powershell -File client/package.ps1
 
 Bundles the exe, `data/quest-triggers.sexp` and
 `data/pin-share/init.lua` (from `client/data/`, the
-source of truth) into `client/dist/RappyRunsClient.zip`, plus
+source of truth) into `client/dist/RappyRunsClient.zip`, and builds
+`data/pin-share/pinshare-input.dll` into it from
+`native/pinshare-input/` (x86; needs the Visual Studio 2022 C++ tools,
+and packaging fails without them rather than ship Pin Share without
+input priority), plus
 `ffmpeg/ffmpeg.exe` when `client/vendor/ffmpeg/` is populated (see
 below); without it the zip is built with a warning and recording needs a
 user-installed ffmpeg.

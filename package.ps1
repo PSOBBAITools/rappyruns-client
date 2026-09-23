@@ -2,6 +2,7 @@
 #   RappyRunsClient.exe
 #   data/quest-triggers.sexp
 #   data/pin-share/init.lua            (the Pin Share addon the client installs)
+#   data/pin-share/pinshare-input.dll  (built here from native/pinshare-input; needs VS2022 C++)
 #   ffmpeg/ffmpeg.exe + LICENSE.txt   (optional, from vendor/ffmpeg/ - see README)
 # Run after building the exe with deliver.lisp (see README.md).
 $ErrorActionPreference = "Stop"
@@ -25,6 +26,12 @@ Copy-Item $triggers (Join-Path $stage "data")
 # recursively and nothing else, so the addon reaches existing installs.
 New-Item -ItemType Directory -Force (Join-Path $stage "data\pin-share") | Out-Null
 Copy-Item $pinShare (Join-Path $stage "data\pin-share")
+# Built fresh every time so the zip never carries a stale binary. Without it
+# Pin Share still works, but bound keys also trigger the game's functions -
+# a release must not silently lose that, hence a hard failure.
+$inputDll = Join-Path $stage "data\pin-share\pinshare-input.dll"
+& (Join-Path $PSScriptRoot "native\pinshare-input\build.cmd") $inputDll
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $inputDll)) { throw "Building pinshare-input.dll failed (needs the Visual Studio 2022 C++ tools)." }
 
 # The client looks for ffmpeg/ffmpeg.exe next to its exe for the video
 # recording feature. Bundling is optional: without it the zip still works,

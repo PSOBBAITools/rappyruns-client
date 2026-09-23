@@ -3,3 +3,7 @@
 # runtime files here.
 exchange/
 options.lua
+# Built from client/native/pinshare-input by build.cmd (package.ps1 runs it);
+# its log is written next to it when the game loads it through a junction.
+pinshare-input.dll
+pinshare-input.log

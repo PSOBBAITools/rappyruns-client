@@ -90,20 +90,26 @@ tick."
 
 ;;; --- addon install ----------------------------------------------------------
 
-(defun pinshare-bundled-addon-path ()
-  "The addon shipped with this client: data/pin-share/init.lua next to
-the exe (delivered image) or in the source tree (development), or NIL."
+(defun pinshare-bundled-file (name)
+  "A file shipped with this client under data/pin-share/ (NAME is e.g.
+init.lua): next to the exe (delivered image) or in the source tree
+(development), or NIL."
   ;; Through LW:LISP-IMAGE-NAME like updater.lisp, not the argv[0]-based
   ;; EXE-ADJACENT-PATH: a relative argv[0] plus another working directory
   ;; would leave a fresh user with "init.lua is missing".
-  (or (ignore-errors
-        (probe-file (merge-pathnames
-                     "data/pin-share/init.lua"
-                     (uiop:pathname-directory-pathname
-                      (lw:lisp-image-name)))))
-      (ignore-errors
-        (probe-file (asdf:system-relative-pathname
-                     :ephinea-ta-client "data/pin-share/init.lua")))))
+  (let ((relative (concatenate 'string "data/pin-share/" name)))
+    (or (ignore-errors
+          (probe-file (merge-pathnames
+                       relative
+                       (uiop:pathname-directory-pathname
+                        (lw:lisp-image-name)))))
+        (ignore-errors
+          (probe-file (asdf:system-relative-pathname
+                       :ephinea-ta-client relative))))))
+
+(defun pinshare-bundled-addon-path ()
+  "The addon shipped with this client, or NIL."
+  (pinshare-bundled-file "init.lua"))
 
 (defun pinshare-reparse-point-p (directory)
   "True when DIRECTORY is a junction / symlink: a developer's
@@ -134,10 +140,44 @@ ERROR_PATH_NOT_FOUND, where a live folder says ERROR_FILE_NOT_FOUND."
       (read-sequence buffer in)
       buffer)))
 
+(defun pinshare-write-octets (path octets)
+  (with-open-file (out path
+                       :direction :output
+                       :if-exists :supersede
+                       :element-type '(unsigned-byte 8))
+    (write-sequence octets out)))
+
+(defun pinshare-install-input-dll (addon-dir)
+  "Install or update pinshare-input.dll (lets the addon's bindings take
+priority over the game) next to the addon. Best effort: without it the
+addon still works, bound keys just reach the game too, so failures are
+only logged. A running game keeps the DLL loaded and locked; Windows
+still allows renaming a loaded DLL, so the old one moves aside to .old
+and the new one takes effect the next time the game starts."
+  (let ((bundled (pinshare-bundled-file "pinshare-input.dll"))
+        (installed (merge-pathnames "pinshare-input.dll" addon-dir))
+        (aside (merge-pathnames "pinshare-input.dll.old" addon-dir)))
+    (ignore-errors (when (probe-file aside) (delete-file aside)))
+    (when bundled
+      (handler-case
+          (let ((wanted (pinshare-file-octets bundled)))
+            (unless (and (probe-file installed)
+                         (equalp wanted (pinshare-file-octets installed)))
+              (handler-case (pinshare-write-octets installed wanted)
+                (error ()
+                  ;; In use by the game: move it aside and write anew.
+                  (when (probe-file aside) (delete-file aside))
+                  (rename-file installed aside)
+                  (pinshare-write-octets installed wanted)))
+              (win32-log "pin share: input dll installed at ~a" installed)))
+        (error (condition)
+          (win32-log "pin share: input dll not installed: ~a" condition))))))
+
 (defun pinshare-ensure-addon (addon-dir)
   "Install or update the addon under ADDON-DIR and make sure its
-exchange folder exists. Only init.lua is ever written: options.lua (the
-player's key bindings) and anything else in the folder stay untouched.
+exchange folder exists. Only init.lua and pinshare-input.dll are ever
+written: options.lua (the player's key bindings) and anything else in the
+folder stay untouched.
 Returns NIL when the addon is ready, else the status list to show."
   (let ((plugin (merge-pathnames
                  "init.lua"
@@ -162,12 +202,9 @@ Returns NIL when the addon is ready, else the status list to show."
                  (unless (and (probe-file installed)
                               (equalp wanted (pinshare-file-octets installed)))
                    (ensure-directories-exist installed)
-                   (with-open-file (out installed
-                                        :direction :output
-                                        :if-exists :supersede
-                                        :element-type '(unsigned-byte 8))
-                     (write-sequence wanted out))
-                   (win32-log "pin share: addon installed at ~a" installed))))
+                   (pinshare-write-octets installed wanted)
+                   (win32-log "pin share: addon installed at ~a" installed)))
+               (pinshare-install-input-dll addon-dir))
              (ensure-directories-exist
               (merge-pathnames "exchange/placeholder" addon-dir))
              (if (probe-file installed)
