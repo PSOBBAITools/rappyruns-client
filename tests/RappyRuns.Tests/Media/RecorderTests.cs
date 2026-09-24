@@ -214,6 +214,23 @@ public class RecorderTests
             h.Recorder.LastError == "remux failed; recording kept whole - its tail is untrimmed");
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void OnKeepIsToldWhetherTheRecordingIsUntrimmed(bool remuxOk, bool untrimmed)
+    {
+        var h = new Harness();
+        var kept = new List<bool>();
+        h.Recorder.OnKeep = (_, _, u) => kept.Add(u);
+        h.Backend.RemuxOk = remuxOk;
+        h.Step(InQuest);
+        h.Step(Idle, Run());
+        h.Backend.Alive = false;
+        h.Step(Idle);
+        h.Step(Idle);
+        Assert.Equal([untrimmed], kept);
+    }
+
     [Fact]
     public void UnstartableRemuxRenamesAtOnce()
     {

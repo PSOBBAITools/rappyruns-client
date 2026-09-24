@@ -89,7 +89,7 @@
 `finalize-capture` (:1194): `backend-close-capture`→ keep なら `begin-remux`、でなければ tmp 削除 + `reset-recorder`。
 `begin-remux` (:1206): **duration はここで計算** (stopping 中に届いた run も含めるため)。`build-remux-args(tmp, final, duration-ms = session-video-duration-ms(run-end-ms))` で起動。起動失敗なら即 `save-recording(remuxed=nil)`。成功なら deadline = now+180s、state=:remuxing。
 `finish-remux` (:1234): exit code 0 なら ok。ok でなければ final-path (部分出力) を削除。→ `save-recording(remuxed=ok)`。
-`save-recording` (:1246): remuxed なら tmp 削除、でなければ tmp を final-path へ rename (上書き)。**remuxed でない場合**: `last-error = "remux failed; recording kept whole - its tail is untrimmed"` + トレイ通知 `:notify-untrimmed-*`。その後 `on-keep(final-path, pending-run)` (例外は握りつぶす)。rename 失敗時は `last-error = "could not save recording: ~a"`。最後に必ず `reset-recorder`。
+`save-recording` (:1246): remuxed なら tmp 削除、でなければ tmp を final-path へ rename (上書き)。**remuxed でない場合**: `last-error = "remux failed; recording kept whole - its tail is untrimmed"` + トレイ通知 `:notify-untrimmed-*`。その後 `on-keep(final-path, pending-run)` (例外は握りつぶす)。C# は on-keep に untrimmed フラグも渡し、エントリに `:untrimmed t` を付けて自動アップロードの対象から外す (S07。Lisp はデスクトップが写りうる末尾ごと自動アップロードしていた)。ファイルはローカルに残してリンクし、保持スイープからも守る。プレイヤーはサイトで手動添付できる。rename 失敗時は `last-error = "could not save recording: ~a"`。最後に必ず `reset-recorder`。
 `reset-recorder` (:1179): capture 系フィールド全消去、state=:idle (`last-error` は消さない)。
 
 `best-session-run` (:567): aborted でない run の中で `time-ms` 最大。完走が 1 件もなければ aborted を含めた最大。

@@ -38,6 +38,9 @@ public static class RunKeys
     public const string NextUploadAt = "NEXT-UPLOAD-AT";
     public const string UploadGivenUp = "UPLOAD-GIVEN-UP";
     public const string UploadError = "UPLOAD-ERROR";
+
+    /// <summary>The recording kept its untrimmed tail (remux failed): never auto-uploaded (C# addition, S07).</summary>
+    public const string Untrimmed = "UNTRIMMED";
 }
 
 /// <summary>The <c>:status</c> keyword names.</summary>
@@ -118,18 +121,27 @@ public static class RunEntries
     /// <summary>
     /// entry-active-p (store.lisp:25): unfinished business that must survive
     /// trimming and restarts - entries awaiting (re)submission, and entries
-    /// whose saved video still needs attaching to their server draft. Aborted
-    /// and unranked runs never upload, and a permanently rejected upload is as
-    /// finished as a rejected run, so none of those keep an entry active.
+    /// whose saved video still needs attaching to their server draft
+    /// (<see cref="AwaitsUpload"/>).
     /// </summary>
-    public static bool IsActive(Plist entry) =>
-        IsUnsent(entry)
-        || (Is(entry, RunKeys.VideoPath)
-            && Is(entry, RunKeys.ServerId)
-            && !Is(entry, RunKeys.Aborted)
-            && !Is(entry, RunKeys.Unranked)
-            && !Is(entry, RunKeys.VideoAttached)
-            && !Is(entry, RunKeys.UploadGivenUp));
+    public static bool IsActive(Plist entry) => IsUnsent(entry) || AwaitsUpload(entry);
+
+    /// <summary>
+    /// The saved recording is still due for the automatic upload: it has a
+    /// file and a server draft, and nothing rules it out. Aborted and unranked
+    /// runs never upload, a permanently rejected upload is as finished as a
+    /// rejected run, and an untrimmed recording (C#, S07) is left for the
+    /// player to check and attach by hand - unless
+    /// <paramref name="orByHand"/> asks about that manual upload too.
+    /// </summary>
+    public static bool AwaitsUpload(Plist entry, bool orByHand = false) =>
+        Is(entry, RunKeys.VideoPath)
+        && Is(entry, RunKeys.ServerId)
+        && !Is(entry, RunKeys.Aborted)
+        && !Is(entry, RunKeys.Unranked)
+        && !Is(entry, RunKeys.VideoAttached)
+        && !Is(entry, RunKeys.UploadGivenUp)
+        && (orByHand || !Is(entry, RunKeys.Untrimmed));
 
     /// <summary>
     /// entry-unsent-p (store.lisp:303): :queued or :failed - runs that exist

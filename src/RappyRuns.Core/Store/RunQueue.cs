@@ -206,10 +206,13 @@ public sealed class RunQueue
     /// <paramref name="run"/> (matched by <see cref="RunEntries.SameRun"/>).
     /// Returns the updated entry, or null when the run is no longer listed.
     /// </summary>
-    public RunEntry? LinkVideoFile(Plist run, string videoPath)
+    public RunEntry? LinkVideoFile(Plist run, string videoPath, bool untrimmed = false)
     {
         var entry = Entries.FirstOrDefault(e => RunEntries.SameRun(run, e.Raw));
-        return entry is null ? null : Update(entry, (RunKeys.VideoPath, SexpNode.Str(videoPath)));
+        if (entry is null) return null;
+        return untrimmed
+            ? Update(entry, (RunKeys.VideoPath, SexpNode.Str(videoPath)), (RunKeys.Untrimmed, SexpNode.T))
+            : Update(entry, (RunKeys.VideoPath, SexpNode.Str(videoPath)));
     }
 
     /// <summary>
@@ -227,12 +230,7 @@ public sealed class RunQueue
         for (var i = snapshot.Count - 1; i >= 0; i--)
         {
             var entry = snapshot[i];
-            if (!(entry.Is(RunKeys.VideoPath)
-                  && entry.Is(RunKeys.ServerId)
-                  && !entry.Is(RunKeys.Aborted)
-                  && !entry.Is(RunKeys.Unranked)
-                  && !entry.Is(RunKeys.VideoAttached)
-                  && !entry.Is(RunKeys.UploadGivenUp)
+            if (!(RunEntries.AwaitsUpload(entry.Raw)
                   && (entry.Get(RunKeys.NextUploadAt) is var next && (next.IsNil || next.AsNumber is { } n && n <= at))))
                 continue;
             if (entry.VideoPath is { } path && _fileExists(path)) return (entry, gaveUp);
@@ -245,7 +243,7 @@ public sealed class RunQueue
     /// <summary>
     /// video-path-retention-sets (store.lisp:510): recordings the local
     /// storage sweep must never take (<c>Protected</c>: still awaiting their
-    /// upload) and those it reclaims first (<c>Uploaded</c>: the site holds
+    /// upload, an untrimmed one's by hand included) and those it reclaims first (<c>Uploaded</c>: the site holds
     /// them). A file in neither list is an orphan. Order mirrors the Lisp
     /// push (oldest entry first).
     /// </summary>
@@ -257,8 +255,7 @@ public sealed class RunQueue
         {
             if (entry.VideoPath is not { } path) continue;
             if (entry.Is(RunKeys.VideoAttached)) uploaded.Insert(0, path);
-            else if (entry.Is(RunKeys.ServerId) && !entry.Is(RunKeys.Aborted)
-                     && !entry.Is(RunKeys.Unranked) && !entry.Is(RunKeys.UploadGivenUp))
+            else if (RunEntries.AwaitsUpload(entry.Raw, orByHand: true))
                 @protected.Insert(0, path);
         }
         return (@protected, uploaded);

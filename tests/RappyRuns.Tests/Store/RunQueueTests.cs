@@ -1,4 +1,5 @@
 using RappyRuns.Core.Config;
+using RappyRuns.Core.I18n;
 using RappyRuns.Core.Sexp;
 using RappyRuns.Core.Store;
 using static RappyRuns.Tests.Store.StoreTestSupport;
@@ -188,6 +189,23 @@ public sealed class RunQueueTests : IDisposable
         Assert.True(linked?.VideoPath?.Contains("run.mp4") == true, "link-video-file! matches by natural key after updates");
         Assert.True(linked?.ServerId == 7, "linked entry still carries its server id");
         Assert.True(q.LinkVideoFile(TestRun(slug: "ep1-other"), "C:/v/x.mp4") is null, "link-video-file! returns NIL for unknown runs");
+        Assert.False(linked!.Is(RunKeys.Untrimmed));
+    }
+
+    [Fact]
+    public void AnUntrimmedRecordingIsLinkedButNeverAutoUploaded()
+    {
+        var q = Store();
+        var run = TestRun();
+        var entry = q.Enqueue(run);
+        q.Update(entry, (RunKeys.Status, SexpNode.Kw(RunStatus.Submitted)), (RunKeys.ServerId, SexpNode.Int(7)));
+        var linked = q.LinkVideoFile(run, _video, untrimmed: true);
+        Assert.Equal(_video, linked?.VideoPath);
+        Assert.True(linked!.Is(RunKeys.Untrimmed));
+        Assert.Null(q.UploadCandidate(_now).Candidate);
+        Assert.False(RunEntries.IsActive(linked.Data));
+        Assert.Contains(_video, q.VideoPathRetentionSets().Protected);
+        Assert.Equal("draft - use Upload to YouTube", RunDisplay.RunStatusLabel(linked.Data, Language.En, hasSubmissionToken: true));
     }
 
     [Fact]

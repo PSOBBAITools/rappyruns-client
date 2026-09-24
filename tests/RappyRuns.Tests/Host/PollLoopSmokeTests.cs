@@ -137,7 +137,7 @@ public sealed class PollLoopSmokeTests : IDisposable
             TicksPerSecond = clock.TicksPerSecond,
             Sleep = t => clock.AdvanceMs((long)t.TotalMilliseconds),
         });
-        recorder.OnKeep = (path, run) => queue.LinkVideoFile(run, path);
+        recorder.OnKeep = (path, run, untrimmed) => queue.LinkVideoFile(run, path, untrimmed);
         var process = attached ? new FakeProcess(LobbyReader()) : null;
         var toasts = new List<RunToast>();
         var ticks = new List<PollTick>();

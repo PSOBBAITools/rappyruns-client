@@ -127,7 +127,7 @@ public sealed class ClientHost : IDisposable
                 Notify = n => Notify(Msg.Of(n.TitleKey), Msg.Of(n.TextKey), n.Icon == NoticeIcon.Info ? NotifyKind.Info : NotifyKind.Warning),
             });
         // The kept file is tied to its queue entry so Upload can find it.
-        Recorder.OnKeep = (path, run) => Queue.LinkVideoFile(run, path);
+        Recorder.OnKeep = (path, run, untrimmed) => Queue.LinkVideoFile(run, path, untrimmed);
 
         // Ghost race and overlay.
         Ghost = new GhostSession();

@@ -481,10 +481,11 @@ JSON の数値: 浮動小数 (座標等) は **単精度の最短表現** (`12.3
 | `:video-attached`, `:video-uploaded`, `:held`, `:approved` | アップロード成功 | held/approved は応答 `status` |
 | `:next-upload-at` | バックオフ | universal time |
 | `:upload-given-up`, `:upload-error` | 恒久失敗 / ファイル消失 | |
+| `:untrimmed` | remux 失敗で末尾未トリムの録画をリンクした時 (C# 追加、S07) | 自動アップロードしない。保持スイープでは protected。Lisp は無視 |
 | `:video-url` | (手動 URL 添付; GUI 側) | `hosted-video-replaceable-p` 判定用 |
 
 ### 9.2 active 判定 (`store.lisp:25 entry-active-p`) — 永続化・トリム対象外の条件
-`:status ∈ {:queued, :failed}`、または (`:video-path` かつ `:server-id` かつ ¬`:aborted` かつ ¬`:unranked` かつ ¬`:video-attached` かつ ¬`:upload-given-up`)。
+`:status ∈ {:queued, :failed}`、または (`:video-path` かつ `:server-id` かつ ¬`:aborted` かつ ¬`:unranked` かつ ¬`:video-attached` かつ ¬`:upload-given-up` かつ ¬`:untrimmed`)。`:untrimmed` は C# 追加 (S07)。
 
 ### 9.3 操作
 - `enqueue-run!`: 先頭に `(:status :queued . run)` を push → トリム (finished は最新 50 件 `+max-finished-runs+`、active は無制限) → 保存。
@@ -507,7 +508,7 @@ JSON の数値: 浮動小数 (座標等) は **単精度の最短表現** (`12.3
 
 ### 9.5 動画アップロード (`upload-candidate`, `upload-entry-video!`, `main.lisp:172 maybe-start-upload`)
 - 開始条件: `:video-upload` (強制真) かつ ¬`*poll-busy-p*` (クエスト中/録画中でない) かつ レコーダ `:idle` かつ 前のアップロードスレッドが死んでいる。GUI ティック (250ms) 毎と未アタッチ時の検索ループ毎に評価。
-- 候補: キューを**古い順**に走査し、`video-path ∧ server-id ∧ ¬aborted ∧ ¬unranked ∧ ¬video-attached ∧ ¬upload-given-up ∧ (next-upload-at 無し or ≤ now)`。ファイルが消えていれば `:upload-given-up t` にして次へ (GUI 再描画要求を返す)。
+- 候補: キューを**古い順**に走査し、`video-path ∧ server-id ∧ ¬aborted ∧ ¬unranked ∧ ¬video-attached ∧ ¬upload-given-up ∧ ¬untrimmed ∧ (next-upload-at 無し or ≤ now)` (¬untrimmed は C# 追加、S07)。ファイルが消えていれば `:upload-given-up t` にして次へ (GUI 再描画要求を返す)。
 - 結果処理:
   - いずれの結果でもまず診断 (`POST /diagnostics`, 録画ログ末尾 64KB + マシン概要) をベストエフォート送信。
   - attached/duplicate → `:video-attached t :video-uploaded t :held (status=="held") :approved (status=="approved")`。**ローカルファイルは消さない** (保持期間スイープに任せる)。

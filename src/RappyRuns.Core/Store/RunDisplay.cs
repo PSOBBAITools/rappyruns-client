@@ -170,7 +170,7 @@ public static class RunDisplay
                 if (RunEntries.Is(entry, RunKeys.Aborted)) key = "status-draft-aborted";
                 else if (RunEntries.Is(entry, RunKeys.Unranked)) key = "status-draft-unranked";
                 else if (!RunEntries.Is(entry, RunKeys.VideoPath)) key = "status-draft-add";
-                else if (videoUpload && !RunEntries.Is(entry, RunKeys.UploadGivenUp)) key = "status-draft-auto-upload";
+                else if (videoUpload && !RunEntries.Is(entry, RunKeys.UploadGivenUp) && !RunEntries.Is(entry, RunKeys.Untrimmed)) key = "status-draft-auto-upload";
                 else key = "status-draft-upload";
                 var label = Tr(language, key);
                 var note = EntryNote(entry, language);
