@@ -39,7 +39,8 @@ public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = Tr
     /// <summary>The rotated generation: trigger-log.txt becomes trigger-log.old.txt (one generation, replaced).</summary>
     public string OldPath => System.IO.Path.ChangeExtension(Path, ".old.txt");
 
-    // trigger-log.lisp:34: opened on first use, kept open until closed.
+    // trigger-log.lisp:34: opened on first use, kept open until closed (or
+    // until Writer closes it to check for rotation).
     private StreamWriter Stream()
     {
         if (_stream is null)
@@ -138,17 +139,20 @@ public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = Tr
     /// trigger-log.lisp:310 log-trigger-changes: append the diffs between two
     /// consecutive snapshots of the same loaded quest (both named, same quest
     /// pointer). Returns the number of lines written, or null when the frames
-    /// are not comparable. Flushes when anything was written.
+    /// are not comparable. A frame with no changes does not touch the file (the
+    /// Lisp opened it anyway), so it cannot reopen or rotate a log the UI just
+    /// closed.
     /// </summary>
     public int? LogChanges(Snapshot? previous, Snapshot? snapshot)
     {
         var lines = ChangeLines(previous, snapshot, TimeOfDay());
         if (lines is null) return null;
+        if (lines.Count == 0) return 0;
         lock (_gate)
         {
             var stream = Writer();
             foreach (var line in lines) stream.Write(line + "\n");
-            if (lines.Count > 0) stream.Flush();
+            stream.Flush();
         }
         return lines.Count;
     }
