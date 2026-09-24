@@ -55,7 +55,7 @@ public class ConfigStoreTests
     [Fact]
     public void RecordDirResolveRenamesThePreRenameFolder()
     {
-        using var home = new TempDir();
+        using var home = new TempDir("rr-store-test");
         var old = Path.Combine(home.Path, "Videos", "EphineaTA");
         Directory.CreateDirectory(old);
         File.WriteAllText(Path.Combine(old, "a.mp4"), "x");
@@ -142,7 +142,7 @@ public class ConfigStoreTests
     [Fact]
     public void AFirstRunWritesEveryDefaultExceptTheForcedKeys()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDir("rr-store-test");
         var config = ConfigStore.Open(dir.Path);
         config.Save();
         var saved = Plist.From(SexpReader.TryReadFile(config.FilePath))!;
@@ -153,7 +153,7 @@ public class ConfigStoreTests
     [Fact]
     public void ForcedKeysInTheFileNeverOverrideTheDefault()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDir("rr-store-test");
         File.WriteAllText(Path.Combine(dir.Path, "config.sexp"), "(:VIDEO-UPLOAD COMMON-LISP:NIL :AUTO-SUBMIT COMMON-LISP:NIL :COMPLETION-SOUND COMMON-LISP:T)");
         var config = ConfigStore.Open(dir.Path);
         Assert.True(config.VideoUpload);
@@ -166,7 +166,7 @@ public class ConfigStoreTests
     [Fact]
     public void ACorruptFileFallsBackToDefaultsAndIsKeptAside()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDir("rr-store-test");
         var path = Path.Combine(dir.Path, "config.sexp");
         File.WriteAllText(path, "(:API-TOKEN \"unterminated");
         var config = ConfigStore.Open(dir.Path);
@@ -177,7 +177,7 @@ public class ConfigStoreTests
     [Fact]
     public void TypedAccessorsRoundTripThroughTheFile()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDir("rr-store-test");
         var config = ConfigStore.Open(dir.Path);
         config.Language = Language.Ja;
         config.OverlayCorner = "CUSTOM";

@@ -15,7 +15,7 @@ namespace RappyRuns.Tests.Store;
 /// </summary>
 public sealed class SubmissionTests : IDisposable
 {
-    private readonly TempDir _dir = new();
+    private readonly TempDir _dir = new("rr-store-test");
 
     public void Dispose() => _dir.Dispose();
 

@@ -12,7 +12,7 @@ namespace RappyRuns.Tests.Store;
 /// </summary>
 public sealed class RunQueueTests : IDisposable
 {
-    private readonly TempDir _dir = new();
+    private readonly TempDir _dir = new("rr-store-test");
     private readonly string _video;
     private readonly long _now = UniversalTime.Now();
 
@@ -36,7 +36,7 @@ public sealed class RunQueueTests : IDisposable
         var q = Store($"(:status :submitted :server-id 3 :video-path {V})",
                       $"(:status :submitted :server-id 2 :video-path {V} :video-attached t)",
                       $"(:status :submitted :server-id 1 :video-path {V})");
-        Assert.Equal(1, q.UploadCandidate(_now).Candidate?.ServerId);
+        Assert.Equal(1, q.UploadCandidate(_now)?.ServerId);
     }
 
     [Fact]
@@ -44,15 +44,15 @@ public sealed class RunQueueTests : IDisposable
     {
         var q = Store($"(:status :submitted :server-id 2 :video-path {V})",
                       $"(:status :submitted :server-id 1 :video-path {V} :next-upload-at {_now + 900})");
-        Assert.True(2 == q.UploadCandidate(_now).Candidate?.ServerId, "a backing-off entry is skipped");
-        Assert.True(1 == q.UploadCandidate(_now + 1000).Candidate?.ServerId, "the backoff expires with time");
+        Assert.True(2 == q.UploadCandidate(_now)?.ServerId, "a backing-off entry is skipped");
+        Assert.True(1 == q.UploadCandidate(_now + 1000)?.ServerId, "the backoff expires with time");
     }
 
     [Fact]
     public void AGivenUpEntryIsNeverACandidate()
     {
         var q = Store($"(:status :submitted :server-id 1 :video-path {V} :upload-given-up t)");
-        Assert.Null(q.UploadCandidate(_now).Candidate);
+        Assert.Null(q.UploadCandidate(_now));
     }
 
     [Fact]
@@ -60,40 +60,43 @@ public sealed class RunQueueTests : IDisposable
     {
         var q = Store($"(:status :submitted :server-id 2 :video-path {V})",
                       "(:status :submitted :server-id 1 :video-path \"C:/nowhere/gone.mp4\")");
-        var (candidate, gaveUp) = q.UploadCandidate(_now);
+        var changes = 0;
+        q.Changed += (_, _) => changes++;
+        var candidate = q.UploadCandidate(_now);
         Assert.True(2 == candidate?.ServerId, "a vanished recording gives up and the scan moves on");
-        Assert.True(gaveUp, "the give-up is reported so the GUI can repaint");
+        Assert.Equal(1, changes); // the give-up raises Changed so the GUI can repaint
         Assert.True(q.Entries.Single(e => e.ServerId == 1).Is(RunKeys.UploadGivenUp), "the vanished entry is marked given up");
     }
 
     [Fact]
-    public void ACleanScanReportsNoGiveUp()
+    public void ACleanScanRaisesNoChange()
     {
         var q = Store($"(:status :submitted :server-id 1 :video-path {V})");
-        var (candidate, gaveUp) = q.UploadCandidate(_now);
-        Assert.NotNull(candidate);
-        Assert.False(gaveUp);
+        var changes = 0;
+        q.Changed += (_, _) => changes++;
+        Assert.NotNull(q.UploadCandidate(_now));
+        Assert.Equal(0, changes);
     }
 
     [Fact]
     public void EntriesWithoutAServerDraftCannotUploadYet() =>
-        Assert.Null(Store($"(:status :queued :video-path {V})").UploadCandidate(_now).Candidate);
+        Assert.Null(Store($"(:status :queued :video-path {V})").UploadCandidate(_now));
 
     [Fact]
     public void AnAbortedRunsRecordingNeverUploads()
     {
         var q = Store($"(:status :submitted :server-id 2 :video-path {V})",
                       $"(:status :submitted :server-id 1 :video-path {V} :aborted t)");
-        Assert.Equal(2, q.UploadCandidate(_now).Candidate?.ServerId);
+        Assert.Equal(2, q.UploadCandidate(_now)?.ServerId);
     }
 
     [Fact]
     public void AnAbortedOnlyQueueHasNoUploadCandidate() =>
-        Assert.Null(Store($"(:status :submitted :server-id 1 :video-path {V} :aborted t)").UploadCandidate(_now).Candidate);
+        Assert.Null(Store($"(:status :submitted :server-id 1 :video-path {V} :aborted t)").UploadCandidate(_now));
 
     [Fact]
     public void AnUnrankedRunsRecordingNeverUploads() =>
-        Assert.Null(Store($"(:status :submitted :server-id 1 :video-path {V} :unranked t)").UploadCandidate(_now).Candidate);
+        Assert.Null(Store($"(:status :submitted :server-id 1 :video-path {V} :unranked t)").UploadCandidate(_now));
 
     [Theory]
     [InlineData("a given-up upload is no longer active", "(:status :submitted :server-id 1 :video-path \"v.mp4\" :upload-given-up t)")]

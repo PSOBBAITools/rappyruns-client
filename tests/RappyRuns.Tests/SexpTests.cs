@@ -106,21 +106,14 @@ public class SexpTests
     [Fact]
     public void TryReadFileIsNullForBrokenOrMissingFiles()
     {
-        var dir = Directory.CreateTempSubdirectory();
-        try
-        {
-            var path = Path.Combine(dir.FullName, "c.sexp");
-            Assert.Null(SexpReader.TryReadFile(path));
-            File.WriteAllText(path, "(:a 1");
-            Assert.Null(SexpReader.TryReadFile(path));
-            SexpWriter.WriteFile(path, SexpReader.ReadOne("(:a 1)"));
-            Assert.Equal("(:A 1)", File.ReadAllText(path));
-            Assert.Equal(1, Plist.From(SexpReader.TryReadFile(path))!.Get("a")!.AsLong);
-        }
-        finally
-        {
-            dir.Delete(true);
-        }
+        using var dir = new TempDir("rr-sexp");
+        var path = dir.File("c.sexp");
+        Assert.Null(SexpReader.TryReadFile(path));
+        File.WriteAllText(path, "(:a 1");
+        Assert.Null(SexpReader.TryReadFile(path));
+        SexpWriter.WriteFile(path, SexpReader.ReadOne("(:a 1)"));
+        Assert.Equal("(:A 1)", File.ReadAllText(path));
+        Assert.Equal(1, Plist.From(SexpReader.TryReadFile(path))!.Get("a")!.AsLong);
     }
 
     [Fact]

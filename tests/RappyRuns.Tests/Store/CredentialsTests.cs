@@ -32,7 +32,7 @@ public class CredentialsTests
     [Fact]
     public void ReadCredentialsReadsARealFile()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDir("rr-store-test");
         var path = Credentials.PathIn(dir.Path);
         File.WriteAllText(path, "username=Teapot\npassword=secret123\n", new UTF8Encoding(false));
         Assert.Equal(new LoginCredentials("Teapot", "secret123"), Credentials.Read(path));
@@ -42,7 +42,7 @@ public class CredentialsTests
     [Fact]
     public void ReadCredentialsOnAMissingFileYieldsNilNil()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDir("rr-store-test");
         Assert.Null(Credentials.Read(Credentials.PathIn(dir.Path)));
         Assert.False(Credentials.Present(dir.Path));
     }
@@ -50,7 +50,7 @@ public class CredentialsTests
     [Fact]
     public void ANonUtf8FileYieldsNothing()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDir("rr-store-test");
         var path = Credentials.PathIn(dir.Path);
         // "username=" + Shift-JIS bytes (invalid UTF-8).
         File.WriteAllBytes(path, [.. "username=u\npassword="u8.ToArray(), 0x83, 0x65, 0x83, 0x58, 0x83, 0x67]);

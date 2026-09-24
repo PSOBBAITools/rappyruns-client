@@ -77,7 +77,7 @@ public class RunDisplayTests
     [Fact]
     public void AnInFlightUploadShowsItsPercentOnlyOnItsOwnEntry()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDir("rr-store-test");
         var queue = new RunQueue(dir.File("q.sexp"));
         // The Lisp test bound *upload-progress* to (7 50 200); here the
         // progress comes from a running upload, so check the pure pieces.

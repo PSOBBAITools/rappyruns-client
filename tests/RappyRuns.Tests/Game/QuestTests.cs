@@ -115,24 +115,18 @@ public class TriggerLogTests
     /// <summary>The Lisp test's sequence on a throwaway log; returns what each check looks at.</summary>
     private static (bool Created, int? Changes, string Text) Sequence()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"eta-test-trigger-log-{Guid.NewGuid():N}.txt");
-        try
-        {
-            using var log = new TriggerLog(path, new ManualGameClock());
-            log.Start();
-            var created = File.Exists(path);
-            var set2 = Zeros(32 * 18);
-            set2[32 * 5] = 0x80 >> 2;
-            var prev = new Snapshot { QuestName = "GDV", QuestPtr = 1, FloorSwitches = Zeros(32 * 18), Registers = Zeros(1024) };
-            var next = new Snapshot { QuestName = "GDV", QuestPtr = 1, FloorSwitches = set2, Registers = Zeros(1024) };
-            var changes = log.LogChanges(prev, next);
-            log.Close();
-            return (created, changes, File.ReadAllText(path));
-        }
-        finally
-        {
-            File.Delete(path);
-        }
+        using var temp = new TempDir("eta-test-trigger-log");
+        var path = temp.File("trigger-log.txt");
+        using var log = new TriggerLog(path, new ManualGameClock());
+        log.Start();
+        var created = File.Exists(path);
+        var set2 = Zeros(32 * 18);
+        set2[32 * 5] = 0x80 >> 2;
+        var prev = new Snapshot { QuestName = "GDV", QuestPtr = 1, FloorSwitches = Zeros(32 * 18), Registers = Zeros(1024) };
+        var next = new Snapshot { QuestName = "GDV", QuestPtr = 1, FloorSwitches = set2, Registers = Zeros(1024) };
+        var changes = log.LogChanges(prev, next);
+        log.Close();
+        return (created, changes, File.ReadAllText(path));
     }
 
     [Fact(DisplayName = "start-trigger-log creates the file at once")]
@@ -177,6 +171,68 @@ public class TriggerLogTests
             "10:11:12 \"A \\\"B\\\"\" monster 5475 killed (?, unitxt 77)",
         ], TriggerLog.ChangeLines(prev, next, "10:11:12")!);
         Assert.Null(TriggerLog.ChangeLines(prev, next with { QuestPtr = 8 }, "x"));
+    }
+
+    [Fact(DisplayName = "trigger log rotates past the limit while writing, keeping one old generation")]
+    public void RotatesWhileWriting()
+    {
+        using var temp = new TempDir("eta-test-trigger-rotate");
+        // A folder that does not exist yet: the log creates it.
+        var path = temp.File("sub", "trigger-log.txt");
+        using var log = new TriggerLog(path, new ManualGameClock(), maxBytes: 200);
+        Assert.Equal(temp.File("sub", "trigger-log.old.txt"), log.OldPath);
+        log.Start(); // 112 bytes
+        log.Start(); // 224 bytes: past the limit, but only checked before the next write
+        Assert.False(File.Exists(log.OldPath));
+        log.Start(); // rotated first, then the header
+        log.Close();
+        Assert.Equal(2, File.ReadAllText(log.OldPath).Split("=== trigger logging started").Length - 1);
+        Assert.Equal(
+            "=== trigger log rotated 12:00:00; earlier lines are in trigger-log.old.txt ===\n" +
+            "=== trigger logging started 12:00:00 ===\n",
+            string.Join("", File.ReadAllText(path).Split('\n').Take(2).Select(l => l + "\n")));
+        // A second rotation replaces the old generation.
+        log.Start();
+        log.Start();
+        log.Close();
+        Assert.StartsWith("=== trigger log rotated", File.ReadAllText(log.OldPath));
+        Assert.StartsWith("=== trigger log rotated", File.ReadAllText(path));
+    }
+
+    [Fact(DisplayName = "trigger log rotates an oversized file left by an earlier session when it opens")]
+    public void RotatesAtOpen()
+    {
+        using var temp = new TempDir("eta-test-trigger-rotate");
+        var path = temp.File("trigger-log.txt");
+        File.WriteAllText(path, new string('x', 300));
+        using var log = new TriggerLog(path, new ManualGameClock(), maxBytes: 200);
+        log.Start();
+        log.Close();
+        Assert.Equal(300, new FileInfo(log.OldPath).Length);
+        Assert.StartsWith(
+            "=== trigger log rotated 12:00:00; earlier lines are in trigger-log.old.txt ===\n=== trigger logging started",
+            File.ReadAllText(path));
+    }
+
+    [Fact(DisplayName = "trigger log keeps appending when the rotation rename is refused, and retries after more growth")]
+    public void KeepsAppendingWhenRenameRefused()
+    {
+        using var temp = new TempDir("eta-test-trigger-rotate");
+        var path = temp.File("trigger-log.txt");
+        using var log = new TriggerLog(path, new ManualGameClock(), maxBytes: 200);
+        File.WriteAllText(log.OldPath, "held");
+        // Open without delete sharing: File.Move cannot replace it.
+        using (new FileStream(log.OldPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            // 112, 224, then refused at 224 (next try past 424), 336, 448.
+            for (var i = 0; i < 4; i++) log.Start();
+            Assert.Equal("held", File.ReadAllText(log.OldPath));
+        }
+        // Past 424 and no longer locked: the next write rotates, with the stream open all along.
+        log.Start();
+        log.Close();
+        Assert.Equal(4, File.ReadAllText(log.OldPath).Split("=== trigger logging started").Length - 1);
+        Assert.StartsWith("=== trigger log rotated", File.ReadAllText(path));
     }
 }
 

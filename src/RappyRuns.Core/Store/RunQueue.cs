@@ -234,13 +234,12 @@ public sealed class RunQueue
     /// upload-candidate (store.lisp:477): the oldest entry whose saved
     /// recording still needs uploading and is not backing off. Aborted and
     /// unranked runs never upload. An entry whose file vanished gives up on
-    /// the spot and the scan moves on; <c>GaveUp</c> then tells the caller the
-    /// runs list needs a refresh (the <see cref="Changed"/> event fires too).
+    /// the spot and the scan moves on; that update raises <see cref="Changed"/>,
+    /// which refreshes the runs list (the Lisp returned a repaint flag instead).
     /// </summary>
-    public (RunEntry? Candidate, bool GaveUp) UploadCandidate(long? now = null)
+    public RunEntry? UploadCandidate(long? now = null)
     {
         var at = now ?? _now();
-        var gaveUp = false;
         var snapshot = Entries;
         for (var i = snapshot.Count - 1; i >= 0; i--)
         {
@@ -253,11 +252,10 @@ public sealed class RunQueue
                   && !entry.Is(RunKeys.UploadGivenUp)
                   && (entry.Get(RunKeys.NextUploadAt) is var next && (next.IsNil || next.AsNumber is { } n && n <= at))))
                 continue;
-            if (entry.VideoPath is { } path && _fileExists(path)) return (entry, gaveUp);
+            if (entry.VideoPath is { } path && _fileExists(path)) return entry;
             Update(entry, (RunKeys.UploadGivenUp, SexpNode.T));
-            gaveUp = true;
         }
-        return (null, gaveUp);
+        return null;
     }
 
     /// <summary>

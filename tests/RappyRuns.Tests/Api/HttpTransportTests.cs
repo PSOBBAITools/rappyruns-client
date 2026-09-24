@@ -9,15 +9,13 @@ namespace RappyRuns.Tests.Api;
 /// <summary>The HTTP layer: uploads, downloads, timeouts and error mapping (spec core §6).</summary>
 public class HttpTransportTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "rr-http-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = new("rr-http");
 
-    public HttpTransportTests() => Directory.CreateDirectory(_dir);
-
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
+    public void Dispose() => _dir.Dispose();
 
     private string WriteFile(string name, int size)
     {
-        var path = Path.Combine(_dir, name);
+        var path = Path.Combine(_dir.Path, name);
         File.WriteAllBytes(path, Enumerable.Range(0, size).Select(i => (byte)(i % 251)).ToArray());
         return path;
     }
@@ -88,14 +86,14 @@ public class HttpTransportTests : IDisposable
         Random.Shared.NextBytes(payload);
         var handler = new DownloadHandler(200, payload);
         using var transport = new HttpTransport(handler);
-        var target = Path.Combine(_dir, "a.zip");
+        var target = Path.Combine(_dir.Path, "a.zip");
         var progress = new List<(long, long?)>();
         Assert.Equal(200, await transport.DownloadToFileAsync("https://x/a.zip", target, onProgress: (d, t) => progress.Add((d, t))));
         Assert.Equal(payload, File.ReadAllBytes(target));
         Assert.Equal((200_000L, (long?)200_000), progress[^1]);
         Assert.Equal(HttpTransport.UserAgent, handler.UserAgent);
 
-        var missing = Path.Combine(_dir, "b.zip");
+        var missing = Path.Combine(_dir.Path, "b.zip");
         using var notFound = new HttpTransport(new DownloadHandler(404, "nope"u8.ToArray()));
         Assert.Equal(404, await notFound.DownloadToFileAsync("https://x/b.zip", missing));
         Assert.False(File.Exists(missing));

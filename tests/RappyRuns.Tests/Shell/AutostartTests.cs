@@ -40,19 +40,17 @@ public class AutostartCommandTests
 public sealed class AutostartRegistryTests : IDisposable
 {
     private readonly string _keyPath = @"Software\RappyRunsTests\" + Guid.NewGuid().ToString("N") + @"\Run";
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "rappyruns-autostart-" + Guid.NewGuid().ToString("N"));
-
-    public AutostartRegistryTests() => Directory.CreateDirectory(_dir);
+    private readonly TempDir _dir = new("rappyruns-autostart");
 
     public void Dispose()
     {
         Registry.CurrentUser.DeleteSubKeyTree(Path.GetDirectoryName(_keyPath)!, throwOnMissingSubKey: false);
         try { Registry.CurrentUser.DeleteSubKey(Path.GetDirectoryName(Path.GetDirectoryName(_keyPath))!, throwOnMissingSubKey: false); }
         catch (InvalidOperationException) { } // another run's key is still there
-        Directory.Delete(_dir, recursive: true);
+        _dir.Dispose();
     }
 
-    private string Exe(string name = "RappyRunsClient.exe") => Path.Combine(_dir, name);
+    private string Exe(string name = "RappyRunsClient.exe") => Path.Combine(_dir.Path, name);
 
     private Autostart Make(string? exe) => new(exe, Registry.CurrentUser, _keyPath, Autostart.ValueName);
 
@@ -97,7 +95,7 @@ public sealed class AutostartRegistryTests : IDisposable
     [Fact]
     public void AnotherExeReadsDisabled()
     {
-        Write(AutostartCommand.Format(Path.Combine(_dir, "elsewhere", "RappyRunsClient.exe")));
+        Write(AutostartCommand.Format(Path.Combine(_dir.Path, "elsewhere", "RappyRunsClient.exe")));
         Assert.False(Make(Exe()).IsEnabled());
     }
 
@@ -160,7 +158,7 @@ public sealed class AutostartRegistryTests : IDisposable
     [Fact]
     public void ReconcileLeavesAMissingExeInAnotherFolder()
     {
-        var command = AutostartCommand.Format(Path.Combine(_dir, "moved", "RappyRunsClient.exe"));
+        var command = AutostartCommand.Format(Path.Combine(_dir.Path, "moved", "RappyRunsClient.exe"));
         Write(command);
         Assert.Equal(AutostartRepair.LeftForeign, Make(Exe()).ReconcileAtStartup());
         Assert.Equal(command, Make(Exe()).ReadRegistered());
