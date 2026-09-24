@@ -1,0 +1,1264 @@
+[
+  {
+    "entry": "(:STATUS :QUEUED)",
+    "language": "en",
+    "status": {
+      "token-upload": "queued",
+      "token-noupload": "queued",
+      "notoken-upload": "saved on this PC - submits once the server is reachable",
+      "notoken-noupload": "saved on this PC - submits once the server is reachable"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :QUEUED)",
+    "language": "ja",
+    "status": {
+      "token-upload": "送信待ち",
+      "token-noupload": "送信待ち",
+      "notoken-upload": "この PC に保存済み - サーバーに接続できると送信されます",
+      "notoken-noupload": "この PC に保存済み - サーバーに接続できると送信されます"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :URL \"https://example.com/runs/42\")",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video",
+      "token-noupload": "draft - double-click to add video",
+      "notoken-upload": "draft - double-click to add video",
+      "notoken-noupload": "draft - double-click to add video"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :URL \"https://example.com/runs/42\")",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加",
+      "token-noupload": "下書き - ダブルクリックで動画を追加",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :VIDEO-PATH \"v.mp4\")",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - video uploads automatically",
+      "token-noupload": "draft - use Upload to YouTube",
+      "notoken-upload": "draft - video uploads automatically",
+      "notoken-noupload": "draft - use Upload to YouTube"
+    },
+    "video": "saved",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :VIDEO-PATH \"v.mp4\")",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - 動画は自動でアップロードされます",
+      "token-noupload": "下書き - 「YouTube にアップロード」を使ってください",
+      "notoken-upload": "下書き - 動画は自動でアップロードされます",
+      "notoken-noupload": "下書き - 「YouTube にアップロード」を使ってください"
+    },
+    "video": "保存済み",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :VIDEO-PATH \"v.mp4\" :UPLOAD-GIVEN-UP COMMON-LISP:T)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - use Upload to YouTube",
+      "token-noupload": "draft - use Upload to YouTube",
+      "notoken-upload": "draft - use Upload to YouTube",
+      "notoken-noupload": "draft - use Upload to YouTube"
+    },
+    "video": "upload failed",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :VIDEO-PATH \"v.mp4\" :UPLOAD-GIVEN-UP COMMON-LISP:T)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - 「YouTube にアップロード」を使ってください",
+      "token-noupload": "下書き - 「YouTube にアップロード」を使ってください",
+      "notoken-upload": "下書き - 「YouTube にアップロード」を使ってください",
+      "notoken-noupload": "下書き - 「YouTube にアップロード」を使ってください"
+    },
+    "video": "アップロード失敗",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :ABORTED COMMON-LISP:T :VIDEO-PATH \"v.mp4\")",
+    "language": "en",
+    "status": {
+      "token-upload": "aborted - private, recording kept locally",
+      "token-noupload": "aborted - private, recording kept locally",
+      "notoken-upload": "aborted - private, recording kept locally",
+      "notoken-noupload": "aborted - private, recording kept locally"
+    },
+    "video": "saved",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :ABORTED COMMON-LISP:T :VIDEO-PATH \"v.mp4\")",
+    "language": "ja",
+    "status": {
+      "token-upload": "中断 - 非公開・録画はローカル保存のみ",
+      "token-noupload": "中断 - 非公開・録画はローカル保存のみ",
+      "notoken-upload": "中断 - 非公開・録画はローカル保存のみ",
+      "notoken-noupload": "中断 - 非公開・録画はローカル保存のみ"
+    },
+    "video": "保存済み",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :UNRANKED COMMON-LISP:T)",
+    "language": "en",
+    "status": {
+      "token-upload": "submitted (record only, not ranked)",
+      "token-noupload": "submitted (record only, not ranked)",
+      "notoken-upload": "submitted (record only, not ranked)",
+      "notoken-noupload": "submitted (record only, not ranked)"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :UNRANKED COMMON-LISP:T)",
+    "language": "ja",
+    "status": {
+      "token-upload": "送信済み (記録専用・ランキング対象外)",
+      "token-noupload": "送信済み (記録専用・ランキング対象外)",
+      "notoken-upload": "送信済み (記録専用・ランキング対象外)",
+      "notoken-noupload": "送信済み (記録専用・ランキング対象外)"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :VIDEO-ATTACHED COMMON-LISP:T)",
+    "language": "en",
+    "status": {
+      "token-upload": "video attached - awaiting review",
+      "token-noupload": "video attached - awaiting review",
+      "notoken-upload": "video attached - awaiting review",
+      "notoken-noupload": "video attached - awaiting review"
+    },
+    "video": "attached",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :VIDEO-ATTACHED COMMON-LISP:T)",
+    "language": "ja",
+    "status": {
+      "token-upload": "動画紐付け済み - 承認待ち",
+      "token-noupload": "動画紐付け済み - 承認待ち",
+      "notoken-upload": "動画紐付け済み - 承認待ち",
+      "notoken-noupload": "動画紐付け済み - 承認待ち"
+    },
+    "video": "紐付け済み",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :VIDEO-ATTACHED COMMON-LISP:T :HELD COMMON-LISP:T)",
+    "language": "en",
+    "status": {
+      "token-upload": "video uploaded - publish it in the browser",
+      "token-noupload": "video uploaded - publish it in the browser",
+      "notoken-upload": "video uploaded - publish it in the browser",
+      "notoken-noupload": "video uploaded - publish it in the browser"
+    },
+    "video": "attached",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :VIDEO-ATTACHED COMMON-LISP:T :HELD COMMON-LISP:T)",
+    "language": "ja",
+    "status": {
+      "token-upload": "動画アップロード済み - ブラウザで公開してください",
+      "token-noupload": "動画アップロード済み - ブラウザで公開してください",
+      "notoken-upload": "動画アップロード済み - ブラウザで公開してください",
+      "notoken-noupload": "動画アップロード済み - ブラウザで公開してください"
+    },
+    "video": "紐付け済み",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :VIDEO-ATTACHED COMMON-LISP:T :APPROVED COMMON-LISP:T)",
+    "language": "en",
+    "status": {
+      "token-upload": "video attached - approved",
+      "token-noupload": "video attached - approved",
+      "notoken-upload": "video attached - approved",
+      "notoken-noupload": "video attached - approved"
+    },
+    "video": "attached",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :VIDEO-ATTACHED COMMON-LISP:T :APPROVED COMMON-LISP:T)",
+    "language": "ja",
+    "status": {
+      "token-upload": "動画紐付け済み - 承認済み",
+      "token-noupload": "動画紐付け済み - 承認済み",
+      "notoken-upload": "動画紐付け済み - 承認済み",
+      "notoken-noupload": "動画紐付け済み - 承認済み"
+    },
+    "video": "紐付け済み",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :VIDEO-ATTACHED COMMON-LISP:T :ABORTED COMMON-LISP:T)",
+    "language": "en",
+    "status": {
+      "token-upload": "aborted - video attached, private",
+      "token-noupload": "aborted - video attached, private",
+      "notoken-upload": "aborted - video attached, private",
+      "notoken-noupload": "aborted - video attached, private"
+    },
+    "video": "attached",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :VIDEO-ATTACHED COMMON-LISP:T :ABORTED COMMON-LISP:T)",
+    "language": "ja",
+    "status": {
+      "token-upload": "中断 - 動画紐付け済み・非公開",
+      "token-noupload": "中断 - 動画紐付け済み・非公開",
+      "notoken-upload": "中断 - 動画紐付け済み・非公開",
+      "notoken-noupload": "中断 - 動画紐付け済み・非公開"
+    },
+    "video": "紐付け済み",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :VIDEO-ATTACHED COMMON-LISP:T :VIDEO-UPLOADED COMMON-LISP:T :VIDEO-PATH \"v.mp4\")",
+    "language": "en",
+    "status": {
+      "token-upload": "video attached - awaiting review",
+      "token-noupload": "video attached - awaiting review",
+      "notoken-upload": "video attached - awaiting review",
+      "notoken-noupload": "video attached - awaiting review"
+    },
+    "video": "uploaded",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :VIDEO-ATTACHED COMMON-LISP:T :VIDEO-UPLOADED COMMON-LISP:T :VIDEO-PATH \"v.mp4\")",
+    "language": "ja",
+    "status": {
+      "token-upload": "動画紐付け済み - 承認待ち",
+      "token-noupload": "動画紐付け済み - 承認待ち",
+      "notoken-upload": "動画紐付け済み - 承認待ち",
+      "notoken-noupload": "動画紐付け済み - 承認待ち"
+    },
+    "video": "アップロード済み",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :DUPLICATE)",
+    "language": "en",
+    "status": {
+      "token-upload": "duplicate (already on server)",
+      "token-noupload": "duplicate (already on server)",
+      "notoken-upload": "duplicate (already on server)",
+      "notoken-noupload": "duplicate (already on server)"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :DUPLICATE)",
+    "language": "ja",
+    "status": {
+      "token-upload": "重複 (サーバーに登録済み)",
+      "token-noupload": "重複 (サーバーに登録済み)",
+      "notoken-upload": "重複 (サーバーに登録済み)",
+      "notoken-noupload": "重複 (サーバーに登録済み)"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :REJECTED :REASON \"too fast\")",
+    "language": "en",
+    "status": {
+      "token-upload": "rejected: too fast",
+      "token-noupload": "rejected: too fast",
+      "notoken-upload": "rejected: too fast",
+      "notoken-noupload": "rejected: too fast"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :REJECTED :REASON \"too fast\")",
+    "language": "ja",
+    "status": {
+      "token-upload": "拒否されました: too fast",
+      "token-noupload": "拒否されました: too fast",
+      "notoken-upload": "拒否されました: too fast",
+      "notoken-noupload": "拒否されました: too fast"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :REJECTED)",
+    "language": "en",
+    "status": {
+      "token-upload": "rejected: ?",
+      "token-noupload": "rejected: ?",
+      "notoken-upload": "rejected: ?",
+      "notoken-noupload": "rejected: ?"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :REJECTED)",
+    "language": "ja",
+    "status": {
+      "token-upload": "拒否されました: ?",
+      "token-noupload": "拒否されました: ?",
+      "notoken-upload": "拒否されました: ?",
+      "notoken-noupload": "拒否されました: ?"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :FAILED :REASON \"POST /api/runs -> 500\")",
+    "language": "en",
+    "status": {
+      "token-upload": "failed: POST /api/runs -> 500",
+      "token-noupload": "failed: POST /api/runs -> 500",
+      "notoken-upload": "failed: POST /api/runs -> 500",
+      "notoken-noupload": "failed: POST /api/runs -> 500"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :FAILED :REASON \"POST /api/runs -> 500\")",
+    "language": "ja",
+    "status": {
+      "token-upload": "失敗しました: POST /api/runs -> 500",
+      "token-noupload": "失敗しました: POST /api/runs -> 500",
+      "notoken-upload": "失敗しました: POST /api/runs -> 500",
+      "notoken-noupload": "失敗しました: POST /api/runs -> 500"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :WEIRD)",
+    "language": "en",
+    "status": {
+      "token-upload": "?",
+      "token-noupload": "?",
+      "notoken-upload": "?",
+      "notoken-noupload": "?"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :WEIRD)",
+    "language": "ja",
+    "status": {
+      "token-upload": "?",
+      "token-noupload": "?",
+      "notoken-upload": "?",
+      "notoken-noupload": "?"
+    },
+    "video": "",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:SERVER-ID 7 :VIDEO-PATH \"v.mp4\")",
+    "language": "en",
+    "status": {
+      "token-upload": "?",
+      "token-noupload": "?",
+      "notoken-upload": "?",
+      "notoken-noupload": "?"
+    },
+    "video": "uploading 25%",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:SERVER-ID 7 :VIDEO-PATH \"v.mp4\")",
+    "language": "ja",
+    "status": {
+      "token-upload": "?",
+      "token-noupload": "?",
+      "notoken-upload": "?",
+      "notoken-noupload": "?"
+    },
+    "video": "アップロード中 25%",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:SERVER-ID 8 :VIDEO-PATH \"v.mp4\")",
+    "language": "en",
+    "status": {
+      "token-upload": "?",
+      "token-noupload": "?",
+      "notoken-upload": "?",
+      "notoken-noupload": "?"
+    },
+    "video": "saved",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:SERVER-ID 8 :VIDEO-PATH \"v.mp4\")",
+    "language": "ja",
+    "status": {
+      "token-upload": "?",
+      "token-noupload": "?",
+      "notoken-upload": "?",
+      "notoken-noupload": "?"
+    },
+    "video": "保存済み",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :SERVER-ID 7 :VIDEO-PATH \"v.mp4\" :UPLOAD-GIVEN-UP COMMON-LISP:T)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - use Upload to YouTube",
+      "token-noupload": "draft - use Upload to YouTube",
+      "notoken-upload": "draft - use Upload to YouTube",
+      "notoken-noupload": "draft - use Upload to YouTube"
+    },
+    "video": "uploading 25%",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :SERVER-ID 7 :VIDEO-PATH \"v.mp4\" :UPLOAD-GIVEN-UP COMMON-LISP:T)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - 「YouTube にアップロード」を使ってください",
+      "token-noupload": "下書き - 「YouTube にアップロード」を使ってください",
+      "notoken-upload": "下書き - 「YouTube にアップロード」を使ってください",
+      "notoken-noupload": "下書き - 「YouTube にアップロード」を使ってください"
+    },
+    "video": "アップロード中 25%",
+    "note": null,
+    "standingNote": null,
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Lost HEAT SWORD\" :TIME-MS 599123 :STANDING-RANK 2 :STANDING-PARTIES 5 :STANDING-DELTA-MS -3210)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · PB! -3.21s · prov. #2 of 5",
+      "token-noupload": "draft - double-click to add video · PB! -3.21s · prov. #2 of 5",
+      "notoken-upload": "draft - double-click to add video · PB! -3.21s · prov. #2 of 5",
+      "notoken-noupload": "draft - double-click to add video · PB! -3.21s · prov. #2 of 5"
+    },
+    "video": "",
+    "note": "PB! -3.21s · prov. #2 of 5",
+    "standingNote": "PB! -3.21s · prov. #2 of 5",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "Provisional #2!",
+      "text": "Lost HEAT SWORD 9:59.123 - prov. #2 of 5 on this board. Click to open the run."
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Lost HEAT SWORD\" :TIME-MS 599123 :STANDING-RANK 2 :STANDING-PARTIES 5 :STANDING-DELTA-MS -3210)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -3.21s · 暫定2/5位",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -3.21s · 暫定2/5位",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -3.21s · 暫定2/5位",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -3.21s · 暫定2/5位"
+    },
+    "video": "",
+    "note": "自己ベスト更新! -3.21s · 暫定2/5位",
+    "standingNote": "自己ベスト更新! -3.21s · 暫定2/5位",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "暫定2位にランクイン!",
+      "text": "Lost HEAT SWORD 9:59.123 - このボードで暫定2/5位です。クリックで記録ページを開きます。"
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 3 :STANDING-PARTIES 8 :STANDING-DELTA-MS 1500)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · PB +1.50s · prov. #3 of 8",
+      "token-noupload": "draft - double-click to add video · PB +1.50s · prov. #3 of 8",
+      "notoken-upload": "draft - double-click to add video · PB +1.50s · prov. #3 of 8",
+      "notoken-noupload": "draft - double-click to add video · PB +1.50s · prov. #3 of 8"
+    },
+    "video": "",
+    "note": "PB +1.50s · prov. #3 of 8",
+    "standingNote": "PB +1.50s · prov. #3 of 8",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "Provisional #3!",
+      "text": "Q 1:00.000 - prov. #3 of 8 on this board. Click to open the run."
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 3 :STANDING-PARTIES 8 :STANDING-DELTA-MS 1500)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定3/8位",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定3/8位",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定3/8位",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定3/8位"
+    },
+    "video": "",
+    "note": "自己ベスト +1.50s · 暫定3/8位",
+    "standingNote": "自己ベスト +1.50s · 暫定3/8位",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "暫定3位にランクイン!",
+      "text": "Q 1:00.000 - このボードで暫定3/8位です。クリックで記録ページを開きます。"
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 1 :STANDING-PARTIES 1 :STANDING-DELTA-MS -3210)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · PB! -3.21s",
+      "token-noupload": "draft - double-click to add video · PB! -3.21s",
+      "notoken-upload": "draft - double-click to add video · PB! -3.21s",
+      "notoken-noupload": "draft - double-click to add video · PB! -3.21s"
+    },
+    "video": "",
+    "note": "PB! -3.21s",
+    "standingNote": "PB! -3.21s",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "New personal best!",
+      "text": "Q 1:00.000 - 3.21s faster than your previous best. Click to open the run."
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 1 :STANDING-PARTIES 1 :STANDING-DELTA-MS -3210)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -3.21s",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -3.21s",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -3.21s",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -3.21s"
+    },
+    "video": "",
+    "note": "自己ベスト更新! -3.21s",
+    "standingNote": "自己ベスト更新! -3.21s",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "自己ベスト更新!",
+      "text": "Q 1:00.000 - 自己ベストを3.21s更新しました。クリックで記録ページを開きます。"
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 1 :STANDING-PARTIES 1 :STANDING-DELTA-MS 16830)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · PB +16.83s",
+      "token-noupload": "draft - double-click to add video · PB +16.83s",
+      "notoken-upload": "draft - double-click to add video · PB +16.83s",
+      "notoken-noupload": "draft - double-click to add video · PB +16.83s"
+    },
+    "video": "",
+    "note": "PB +16.83s",
+    "standingNote": "PB +16.83s",
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 1 :STANDING-PARTIES 1 :STANDING-DELTA-MS 16830)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +16.83s",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +16.83s",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +16.83s",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +16.83s"
+    },
+    "video": "",
+    "note": "自己ベスト +16.83s",
+    "standingNote": "自己ベスト +16.83s",
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 1 :STANDING-PARTIES 1)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · first run on this board",
+      "token-noupload": "draft - double-click to add video · first run on this board",
+      "notoken-upload": "draft - double-click to add video · first run on this board",
+      "notoken-noupload": "draft - double-click to add video · first run on this board"
+    },
+    "video": "",
+    "note": "first run on this board",
+    "standingNote": "first run on this board",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "First run on this board!",
+      "text": "Q 1:00.000 - your first time on this board. Click to open the run."
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 1 :STANDING-PARTIES 1)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · このボード初記録",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · このボード初記録",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · このボード初記録",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · このボード初記録"
+    },
+    "video": "",
+    "note": "このボード初記録",
+    "standingNote": "このボード初記録",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "このボードに初記録!",
+      "text": "Q 1:00.000 - このボードへの最初の記録です。クリックで記録ページを開きます。"
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 1 :STANDING-PARTIES 5 :STANDING-DELTA-MS -3210)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · PB! -3.21s · prov. #1 of 5",
+      "token-noupload": "draft - double-click to add video · PB! -3.21s · prov. #1 of 5",
+      "notoken-upload": "draft - double-click to add video · PB! -3.21s · prov. #1 of 5",
+      "notoken-noupload": "draft - double-click to add video · PB! -3.21s · prov. #1 of 5"
+    },
+    "video": "",
+    "note": "PB! -3.21s · prov. #1 of 5",
+    "standingNote": "PB! -3.21s · prov. #1 of 5",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "Provisional #1!",
+      "text": "Q 1:00.000 - the current top time on this board. Click to open the run."
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 1 :STANDING-PARTIES 5 :STANDING-DELTA-MS -3210)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -3.21s · 暫定1/5位",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -3.21s · 暫定1/5位",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -3.21s · 暫定1/5位",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -3.21s · 暫定1/5位"
+    },
+    "video": "",
+    "note": "自己ベスト更新! -3.21s · 暫定1/5位",
+    "standingNote": "自己ベスト更新! -3.21s · 暫定1/5位",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "暫定1位です!",
+      "text": "Q 1:00.000 - このボードの現在のトップタイムです。クリックで記録ページを開きます。"
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 3 :STANDING-PARTIES 8)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · first run on this board · prov. #3 of 8",
+      "token-noupload": "draft - double-click to add video · first run on this board · prov. #3 of 8",
+      "notoken-upload": "draft - double-click to add video · first run on this board · prov. #3 of 8",
+      "notoken-noupload": "draft - double-click to add video · first run on this board · prov. #3 of 8"
+    },
+    "video": "",
+    "note": "first run on this board · prov. #3 of 8",
+    "standingNote": "first run on this board · prov. #3 of 8",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "Provisional #3!",
+      "text": "Q 1:00.000 - prov. #3 of 8 on this board. Click to open the run."
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 3 :STANDING-PARTIES 8)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · このボード初記録 · 暫定3/8位",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · このボード初記録 · 暫定3/8位",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · このボード初記録 · 暫定3/8位",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · このボード初記録 · 暫定3/8位"
+    },
+    "video": "",
+    "note": "このボード初記録 · 暫定3/8位",
+    "standingNote": "このボード初記録 · 暫定3/8位",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "暫定3位にランクイン!",
+      "text": "Q 1:00.000 - このボードで暫定3/8位です。クリックで記録ページを開きます。"
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 3 :STANDING-PARTIES 3 :STANDING-DELTA-MS 1500)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · PB +1.50s · prov. #3 of 3",
+      "token-noupload": "draft - double-click to add video · PB +1.50s · prov. #3 of 3",
+      "notoken-upload": "draft - double-click to add video · PB +1.50s · prov. #3 of 3",
+      "notoken-noupload": "draft - double-click to add video · PB +1.50s · prov. #3 of 3"
+    },
+    "video": "",
+    "note": "PB +1.50s · prov. #3 of 3",
+    "standingNote": "PB +1.50s · prov. #3 of 3",
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 3 :STANDING-PARTIES 3 :STANDING-DELTA-MS 1500)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定3/3位",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定3/3位",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定3/3位",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定3/3位"
+    },
+    "video": "",
+    "note": "自己ベスト +1.50s · 暫定3/3位",
+    "standingNote": "自己ベスト +1.50s · 暫定3/3位",
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 5 :STANDING-PARTIES 8 :STANDING-DELTA-MS 1500)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · PB +1.50s · prov. #5 of 8",
+      "token-noupload": "draft - double-click to add video · PB +1.50s · prov. #5 of 8",
+      "notoken-upload": "draft - double-click to add video · PB +1.50s · prov. #5 of 8",
+      "notoken-noupload": "draft - double-click to add video · PB +1.50s · prov. #5 of 8"
+    },
+    "video": "",
+    "note": "PB +1.50s · prov. #5 of 8",
+    "standingNote": "PB +1.50s · prov. #5 of 8",
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 60000 :STANDING-RANK 5 :STANDING-PARTIES 8 :STANDING-DELTA-MS 1500)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定5/8位",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定5/8位",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定5/8位",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定5/8位"
+    },
+    "video": "",
+    "note": "自己ベスト +1.50s · 暫定5/8位",
+    "standingNote": "自己ベスト +1.50s · 暫定5/8位",
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 3600000 :STANDING-RANK 5 :STANDING-PARTIES 8 :STANDING-DELTA-MS -70000)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · PB! -1:10.000 · prov. #5 of 8",
+      "token-noupload": "draft - double-click to add video · PB! -1:10.000 · prov. #5 of 8",
+      "notoken-upload": "draft - double-click to add video · PB! -1:10.000 · prov. #5 of 8",
+      "notoken-noupload": "draft - double-click to add video · PB! -1:10.000 · prov. #5 of 8"
+    },
+    "video": "",
+    "note": "PB! -1:10.000 · prov. #5 of 8",
+    "standingNote": "PB! -1:10.000 · prov. #5 of 8",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "New personal best!",
+      "text": "Q 60:00.000 - 1:10.000 faster than your previous best. Click to open the run."
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 3600000 :STANDING-RANK 5 :STANDING-PARTIES 8 :STANDING-DELTA-MS -70000)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -1:10.000 · 暫定5/8位",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -1:10.000 · 暫定5/8位",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -1:10.000 · 暫定5/8位",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト更新! -1:10.000 · 暫定5/8位"
+    },
+    "video": "",
+    "note": "自己ベスト更新! -1:10.000 · 暫定5/8位",
+    "standingNote": "自己ベスト更新! -1:10.000 · 暫定5/8位",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "自己ベスト更新!",
+      "text": "Q 60:00.000 - 自己ベストを1:10.000更新しました。クリックで記録ページを開きます。"
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-SLUG \"ep1-slug-only\" :TIME-MS 5 :STANDING-RANK 1 :STANDING-PARTIES 2)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · first run on this board · prov. #1 of 2",
+      "token-noupload": "draft - double-click to add video · first run on this board · prov. #1 of 2",
+      "notoken-upload": "draft - double-click to add video · first run on this board · prov. #1 of 2",
+      "notoken-noupload": "draft - double-click to add video · first run on this board · prov. #1 of 2"
+    },
+    "video": "",
+    "note": "first run on this board · prov. #1 of 2",
+    "standingNote": "first run on this board · prov. #1 of 2",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "Provisional #1!",
+      "text": "ep1-slug-only 0:00.005 - the current top time on this board. Click to open the run."
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-SLUG \"ep1-slug-only\" :TIME-MS 5 :STANDING-RANK 1 :STANDING-PARTIES 2)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · このボード初記録 · 暫定1/2位",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · このボード初記録 · 暫定1/2位",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · このボード初記録 · 暫定1/2位",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · このボード初記録 · 暫定1/2位"
+    },
+    "video": "",
+    "note": "このボード初記録 · 暫定1/2位",
+    "standingNote": "このボード初記録 · 暫定1/2位",
+    "ghostNote": null,
+    "standingToast": {
+      "title": "暫定1位です!",
+      "text": "ep1-slug-only 0:00.005 - このボードの現在のトップタイムです。クリックで記録ページを開きます。"
+    },
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"クエスト\" :TIME-MS 754321 :STANDING-RANK 4 :STANDING-PARTIES 9 :STANDING-DELTA-MS 1005)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · PB +1.00s · prov. #4 of 9",
+      "token-noupload": "draft - double-click to add video · PB +1.00s · prov. #4 of 9",
+      "notoken-upload": "draft - double-click to add video · PB +1.00s · prov. #4 of 9",
+      "notoken-noupload": "draft - double-click to add video · PB +1.00s · prov. #4 of 9"
+    },
+    "video": "",
+    "note": "PB +1.00s · prov. #4 of 9",
+    "standingNote": "PB +1.00s · prov. #4 of 9",
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"クエスト\" :TIME-MS 754321 :STANDING-RANK 4 :STANDING-PARTIES 9 :STANDING-DELTA-MS 1005)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.00s · 暫定4/9位",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.00s · 暫定4/9位",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.00s · 暫定4/9位",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.00s · 暫定4/9位"
+    },
+    "video": "",
+    "note": "自己ベスト +1.00s · 暫定4/9位",
+    "standingNote": "自己ベスト +1.00s · 暫定4/9位",
+    "ghostNote": null,
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 70000 :GHOST-DELTA-MS -3210)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · vs ghost -3.21s",
+      "token-noupload": "draft - double-click to add video · vs ghost -3.21s",
+      "notoken-upload": "draft - double-click to add video · vs ghost -3.21s",
+      "notoken-noupload": "draft - double-click to add video · vs ghost -3.21s"
+    },
+    "video": "",
+    "note": "vs ghost -3.21s",
+    "standingNote": null,
+    "ghostNote": "vs ghost -3.21s",
+    "standingToast": null,
+    "ghostToast": {
+      "title": "Ghost beaten!",
+      "text": "Q - 1:10.000, 3.21s ahead of the ghost"
+    }
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 70000 :GHOST-DELTA-MS -3210)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · ゴースト比 -3.21s",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · ゴースト比 -3.21s",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · ゴースト比 -3.21s",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · ゴースト比 -3.21s"
+    },
+    "video": "",
+    "note": "ゴースト比 -3.21s",
+    "standingNote": null,
+    "ghostNote": "ゴースト比 -3.21s",
+    "standingToast": null,
+    "ghostToast": {
+      "title": "ゴーストに勝利!",
+      "text": "Q - 1:10.000、ゴーストより 3.21s 速い"
+    }
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 70000 :GHOST-DELTA-MS 2500)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · vs ghost +2.50s",
+      "token-noupload": "draft - double-click to add video · vs ghost +2.50s",
+      "notoken-upload": "draft - double-click to add video · vs ghost +2.50s",
+      "notoken-noupload": "draft - double-click to add video · vs ghost +2.50s"
+    },
+    "video": "",
+    "note": "vs ghost +2.50s",
+    "standingNote": null,
+    "ghostNote": "vs ghost +2.50s",
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 70000 :GHOST-DELTA-MS 2500)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · ゴースト比 +2.50s",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · ゴースト比 +2.50s",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · ゴースト比 +2.50s",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · ゴースト比 +2.50s"
+    },
+    "video": "",
+    "note": "ゴースト比 +2.50s",
+    "standingNote": null,
+    "ghostNote": "ゴースト比 +2.50s",
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 70000 :GHOST-DELTA-MS -65000)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · vs ghost -1:05.000",
+      "token-noupload": "draft - double-click to add video · vs ghost -1:05.000",
+      "notoken-upload": "draft - double-click to add video · vs ghost -1:05.000",
+      "notoken-noupload": "draft - double-click to add video · vs ghost -1:05.000"
+    },
+    "video": "",
+    "note": "vs ghost -1:05.000",
+    "standingNote": null,
+    "ghostNote": "vs ghost -1:05.000",
+    "standingToast": null,
+    "ghostToast": {
+      "title": "Ghost beaten!",
+      "text": "Q - 1:10.000, 1:05.000 ahead of the ghost"
+    }
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 70000 :GHOST-DELTA-MS -65000)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · ゴースト比 -1:05.000",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · ゴースト比 -1:05.000",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · ゴースト比 -1:05.000",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · ゴースト比 -1:05.000"
+    },
+    "video": "",
+    "note": "ゴースト比 -1:05.000",
+    "standingNote": null,
+    "ghostNote": "ゴースト比 -1:05.000",
+    "standingToast": null,
+    "ghostToast": {
+      "title": "ゴーストに勝利!",
+      "text": "Q - 1:10.000、ゴーストより 1:05.000 速い"
+    }
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 70000 :GHOST-DELTA-MS 0)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · vs ghost +0.00s",
+      "token-noupload": "draft - double-click to add video · vs ghost +0.00s",
+      "notoken-upload": "draft - double-click to add video · vs ghost +0.00s",
+      "notoken-noupload": "draft - double-click to add video · vs ghost +0.00s"
+    },
+    "video": "",
+    "note": "vs ghost +0.00s",
+    "standingNote": null,
+    "ghostNote": "vs ghost +0.00s",
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 70000 :GHOST-DELTA-MS 0)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · ゴースト比 +0.00s",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · ゴースト比 +0.00s",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · ゴースト比 +0.00s",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · ゴースト比 +0.00s"
+    },
+    "video": "",
+    "note": "ゴースト比 +0.00s",
+    "standingNote": null,
+    "ghostNote": "ゴースト比 +0.00s",
+    "standingToast": null,
+    "ghostToast": null
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 70000 :STANDING-RANK 5 :STANDING-PARTIES 8 :STANDING-DELTA-MS 1500 :GHOST-DELTA-MS -1125)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · PB +1.50s · prov. #5 of 8 · vs ghost -1.13s",
+      "token-noupload": "draft - double-click to add video · PB +1.50s · prov. #5 of 8 · vs ghost -1.13s",
+      "notoken-upload": "draft - double-click to add video · PB +1.50s · prov. #5 of 8 · vs ghost -1.13s",
+      "notoken-noupload": "draft - double-click to add video · PB +1.50s · prov. #5 of 8 · vs ghost -1.13s"
+    },
+    "video": "",
+    "note": "PB +1.50s · prov. #5 of 8 · vs ghost -1.13s",
+    "standingNote": "PB +1.50s · prov. #5 of 8",
+    "ghostNote": "vs ghost -1.13s",
+    "standingToast": null,
+    "ghostToast": {
+      "title": "Ghost beaten!",
+      "text": "Q - 1:10.000, 1.13s ahead of the ghost"
+    }
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 70000 :STANDING-RANK 5 :STANDING-PARTIES 8 :STANDING-DELTA-MS 1500 :GHOST-DELTA-MS -1125)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定5/8位 · ゴースト比 -1.13s",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定5/8位 · ゴースト比 -1.13s",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定5/8位 · ゴースト比 -1.13s",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · 自己ベスト +1.50s · 暫定5/8位 · ゴースト比 -1.13s"
+    },
+    "video": "",
+    "note": "自己ベスト +1.50s · 暫定5/8位 · ゴースト比 -1.13s",
+    "standingNote": "自己ベスト +1.50s · 暫定5/8位",
+    "ghostNote": "ゴースト比 -1.13s",
+    "standingToast": null,
+    "ghostToast": {
+      "title": "ゴーストに勝利!",
+      "text": "Q - 1:10.000、ゴーストより 1.13s 速い"
+    }
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 70000 :STANDING-RANK 1 :STANDING-PARTIES 3 :GHOST-DELTA-MS -1125)",
+    "language": "en",
+    "status": {
+      "token-upload": "draft - double-click to add video · first run on this board · prov. #1 of 3 · vs ghost -1.13s",
+      "token-noupload": "draft - double-click to add video · first run on this board · prov. #1 of 3 · vs ghost -1.13s",
+      "notoken-upload": "draft - double-click to add video · first run on this board · prov. #1 of 3 · vs ghost -1.13s",
+      "notoken-noupload": "draft - double-click to add video · first run on this board · prov. #1 of 3 · vs ghost -1.13s"
+    },
+    "video": "",
+    "note": "first run on this board · prov. #1 of 3 · vs ghost -1.13s",
+    "standingNote": "first run on this board · prov. #1 of 3",
+    "ghostNote": "vs ghost -1.13s",
+    "standingToast": {
+      "title": "Provisional #1!",
+      "text": "Q 1:10.000 - the current top time on this board. Click to open the run."
+    },
+    "ghostToast": {
+      "title": "Ghost beaten!",
+      "text": "Q - 1:10.000, 1.13s ahead of the ghost"
+    }
+  },
+  {
+    "entry": "(:STATUS :SUBMITTED :QUEST-NAME \"Q\" :TIME-MS 70000 :STANDING-RANK 1 :STANDING-PARTIES 3 :GHOST-DELTA-MS -1125)",
+    "language": "ja",
+    "status": {
+      "token-upload": "下書き - ダブルクリックで動画を追加 · このボード初記録 · 暫定1/3位 · ゴースト比 -1.13s",
+      "token-noupload": "下書き - ダブルクリックで動画を追加 · このボード初記録 · 暫定1/3位 · ゴースト比 -1.13s",
+      "notoken-upload": "下書き - ダブルクリックで動画を追加 · このボード初記録 · 暫定1/3位 · ゴースト比 -1.13s",
+      "notoken-noupload": "下書き - ダブルクリックで動画を追加 · このボード初記録 · 暫定1/3位 · ゴースト比 -1.13s"
+    },
+    "video": "",
+    "note": "このボード初記録 · 暫定1/3位 · ゴースト比 -1.13s",
+    "standingNote": "このボード初記録 · 暫定1/3位",
+    "ghostNote": "ゴースト比 -1.13s",
+    "standingToast": {
+      "title": "暫定1位です!",
+      "text": "Q 1:10.000 - このボードの現在のトップタイムです。クリックで記録ページを開きます。"
+    },
+    "ghostToast": {
+      "title": "ゴーストに勝利!",
+      "text": "Q - 1:10.000、ゴーストより 1.13s 速い"
+    }
+  }
+]
