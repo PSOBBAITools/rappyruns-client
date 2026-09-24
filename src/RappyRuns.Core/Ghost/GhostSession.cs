@@ -10,14 +10,14 @@ namespace RappyRuns.Core.Ghost;
 /// <param name="PartyMembers">The party size without NPCs (party-of).</param>
 /// <param name="GhostRaceEnabled">The :ghost-race setting.</param>
 /// <param name="HasSubmissionToken">submission-token is non-empty. The guest token counts: an anonymous player's PBs live under the guest account.</param>
-/// <param name="AccountMode">"normal" / "sandbox" from the player's name colour (PsobbTables.AccountModeOfColor); null when it could not be read (the query then omits it).</param>
+/// <param name="AccountMode">"normal" / "sandbox" from the Detector's settled name colour for this load (the reading that also stamps the run); null when it could not be read (the query then omits it and the server leaves the mode open).</param>
 public sealed record GhostLoadInfo(
     IReadOnlyList<string> Slugs,
     string? Difficulty,
     int PartyMembers,
     bool GhostRaceEnabled,
     bool HasSubmissionToken,
-    string? AccountMode = null);
+    string? AccountMode);
 
 /// <summary>
 /// One GET /api/quests/:slug/ghost to make (ghost-fetch-wanted's values,

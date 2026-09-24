@@ -209,7 +209,7 @@ public class GhostTests
     // Fetch gating: one ask per quest load, refetch after a lobby visit (even
     // at the same allocation address), none without the setting.
     private static GhostLoadInfo Load(bool enabled = true) =>
-        new(["ep1-towards-the-future", "ep1-towards-the-future-solo"], "Ultimate", 1, enabled, HasSubmissionToken: true);
+        new(["ep1-towards-the-future", "ep1-towards-the-future-solo"], "Ultimate", 1, enabled, HasSubmissionToken: true, AccountMode: null);
 
     [Fact(DisplayName = "fetch wanted on a fresh quest load")]
     public void FetchWantedFresh()

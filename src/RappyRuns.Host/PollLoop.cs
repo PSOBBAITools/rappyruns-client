@@ -355,7 +355,9 @@ public sealed class PollLoop : IFrameHooks
         Detector.PartyOf(snapshot).Count,
         _s.Config.GhostRace,
         _s.Config.SubmissionToken.Length > 0,
-        PsobbTables.AccountModeOfColor(snapshot.MyPlayer?.NameColor));
+        // The Detector's settled per-load colour - the same reading that
+        // stamps the submitted run's account_mode - not this frame's raw one.
+        PsobbTables.AccountModeOfColor(_s.Frames.Detector.MyNameColor));
 
     /// <summary>
     /// handle-completed-runs (main.lisp:136): drop aborted runs unless

@@ -352,7 +352,7 @@ psostats 準拠: `number` が正でかつ定義の `:number` と `eql` ならマ
 | POST `/api/me/auto-publish` | L | `{"enabled": 0|1}` (整数) | 200 → 成功; 401/他 → api-error |
 | POST `/api/runs` | S | ラン JSON (§7.2) | 201 created / 200 duplicate / 400,403 rejected / 401 api-error("Invalid or revoked API token") / 他 api-error |
 | POST `/api/quests` | L (モデレーター) | `{"parent","name","description","end"?,"start"?}` | 201 created / 409 duplicate / 403 forbidden / 400 rejected / 401,他 api-error |
-| GET `/api/quests/{slug}/ghost?slugs=a,b&difficulty=X&party_size=N&pb=0` | S | — | 200 → ok+payload; 404 → none; 401,他 → api-error |
+| GET `/api/quests/{slug}/ghost?slugs=a,b&difficulty=X&party_size=N&pb=0&account_mode=M` | S | — | 200 → ok+payload; 404 → none; 401,他 → api-error |
 | GET `/api/quests/{slug}/pins?slugs=a,b` | L | — | 200 ok / 404 none / 401,他 api-error |
 | POST `/api/pin-sets` | L | Pin Share 保存 body | 201 created / 200 updated / 400,403 rejected / 404 not-found / 401,他 api-error |
 | POST `/api/pin-sets/{id}/items` | L | 同上 | 同上 |
@@ -418,7 +418,7 @@ psostats 準拠: `number` が正でかつ定義の `:number` と `eql` ならマ
 JSON の数値: 浮動小数 (座標等) は **単精度の最短表現** (`12.3`)。C# で `double` に変換してから直列化すると `12.300000190734863` になる → `float` のまま `System.Text.Json` に渡す (最短往復表現) こと。
 
 ### 7.4 ゴーストのクエリ (`api-client.lisp:679 fetch-ghost-splits`)
-パス `/api/quests/{slug}/ghost` + `?` + `&` 連結: `slugs=<他カテゴリ slug をカンマ連結、エンコードなし>`、`difficulty=<url-encode>`、`party_size=N`、`pb=N`。パラメータ無しなら `?` も付けない。クライアントは常に `pb=0` (開始時点では No PB が確定しているため)。フェッチはクエストロード毎に 1 回 (quest-ptr で消費)、応答到着時に同じロードが続いている場合のみ採用。条件: 定義マッチあり・`:ghost-race` 真・`submission-token` 非空。
+パス `/api/quests/{slug}/ghost` + `?` + `&` 連結: `slugs=<他カテゴリ slug をカンマ連結、エンコードなし>`、`difficulty=<url-encode>`、`party_size=N`、`pb=N`、`account_mode=<normal|sandbox>` (Detector が確定させたそのロードの名前色から。読めない時は付けない、S25)。パラメータ無しなら `?` も付けない。クライアントは常に `pb=0` (開始時点では No PB が確定しているため)。フェッチはクエストロード毎に 1 回 (quest-ptr で消費)、応答到着時に同じロードが続いている場合のみ採用。条件: 定義マッチあり・`:ghost-race` 真・`submission-token` 非空。
 
 ---
 
