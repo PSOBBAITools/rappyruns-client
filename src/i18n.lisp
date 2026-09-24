@@ -602,6 +602,9 @@
     :update-after-run
     ("~a downloaded - installs after this run"
      "~a ダウンロード済み - 現在のプレイ終了後にインストールします")
+    :update-rejected
+    ("The latest update could not start on this PC and was rolled back; it is not installed automatically"
+     "最新のアップデートはこの PC で起動できなかったため元に戻しました。自動ではインストールしません")
     :update-restarting
     ("installing ~a - restarting..."
      "~a をインストール中 - 再起動します...")

@@ -1699,7 +1699,7 @@ the poll loop (for updates deferred past a run)."
    (lambda ()
      ;; *INTERFACE*, not the captured window: a language switch may
      ;; have rebuilt it, and the teardown must destroy the live one.
-     (launch-updater-and-quit *interface* zip))))
+     (launch-updater-and-quit *interface* zip tag))))
 
 (capi:define-interface update-splash ()
   ()
@@ -1724,7 +1724,8 @@ never shows. In every other case it returns with the outcome in
 *STARTUP-UPDATE-NOTE* for REPORT-STARTUP-UPDATE to surface."
   (let* ((release (fetch-latest-release))
          (decision (startup-update-decision
-                    release *client-version* (install-dir-writable-p))))
+                    release *client-version* (install-dir-writable-p)
+                    (rejected-update-tag))))
     (setf *startup-update-note* decision)
     (when (eq decision :apply)
       (let ((tag (getf release :tag))
@@ -1741,7 +1742,7 @@ never shows. In every other case it returns with the outcome in
              (set-pane-text splash #'splash-message-pane
                             (tr :update-restarting tag))
              ;; Does not return: hands over to the helper and quits.
-             (launch-updater-and-quit splash zip))
+             (launch-updater-and-quit splash zip tag))
             (t
              (setf *startup-update-note* :download-failed)
              (capi:execute-with-interface-if-alive
@@ -1755,6 +1756,7 @@ dialogs the Settings-button check shows; a failed release check stays
 silent, exactly like the old silent startup check."
   (case *startup-update-note*
     (:up-to-date (set-version-status interface (tr :update-up-to-date)))
+    (:rejected (set-version-status interface (tr :update-rejected) :red))
     (:not-writable (offer-manual-download interface))
     (:download-failed
      (set-version-status interface (tr :update-download-failed) :red)

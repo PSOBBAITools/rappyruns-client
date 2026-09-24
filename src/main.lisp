@@ -440,6 +440,9 @@ are persisted incrementally, so an abrupt exit loses nothing."
   (when (already-running-p)
     (signal-existing-instance)
     (exit-process-now))
+  ;; This build runs: tell an update helper waiting on it, before the
+  ;; .old cleanup below and before a further update could hand over.
+  (write-started-marker)
   (setf *stop-requested* nil
         *really-quitting* nil)
   (load-config!)
@@ -461,9 +464,6 @@ are persisted incrementally, so an abrupt exit loses nothing."
   (let ((interface (make-instance 'client-window)))
     (setf *interface* interface)
     (capi:display interface)
-    ;; The window is up: an update helper waiting on this build may now
-    ;; delete the .old exe instead of rolling back.
-    (write-started-marker)
     (refresh-runs-list interface)
     (check-server interface)
     ;; A revoked token heals itself when a login.txt sits next to the

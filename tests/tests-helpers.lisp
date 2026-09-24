@@ -466,6 +466,12 @@
            (eq :up-to-date (startup-update-decision release "0.6.0" t)))
     (check "startup decision never updates a dev build"
            (eq :up-to-date (startup-update-decision release nil t))))
+  (check "startup decision skips a release the helper rolled back"
+         (eq :rejected (startup-update-decision
+                        (list :tag "v0.6.0") "0.5.0" t "v0.6.0")))
+  (check "startup decision still applies a newer release than the rolled-back one"
+         (eq :apply (startup-update-decision
+                     (list :tag "v0.7.0") "0.5.0" t "v0.6.0")))
   (check "startup decision reports a failed release check"
          (eq :check-failed (startup-update-decision nil "0.5.0" t)))
   ;; Release JSON -> plist.
@@ -523,6 +529,8 @@
                  :stage-dir "C:\\Temp\\rappyruns-update-stage\\"
                  :log-path "C:\\Temp\\it's a log.txt"
                  :marker-path "C:\\Temp\\rappyruns-client-started.txt"
+                 :rejected-path "C:\\Users\\me\\AppData\\Roaming\\ephinea-ta-client\\update-rejected.txt"
+                 :tag "v1.0.0"
                  :start-timeout 120)))
     (check "script waits for the old process"
            (and (search "Wait-Process -Id 4242" script)
@@ -565,11 +573,23 @@
     (check "script waits for the new client's own PID in the marker"
            (and (search "$markerPid -eq [string]$new.Id" script)
                 (search "AddSeconds(120)" script)))
-    (check "a new client that never starts is stopped and rolled back"
-           (let ((stop (search "Stop-Process -Id $new.Id" script))
-                 (drop (search "try { Remove-Item -Force $target -ErrorAction Stop }" script))
-                 (rollback (search "Move-Item $old $exe" script)))
-             (and stop drop rollback (< drop rollback))))
+    (check "an unreadable marker is retried, not fatal"
+           (search "try { $markerText = Get-Content -Raw $marker -ErrorAction Stop } catch { }" script))
+    (check "only a still-running new client is killed"
+           (and (search "if (-not $new.HasExited) {" script)
+                (not (search "Stop-Process" script))))
+    (check "a rollback restores the .old exe over the new one"
+           (search "Move-Item -Force $old $exe -ErrorAction Stop; $restored = $true" script))
+    (check "a rollback puts the previous data folder back"
+           (let ((backup (search "Copy-Item $data $dataBackup -Recurse -Force" script))
+                 (merge (search "Copy-Item (Join-Path $newData '*') $data" script))
+                 (restore (search "Copy-Item $dataBackup $data -Recurse -Force" script)))
+             (and backup merge restore (< backup merge restore))))
+    (check "a rollback records the rejected tag"
+           (and (search "$tag = 'v1.0.0'" script)
+                (search "[IO.File]::WriteAllText($rejected, $tag)" script)))
+    (check "the failed build is never relaunched"
+           (search "if ($restored -and (-not $stillRunning) -and (Test-Path $exe))" script))
     (check "the zip is only removed after the new client started"
            (< (search "throw \"the new client did not start\"" script)
               (search "Remove-Item -Force $zip" script)))))

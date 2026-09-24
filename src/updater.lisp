@@ -62,14 +62,19 @@ release published between check and download cannot mismatch them."
                                                      (plusp size)
                                                      size))))))))))
 
-(defun startup-update-decision (release current-version writable-p)
+(defun startup-update-decision (release current-version writable-p
+                                 &optional rejected-tag)
   "What the pre-GUI update pass (STARTUP-AUTO-UPDATE in gui.lisp) should
 do: :APPLY (download and hand over before any window shows), :UP-TO-DATE,
-:NOT-WRITABLE (the main window offers the manual download instead) or
-:CHECK-FAILED. Pure so the tests can pin the boundaries."
+:NOT-WRITABLE (the main window offers the manual download instead),
+:REJECTED (REJECTED-TAG is this very release, which the update helper
+had to roll back because it would not start here) or :CHECK-FAILED.
+Pure so the tests can pin the boundaries."
   (cond ((null release) :check-failed)
         ((not (update-available-p current-version (getf release :tag)))
          :up-to-date)
+        ((and rejected-tag (equal rejected-tag (getf release :tag)))
+         :rejected)
         ((not writable-p) :not-writable)
         (t :apply)))
 
@@ -101,13 +106,21 @@ once its window is up (WRITE-STARTED-MARKER here; the C# client writes
 the same file). The update helper waits for it before keeping a new
 build - desktop/docs/PLAN.md decision 1.")
 
-(defparameter +started-marker-timeout-seconds+ 120
+(defparameter +started-marker-timeout-seconds+ 300
   "How long the update helper waits for the new client's started marker
 before it rolls back to the .old exe. Generous: a cold first start
-(antivirus scan of a new 50MB exe, WebView2 first-run setup) is slow.")
+(antivirus scan of a new 50MB exe, WebView2 first-run setup) can be
+slow, and killing a healthy build is worse than waiting.")
+
+(defparameter +rejected-update-name+ "update-rejected.txt"
+  "File in the config dir where the update helper records the tag of a
+release it had to roll back. The automatic startup pass skips that tag
+(STARTUP-UPDATE-DECISION), so a build that cannot start on this PC is
+not downloaded and rolled back again on every launch.")
 
 (defun updater-script-text (&key pid exe-path target-exe-path install-dir
                                  zip-path stage-dir log-path marker-path
+                                 rejected-path (tag "")
                                  (start-timeout +started-marker-timeout-seconds+))
   "The helper script that performs the actual swap, as a string (pure,
 so the tests can check its shape). It stages the zip and verifies the
@@ -117,9 +130,10 @@ TARGET-EXE-PATH is where the new exe lands (+CLIENT-EXE-NAME+ in the
 install dir): when the running exe still carries the pre-rename name,
 the update doubles as the rename migration.
 MARKER-PATH is the started marker: the new exe must write its PID there
-within START-TIMEOUT seconds, or the helper stops it and restores the
-.old exe. This guards the switch to the C# client, whose failure to
-start (say, no WebView2 runtime) would otherwise strand the user."
+within START-TIMEOUT seconds, or the helper stops it, restores the .old
+exe and the previous data folder, and records TAG in REJECTED-PATH.
+This guards the switch to the C# client, whose failure to start (say,
+no WebView2 runtime) would otherwise strand the user."
   (format nil "$ErrorActionPreference = 'Stop'~%~
 Start-Transcript -Path ~a -Force | Out-Null~%~
 $exe = ~a~%~
@@ -128,7 +142,12 @@ $installDir = ~a~%~
 $zip = ~a~%~
 $stage = ~a~%~
 $marker = ~a~%~
+$rejected = ~a~%~
+$tag = ~a~%~
 $old = \"$exe.old\"~%~
+$data = Join-Path $installDir 'data'~%~
+$dataBackup = Join-Path $stage '_previous-data'~%~
+$hadData = Test-Path $data~%~
 $stillRunning = $false~%~
 $dropNew = $false~%~
 try {~%~
@@ -143,6 +162,8 @@ try {~%~
     Expand-Archive -Path $zip -DestinationPath $stage -Force~%~
     $newExe = Join-Path $stage 'RappyRunsClient.exe'~%~
     if (-not (Test-Path $newExe)) { throw \"no RappyRunsClient.exe in the update zip\" }~%~
+    # Keep the current data folder so a rollback can put it back.~%~
+    if ($hadData) { Copy-Item $data $dataBackup -Recurse -Force }~%~
     # A file of the running image may linger locked briefly; retry the move.~%~
     $moved = $false~%~
     for ($i = 0; $i -lt 10; $i++) {~%~
@@ -153,8 +174,8 @@ try {~%~
     Copy-Item $newExe $target -Force~%~
     $newData = Join-Path $stage 'data'~%~
     if (Test-Path $newData) {~%~
-        New-Item -ItemType Directory -Force (Join-Path $installDir 'data') | Out-Null~%~
-        Copy-Item (Join-Path $newData '*') (Join-Path $installDir 'data') -Recurse -Force~%~
+        New-Item -ItemType Directory -Force $data | Out-Null~%~
+        Copy-Item (Join-Path $newData '*') $data -Recurse -Force~%~
     }~%~
     # Best effort: a leftover recording process may still hold ffmpeg.exe.~%~
     $newFfmpeg = Join-Path $stage 'ffmpeg'~%~
@@ -166,40 +187,60 @@ try {~%~
     }~%~
     Remove-Item -Force $marker -ErrorAction SilentlyContinue~%~
     $new = Start-Process -FilePath $target -WorkingDirectory $installDir -PassThru~%~
-    # Keep the new build only once it reports its window is up.~%~
+    # Keep the new build only once it reports that it runs.~%~
     $deadline = (Get-Date).AddSeconds(~d)~%~
     $started = $false~%~
     while ((Get-Date) -lt $deadline) {~%~
-        if (Test-Path $marker) {~%~
-            $markerPid = ((Get-Content -Raw $marker).Trim() -split ' ')[0]~%~
+        # The writer truncates before writing: an empty or locked file just means not yet.~%~
+        $markerText = $null~%~
+        try { $markerText = Get-Content -Raw $marker -ErrorAction Stop } catch { }~%~
+        if ($markerText) {~%~
+            $markerPid = ($markerText.Trim() -split ' ')[0]~%~
             if ($markerPid -eq [string]$new.Id) { $started = $true; break }~%~
         }~%~
         if ($new.HasExited) { break }~%~
         Start-Sleep -Milliseconds 500~%~
     }~%~
     if (-not $started) {~%~
-        Stop-Process -Id $new.Id -Force -ErrorAction SilentlyContinue~%~
-        Wait-Process -Id $new.Id -Timeout 10 -ErrorAction SilentlyContinue~%~
         $dropNew = $true~%~
+        # Never signal a PID the dead process no longer owns.~%~
+        if (-not $new.HasExited) {~%~
+            try { $new.Kill() } catch { }~%~
+            $new.WaitForExit(10000) | Out-Null~%~
+        }~%~
         throw \"the new client did not start\"~%~
     }~%~
     Remove-Item -Force $zip -ErrorAction SilentlyContinue~%~
     Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue~%~
 } catch {~%~
     Write-Output \"update failed: $_\"~%~
-    # A new build that never came up is removed so the .old one returns.~%~
-    # The stopped process may hold its image a moment longer; retry.~%~
+    $restored = $false~%~
     if ($dropNew -and (Test-Path $old)) {~%~
-        for ($i = 0; $i -lt 10 -and (Test-Path $target); $i++) {~%~
-            try { Remove-Item -Force $target -ErrorAction Stop } catch { Start-Sleep -Seconds 1 }~%~
+        # Put the previous exe back over the new one (the stopped process~%~
+        # may hold its image a moment longer, so retry).~%~
+        for ($i = 0; $i -lt 30; $i++) {~%~
+            try { Move-Item -Force $old $exe -ErrorAction Stop; $restored = $true; break }~%~
+            catch { Start-Sleep -Seconds 1 }~%~
         }~%~
-    }~%~
-    if ((Test-Path $old) -and -not (Test-Path $exe)) {~%~
+        if ($restored -and $target -ne $exe) { Remove-Item -Force $target -ErrorAction SilentlyContinue }~%~
+        if ($restored -and (Test-Path $dataBackup)) {~%~
+            try {~%~
+                Remove-Item -Recurse -Force $data~%~
+                Copy-Item $dataBackup $data -Recurse -Force~%~
+            } catch { Write-Output \"data restore failed: $_\" }~%~
+        }~%~
+        # Remember the release so the automatic update does not retry it.~%~
+        try { [IO.File]::WriteAllText($rejected, $tag) } catch { }~%~
+    } elseif ((Test-Path $old) -and -not (Test-Path $exe)) {~%~
         # When the old exe carried a different name, drop the half-installed new-name exe too.~%~
         if ($target -ne $exe) { Remove-Item -Force $target -ErrorAction SilentlyContinue }~%~
         Move-Item $old $exe~%~
+        $restored = $true~%~
+    } elseif (-not $dropNew) {~%~
+        $restored = $true~%~
     }~%~
-    if ((-not $stillRunning) -and (Test-Path $exe)) {~%~
+    # Relaunch only a build known to work: never the one that just failed.~%~
+    if ($restored -and (-not $stillRunning) -and (Test-Path $exe)) {~%~
         Start-Process -FilePath $exe -WorkingDirectory $installDir~%~
     }~%~
 } finally {~%~
@@ -212,6 +253,8 @@ try {~%~
           (ps-quote zip-path)
           (ps-quote stage-dir)
           (ps-quote marker-path)
+          (ps-quote (or rejected-path ""))
+          (ps-quote (or tag ""))
           pid
           start-timeout))
 
@@ -257,13 +300,34 @@ build).")
 
 #+lispworks
 (defun write-started-marker ()
-  "Tell a waiting update helper this build came up (see
-UPDATER-SCRIPT-TEXT). Written on every start; failures are ignored."
+  "Tell a waiting update helper this build runs (see UPDATER-SCRIPT-TEXT).
+Written first thing on every start - before the pre-GUI update pass,
+which may itself hand over to a newer build and quit, and before
+CLEANUP-OLD-UPDATE-FILES deletes the .old exe a rollback would need.
+Failures are ignored."
   (ignore-errors
     (with-open-file (out (started-marker-path) :direction :output
                                                :if-exists :supersede
                                                :external-format :utf-8)
       (format out "~d ~a~%" (%get-current-process-id) (client-version)))))
+
+#+lispworks
+(defun rejected-update-path ()
+  (merge-pathnames +rejected-update-name+ (config-dir)))
+
+#+lispworks
+(defun rejected-update-tag ()
+  "The release tag the update helper last rolled back, or NIL."
+  (ignore-errors
+    (with-open-file (in (rejected-update-path) :external-format :utf-8
+                                               :if-does-not-exist nil)
+      (when in
+        (let ((line (read-line in nil nil)))
+          (when line
+            (let ((tag (string-trim (list #\Space #\Tab #\Return #\Newline
+                                          (code-char #xfeff))
+                                    line)))
+              (and (plusp (length tag)) tag))))))))
 
 #+lispworks
 (defun update-zip-path ()
@@ -344,7 +408,7 @@ Safe to call on every startup."
        :validate t :if-does-not-exist :ignore))))
 
 #+lispworks
-(defun launch-updater-and-quit (interface zip-path)
+(defun launch-updater-and-quit (interface zip-path tag)
   "Hand over to the helper script and exit: the script waits for this
 process to die, swaps the exe and restarts the new build."
   (let* ((temp (windows-temp-dir))
@@ -361,7 +425,9 @@ process to die, swaps the exe and restarts the new build."
                             (merge-pathnames "rappyruns-update-stage/" temp))
                 :log-path (namestring
                            (merge-pathnames "rappyruns-update.log" temp))
-                :marker-path (namestring (started-marker-path)))))
+                :marker-path (namestring (started-marker-path))
+                :rejected-path (namestring (rejected-update-path))
+                :tag tag)))
     (with-open-file (out script-path :direction :output :if-exists :supersede
                                      :external-format :utf-8)
       ;; BOM first: PowerShell 5.1 reads a BOM-less .ps1 as ANSI (cp932
