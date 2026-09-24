@@ -64,6 +64,12 @@ if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) { throw "package.ps1 faile
 $zip = Join-Path $PSScriptRoot "dist\RappyRunsClient.zip"
 if (-not (Test-Path $zip)) { throw "Missing $zip." }
 
+# Publish the source BEFORE the release so its tag lands on the exact commit
+# the exe was built from (the Lisp release does the same with client/ on main).
+if (-not $Dogfood) {
+    & (Join-Path $PSScriptRoot "..\scripts\publish-desktop-source.ps1")
+}
+
 if ($Dogfood) {
     if ((Invoke-GhQuiet repo view $dogfoodRepo --json name).ExitCode -ne 0) {
         gh repo create $dogfoodRepo --public --add-readme --description "Test releases of the Rappy Runs C# client (not for general use)"
@@ -77,8 +83,10 @@ if ($Clobber) {
     $ghArgs = @("release", "create", $Version, $zip, "--repo", $repo, "--title", "Rappy Runs Client $Version")
     if ($NotesFile) { $ghArgs += @("--notes-file", $NotesFile) }
     else { $ghArgs += @("--notes", "Rappy Runs Client $Version.") }
-    # A dogfood repo has no source; give the tag something to point at.
+    # A dogfood repo has no source; give the tag something to point at. A real
+    # release is tagged on the mirrored C# source (publish-desktop-source.ps1).
     if ($Dogfood) { $ghArgs += @("--target", "main") }
+    else { $ghArgs += @("--target", "csharp") }
     gh @ghArgs
 }
 if ($LASTEXITCODE -ne 0) { throw "gh failed (exit $LASTEXITCODE)." }
