@@ -480,8 +480,8 @@ JSON の数値: 浮動小数 (座標等) は **単精度の最短表現** (`12.3
 | `:video-path` | 録画保存時 (`link-video-file!`) | |
 | `:video-attached`, `:video-uploaded`, `:held`, `:approved` | アップロード成功 | held/approved は応答 `status` |
 | `:next-upload-at` | バックオフ | universal time |
-| `:upload-given-up`, `:upload-error` | 恒久失敗 / ファイル消失 / api-error 12 連続 | |
-| `:upload-failures` | api-error の連続回数 (C# 追加、S17) | サーバーが応答すれば消す。Lisp は無視 |
+| `:upload-given-up`, `:upload-error` | 恒久失敗 / ファイル消失 / 数える失敗 12 連続 | |
+| `:upload-failures` | 数える失敗 (ボディ送信開始後の失敗か 5xx) の連続回数 (C# 追加、S17) | サーバーの応答と手動リトライで消す。Lisp は無視 |
 | `:video-url` | (手動 URL 添付; GUI 側) | `hosted-video-replaceable-p` 判定用 |
 
 ### 9.2 active 判定 (`store.lisp:25 entry-active-p`) — 永続化・トリム対象外の条件
@@ -513,7 +513,7 @@ JSON の数値: 浮動小数 (座標等) は **単精度の最短表現** (`12.3
   - いずれの結果でもまず診断 (`POST /diagnostics`, 録画ログ末尾 64KB + マシン概要) をベストエフォート送信。
   - attached/duplicate → `:video-attached t :video-uploaded t :held (status=="held") :approved (status=="approved")`。**ローカルファイルは消さない** (保持期間スイープに任せる)。
   - rejected: `error == "pending-limit"` → `:next-upload-at now+3600`、それ以外 → `:upload-given-up t :upload-error <message|error|"rejected">`。
-  - api-error → `:next-upload-at now+300`, `:upload-error`, `:upload-failures +1`。C# は 12 回連続 (約 1 時間) で `:upload-given-up t` にして止める (S17、Lisp は無限に再送)。回数は queue.sexp に残るので再起動をまたぐ。api-error 以外の応答 (attached/duplicate/rejected) で回数を消す。ホスト名が引けない失敗 (オフライン) は回数に数えない。諦めた回だけは診断を送る。クライアントに手動の再アップロード操作は無いので、諦めた動画はサイトで手動添付する。
+  - api-error → `:next-upload-at now+300`, `:upload-error`。C# (S17、Lisp は無限に再送) はアップロード自体の失敗だけを数える: リクエストボディの送信が始まった後の失敗 (送信中のリセット、送信中・応答待ちのタイムアウト) と 5xx。DNS・接続失敗・401・その他のステータス・ローカルのファイルエラーは数えず、従来どおり 300 秒後に再試行し、連続回数もそのまま残す (諦めない)。数える失敗は `:upload-failures +1` し、`:next-upload-at` を 300 秒から倍々、上限 6 時間 (`RunQueue.CountedRetrySeconds`) にする。12 回連続 (約 1 日半) で `:upload-given-up t` にして止め、その回だけ診断を送る。回数は queue.sexp に残るので再起動をまたぐ。api-error 以外の応答 (attached/duplicate/rejected) で回数を消す。手動リトライ (「未送信の記録を送信」ボタン、`runs.retry`) は全エントリの回数とバックオフを消し、回数で諦めたエントリを復活させる (リジェクトやファイル消失で諦めたものはそのまま)。
 - 進捗: `*upload-progress*` = `(server-id done total)`、整数 % が変わった時だけ再描画。
 - 保持期間 (`apply-recording-retention`, 120 秒毎、レコーダ idle 時のみ): 上限超過で、protected (アップロード待ち) は除外、uploaded (attached) を先に、各層内は古い順に削除。
 

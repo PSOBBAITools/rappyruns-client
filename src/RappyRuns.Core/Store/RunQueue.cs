@@ -35,15 +35,25 @@ public sealed class RunQueue
     public const long UploadLimitRetrySeconds = 3600;
 
     /// <summary>
-    /// Consecutive api-errors after which an upload gives up, as a rejection
-    /// does (S17): 12 tries 300 s apart is about an hour. The Lisp client
-    /// retried forever, and some failures never clear on their own (a revoked
-    /// token's 401, a server that answers early and resets the connection).
-    /// The count lives on the entry (<see cref="RunKeys.UploadFailures"/>), so
-    /// it survives restarts; any reply from the server resets it. A host that
-    /// did not resolve (offline) is no strike (<see cref="UploadResult.ServerUnreached"/>).
+    /// Consecutive counted failures (<see cref="UploadResult.Counted"/>: the
+    /// upload itself failed mid-body, timed out, or got a 5xx) after which an
+    /// upload gives up, as a rejection does (S17). The Lisp client retried
+    /// forever, and a server that answers early and resets the connection
+    /// never clears on its own. Counted failures back off exponentially
+    /// (<see cref="CountedRetrySeconds"/>), so the twelfth comes about a day and
+    /// a half in; a server outage long enough to matter is mostly connect
+    /// failures, which do not count. The count lives on the entry
+    /// (<see cref="RunKeys.UploadFailures"/>) and survives restarts; any server
+    /// reply and the manual retry (<see cref="ResetUploadFailures"/>) clear it.
     /// </summary>
     public const int MaxUploadFailures = 12;
+
+    /// <summary>The backoff cap for counted failures: 6 hours.</summary>
+    public const long MaxUploadRetrySeconds = 6 * 3600;
+
+    /// <summary>The backoff after the <paramref name="failures"/>th counted failure in a row: 300 s, doubling, capped at 6 h.</summary>
+    public static long CountedRetrySeconds(long failures) =>
+        failures >= 8 ? MaxUploadRetrySeconds : Math.Min(MaxUploadRetrySeconds, UploadRetrySeconds << (int)Math.Max(0, failures - 1));
 
     private readonly object _lock = new();
     private readonly object _saveLock = new();
@@ -199,6 +209,35 @@ public sealed class RunQueue
 
     private static IEnumerable<KeyValuePair<string, SexpNode>> Pairs((string Key, SexpNode Value)[] updates) =>
         updates.Select(u => new KeyValuePair<string, SexpNode>(u.Key, u.Value));
+
+    /// <summary>
+    /// The manual retry (the Retry button, C# addition for S17): forget every
+    /// counted-failure streak and its backoff, and bring back an upload the
+    /// streak gave up on (still listed; a count-based give-up is the only one
+    /// that carries a count). Rejections and vanished files stay given up.
+    /// Returns the number of entries reset.
+    /// </summary>
+    public int ResetUploadFailures()
+    {
+        var reset = 0;
+        foreach (var entry in Entries.Where(e => e.Is(RunKeys.UploadFailures)))
+        {
+            Change(entry, current =>
+            {
+                var copy = current.Clone();
+                if ((RunEntries.Get(copy, RunKeys.UploadFailures).AsLong ?? 0) >= MaxUploadFailures)
+                {
+                    copy.Remove(RunKeys.UploadGivenUp);
+                    copy.Remove(RunKeys.UploadError);
+                }
+                copy.Remove(RunKeys.UploadFailures);
+                copy.Remove(RunKeys.NextUploadAt);
+                return copy;
+            });
+            reset++;
+        }
+        return reset;
+    }
 
     /// <summary>
     /// clear-runs!: drop every entry except unsent ones (:queued/:failed).
@@ -386,16 +425,19 @@ public sealed class RunQueue
 
             if (result.Outcome == UploadOutcome.ApiError)
             {
-                var retry = (RunKeys.NextUploadAt, SexpNode.Int(_now() + UploadRetrySeconds));
                 var error = (RunKeys.UploadError, SexpNode.Str(result.Message ?? ""));
-                // Offline (the host did not resolve): the server never saw this upload, so it is no strike.
-                if (result.ServerUnreached) return Update(entry, retry, error);
+                // Not the upload's own failure (offline, connect, 401): the old
+                // fixed backoff, the streak left as it is, never a give-up.
+                if (!result.Counted)
+                    return Update(entry, (RunKeys.NextUploadAt, SexpNode.Int(_now() + UploadRetrySeconds)), error);
                 var gaveUp = false;
                 var updated = Change(entry, current =>
                 {
                     var failures = (RunEntries.Get(current, RunKeys.UploadFailures).AsLong ?? 0) + 1;
                     gaveUp = failures >= MaxUploadFailures;
-                    return Apply(current, Pairs([gaveUp ? (RunKeys.UploadGivenUp, SexpNode.T) : retry,
+                    return Apply(current, Pairs([gaveUp
+                            ? (RunKeys.UploadGivenUp, SexpNode.T)
+                            : (RunKeys.NextUploadAt, SexpNode.Int(_now() + CountedRetrySeconds(failures))),
                         (RunKeys.UploadFailures, SexpNode.Int(failures)), error]));
                 });
                 // A final failure is worth the capture log on the server, as a rejection's is.

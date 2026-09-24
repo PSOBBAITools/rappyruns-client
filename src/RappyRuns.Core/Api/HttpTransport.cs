@@ -153,7 +153,11 @@ public sealed class HttpTransport : IDisposable
         }
         catch (Exception ex) when (Map(ex, method, url, cancellationToken) is { } mapped)
         {
-            throw mapped;
+            // Whether the body had started tells an upload failure from a
+            // failure to reach the server at all (the queue counts only the former).
+            throw content.Started && mapped is ApiException { BodyStarted: false } api
+                ? new ApiException(api.Message, api.Failure, api.InnerException) { Status = api.Status, BodyStarted = true }
+                : mapped;
         }
     }
 
@@ -342,6 +346,7 @@ public sealed class HttpTransport : IDisposable
                 if (n == 0) break;
                 if (sent + n > total) break;
                 timer.CancelAfter(timeouts.Send);
+                Started = true;
                 await stream.WriteAsync(buffer.AsMemory(0, n), cancellationToken).ConfigureAwait(false);
                 sent += n;
                 onProgress?.Invoke(sent, total);
@@ -351,6 +356,15 @@ public sealed class HttpTransport : IDisposable
             // The long wait: the server relays the last chunk to storage before answering.
             timer.CancelAfter(timeouts.Receive);
         }
+
+        /// <summary>The first chunk has been handed to the connection (volatile: set on the send path, read by the caller).</summary>
+        public bool Started
+        {
+            get => Volatile.Read(ref _started);
+            private set => Volatile.Write(ref _started, value);
+        }
+
+        private bool _started;
 
         protected override bool TryComputeLength(out long length)
         {

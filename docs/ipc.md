@@ -207,7 +207,7 @@ login.txt login (§2.2) has no UI method: it runs at startup / on 401 and report
 | `runs.uploadVideo` | `{id: string\|null}` | Notice? | `upload-video-callback`: the row, or (null) the newest run a video can still be attached to. Explorer `/select,"<path>"` (R23) + `https://www.youtube.com/upload`. Errors: `:no-recording-for-run`, `:no-recordings-yet`, `:recording-file-missing <path>`. |
 | `runs.openRecordingsFolder` | – | `null` | Create the folder, ShellExecute open. |
 | `runs.openMyRuns` | – | `null` | `<server>/my/runs`. |
-| `runs.retry` | – | `null` | Sets the retry flag; the poll loop submits on its next pass (works unlinked). Results arrive as `runs`. |
+| `runs.retry` | – | `null` | Clears every video upload's counted-failure streak and backoff (reviving an upload the streak gave up, S17), then sets the retry flag; the poll loop submits on its next pass (works unlinked). Results arrive as `runs`. |
 | `runs.clear` | – | `null` | The UI confirmed `:clear-list-confirm`. `clear-runs!`, then emits `runs`. |
 
 ### rules — quest rule registration (moderators, ui-shell §3)
