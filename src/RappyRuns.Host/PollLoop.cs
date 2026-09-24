@@ -354,7 +354,8 @@ public sealed class PollLoop : IFrameHooks
         PsobbTables.DifficultyLabel(snapshot.Difficulty, snapshot.Anguish),
         Detector.PartyOf(snapshot).Count,
         _s.Config.GhostRace,
-        _s.Config.SubmissionToken.Length > 0);
+        _s.Config.SubmissionToken.Length > 0,
+        PsobbTables.AccountModeOfColor(snapshot.MyPlayer?.NameColor));
 
     /// <summary>
     /// handle-completed-runs (main.lisp:136): drop aborted runs unless

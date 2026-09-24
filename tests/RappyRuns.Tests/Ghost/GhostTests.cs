@@ -253,6 +253,9 @@ public class GhostTests
         var request = new GhostFetchRequest(["a", "b", "c"], "Very Hard", 2);
         Assert.Equal("/api/quests/a/ghost?slugs=b,c&difficulty=Very%20Hard&party_size=2&pb=0", request.PathAndQuery());
         Assert.Equal("/api/quests/a/ghost?party_size=1&pb=0", new GhostFetchRequest(["a"], null, 1).PathAndQuery());
+        // S25: the session's account mode rides along when it is known.
+        Assert.Equal("/api/quests/a/ghost?party_size=1&pb=0&account_mode=sandbox",
+            new GhostFetchRequest(["a"], null, 1, AccountMode: "sandbox").PathAndQuery());
     }
 
     [Fact(DisplayName = "a fetch reply for a superseded load is dropped")]
