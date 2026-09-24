@@ -192,15 +192,26 @@ public static class RunDisplay
     /// <param name="entry">The queue entry.</param>
     /// <param name="language">UI language.</param>
     /// <param name="uploadPercent"><see cref="RunQueue.UploadProgressPercent"/> for this entry.</param>
-    public static string RunVideoLabel(Plist entry, Language language, int? uploadPercent)
+    public static string RunVideoLabel(Plist entry, Language language, int? uploadPercent) =>
+        RunVideoKey(entry, uploadPercent) is var (key, percent)
+            ? percent is { } p ? Tr(language, key, p) : Tr(language, key)
+            : "";
+
+    /// <summary>
+    /// The one decision behind the Video column: the strings key for
+    /// <paramref name="entry"/> and, for "video-uploading", its percent
+    /// argument; null for no recording. <see cref="RunVideoLabel"/> renders
+    /// it; the host sends it to the UI as a Msg (StatusMsgs.RunVideo).
+    /// </summary>
+    public static (string Key, int? Percent)? RunVideoKey(Plist entry, int? uploadPercent)
     {
-        if (RunEntries.Is(entry, RunKeys.VideoUploaded)) return Tr(language, "video-uploaded");
-        if (RunEntries.Is(entry, RunKeys.VideoAttached)) return Tr(language, "video-attached");
-        if (uploadPercent is { } percent) return Tr(language, "video-uploading", percent);
-        if (RunEntries.Is(entry, RunKeys.UploadGivenUp)) return Tr(language, "video-upload-failed");
-        if (RunEntries.Is(entry, RunKeys.Untrimmed)) return Tr(language, "video-untrimmed");
-        if (RunEntries.Is(entry, RunKeys.VideoPath)) return Tr(language, "video-saved");
-        return "";
+        if (RunEntries.Is(entry, RunKeys.VideoUploaded)) return ("video-uploaded", null);
+        if (RunEntries.Is(entry, RunKeys.VideoAttached)) return ("video-attached", null);
+        if (uploadPercent is { } percent) return ("video-uploading", percent);
+        if (RunEntries.Is(entry, RunKeys.UploadGivenUp)) return ("video-upload-failed", null);
+        if (RunEntries.Is(entry, RunKeys.Untrimmed)) return ("video-untrimmed", null);
+        if (RunEntries.Is(entry, RunKeys.VideoPath)) return ("video-saved", null);
+        return null;
     }
 
     private static SexpNode Val(Plist entry, string key) => RunEntries.Get(entry, key);

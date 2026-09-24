@@ -1,7 +1,9 @@
 using System.Text.Json.Nodes;
 using RappyRuns.Core.Api;
 using RappyRuns.Core.I18n;
+using RappyRuns.Core.Store;
 using RappyRuns.Host;
+using static RappyRuns.Tests.Store.StoreTestSupport;
 
 namespace RappyRuns.Tests.Host;
 
@@ -98,6 +100,18 @@ public class UiStateTests
         Assert.Equal(ErrorText.TokenStatus(Language.En, connect), StatusMsgs.TokenError(connect).Render(Language.En));
         var other = new InvalidOperationException("boom");
         Assert.Equal(ErrorText.ServerStatus(Language.En, other), StatusMsgs.ServerError(other).Render(Language.En));
+    }
+
+    [Fact(DisplayName = "the Video column Msg renders as the runs-list label, percent included (S38)")]
+    public void VideoWording()
+    {
+        var uploading = P("(:server-id 7 :video-path \"v.mp4\")");
+        var msg = StatusMsgs.RunVideo(uploading, 25)!;
+        Assert.Equal([25], msg.Args.Cast<int>());
+        Assert.Equal(RunDisplay.RunVideoLabel(uploading, Language.En, 25), msg.Render(Language.En));
+        var attached = P("(:video-path \"v.mp4\" :video-attached t)");
+        Assert.Equal(RunDisplay.RunVideoLabel(attached, Language.Ja, null), StatusMsgs.RunVideo(attached, null)!.Render(Language.Ja));
+        Assert.Null(StatusMsgs.RunVideo(P("(:server-id 1)"), null));
     }
 
     [Fact(DisplayName = "a patch made while the hello snapshot is delivered leaves after it (PR #330 review)")]

@@ -68,31 +68,6 @@ public static class SessionRuns
         Eql(a.Get("TIME-MS"), b.Get("TIME-MS")) &&
         Eql(a.Get("FINISHED-AT"), b.Get("FINISHED-AT"));
 
-    /// <summary>
-    /// The lookup half of <c>link-video-file!</c> (store.lisp:431): the queue
-    /// entry for <paramref name="run"/> by natural key, or null when it is no
-    /// longer queued. The store then applies <c>:video-path path</c> through its
-    /// own update (which replaces the entry and persists the queue).
-    /// </summary>
-    public static Plist? FindQueueEntry(IEnumerable<Plist> queue, Plist run) =>
-        queue.FirstOrDefault(entry => SameRun(run, entry));
-
-    /// <summary>
-    /// <c>link-video-file!</c> (store.lisp:431) over a caller-supplied update:
-    /// finds the entry and hands it with the updates to
-    /// <paramref name="updateRun"/> (the store's <c>update-run!</c>), returning
-    /// its result, or null for an unknown run. This mirrors the Lisp on-keep
-    /// (main.lisp:390); the C# host links through
-    /// <see cref="Store.RunQueue.LinkVideoFile"/>, which also records
-    /// <c>:untrimmed</c> (S07) - this helper does not.
-    /// </summary>
-    public static Plist? LinkVideoFile(IEnumerable<Plist> queue, Plist run, string videoPath,
-        Func<Plist, IReadOnlyList<(string Key, SexpNode Value)>, Plist> updateRun)
-    {
-        var entry = FindQueueEntry(queue, run);
-        return entry is null ? null : updateRun(entry, [("VIDEO-PATH", SexpNode.Str(videoPath))]);
-    }
-
     private static SexpNode NodeOrNil(SexpNode? node) => node is null || node.IsNil ? SexpNode.Nil : node;
 
     private static bool Eql(SexpNode? a, SexpNode? b)

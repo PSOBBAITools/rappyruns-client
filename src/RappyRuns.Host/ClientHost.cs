@@ -829,7 +829,7 @@ public sealed class ClientHost : IDisposable
                 entry.TimeMs ?? 0,
                 entry.Get("PARTY-SIZE").AsLong ?? 0,
                 entry.Is("PB"),
-                StatusMsgs.RunVideo(entry, Queue.UploadProgressPercent(data)),
+                StatusMsgs.RunVideo(data, Queue.UploadProgressPercent(data)),
                 [Msg.Raw(RunDisplay.RunStatusLabel(data, language, hasToken, videoUpload))],
                 error,
                 entry.Url,

@@ -65,28 +65,4 @@ public class VideoFlowTests
         Check.That("an erroring on-keep neither sticks nor reports",
             h.Recorder.State == RecorderState.Idle && h.Recorder.LastError is null);
     }
-
-    [Fact]
-    public void LinkVideoFileMatchesByNaturalKey()
-    {
-        var run = Run();
-        // update-run! replaces entries with copies: identity is the natural key.
-        var entry = run.Clone();
-        entry.Set("STATUS", SexpNode.Kw("submitted"));
-        entry.Set("SERVER-ID", SexpNode.Int(7));
-        var queue = new List<Plist> { entry };
-        Plist Update(Plist e, IReadOnlyList<(string Key, SexpNode Value)> updates)
-        {
-            var copy = e.Clone();
-            foreach (var (k, v) in updates) copy.Set(k, v);
-            queue[queue.IndexOf(e)] = copy;
-            return copy;
-        }
-        var linked = SessionRuns.LinkVideoFile(queue, run, "C:/v/run.mp4", Update);
-        Check.That("link-video-file! matches by natural key after updates",
-            linked is not null && linked.Get("VIDEO-PATH")!.AsString!.Contains("run.mp4", StringComparison.Ordinal));
-        Check.That("linked entry still carries its server id", linked!.Get("SERVER-ID")!.AsLong == 7);
-        Check.That("link-video-file! returns NIL for unknown runs",
-            SessionRuns.LinkVideoFile(queue, Run(slug: "ep1-other"), "C:/v/x.mp4", Update) is null);
-    }
 }

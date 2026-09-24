@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using RappyRuns.Core.Api;
 using RappyRuns.Core.Game;
 using RappyRuns.Core.PinShare;
+using RappyRuns.Core.Sexp;
 using RappyRuns.Core.Store;
 using PinShareSaveOutcome = RappyRuns.Core.Api.PinSetSaveOutcome;
 
@@ -94,19 +95,13 @@ public static class StatusMsgs
     };
 
     /// <summary>
-    /// <see cref="RunDisplay.RunVideoLabel"/> as a Msg, so an upload's percent
+    /// <see cref="RunDisplay.RunVideoKey"/> as a Msg, so an upload's percent
     /// travels as a number the UI can draw a bar with.
     /// </summary>
-    public static Msg? RunVideo(RunEntry entry, int? uploadPercent)
-    {
-        if (entry.Is(RunKeys.VideoUploaded)) return Msg.Of("video-uploaded");
-        if (entry.Is(RunKeys.VideoAttached)) return Msg.Of("video-attached");
-        if (uploadPercent is { } percent) return Msg.Of("video-uploading", percent);
-        if (entry.Is(RunKeys.UploadGivenUp)) return Msg.Of("video-upload-failed");
-        if (entry.Is(RunKeys.Untrimmed)) return Msg.Of("video-untrimmed");
-        if (entry.Is(RunKeys.VideoPath)) return Msg.Of("video-saved");
-        return null;
-    }
+    public static Msg? RunVideo(Plist entry, int? uploadPercent) =>
+        RunDisplay.RunVideoKey(entry, uploadPercent) is var (key, percent)
+            ? percent is { } p ? Msg.Of(key, p) : Msg.Of(key)
+            : null;
 
     /// <summary>A trigger as the wire JSON the UI and POST /api/quests use.</summary>
     public static JsonNode? TriggerJson(Trigger? trigger) => trigger is null ? null : JsonNode.Parse(trigger.ToJson());
