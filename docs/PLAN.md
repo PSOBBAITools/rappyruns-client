@@ -78,7 +78,7 @@ P1〜P2 と P3 の UI 部分は並行可能 (IPC の型を先に固める)。
 3. クライアントを起動すると C# 版が入る (起動しなければ自動で元に戻る)
 4. 戻すときはキーを消し、本番の最新版 zip を手で展開する
 
-新しいドッグフード版は `desktop/VERSION` を上げてコミットし、`.\desktopelease.ps1 vX.Y.Z -Dogfood`。
+新しいドッグフード版は `desktop/VERSION` を上げてコミットし、`.\desktop\release.ps1 vX.Y.Z -Dogfood`。
 
 ### P0 で決めた契約 (2026-09-24)
 
