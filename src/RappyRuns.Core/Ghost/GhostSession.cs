@@ -10,12 +10,14 @@ namespace RappyRuns.Core.Ghost;
 /// <param name="PartyMembers">The party size without NPCs (party-of).</param>
 /// <param name="GhostRaceEnabled">The :ghost-race setting.</param>
 /// <param name="HasSubmissionToken">submission-token is non-empty. The guest token counts: an anonymous player's PBs live under the guest account.</param>
+/// <param name="AccountMode">"normal" / "sandbox" from the Detector's settled name colour for this load (the reading that also stamps the run); null when it could not be read (the query then omits it and the server leaves the mode open).</param>
 public sealed record GhostLoadInfo(
     IReadOnlyList<string> Slugs,
     string? Difficulty,
     int PartyMembers,
     bool GhostRaceEnabled,
-    bool HasSubmissionToken);
+    bool HasSubmissionToken,
+    string? AccountMode);
 
 /// <summary>
 /// One GET /api/quests/:slug/ghost to make (ghost-fetch-wanted's values,
@@ -23,7 +25,8 @@ public sealed record GhostLoadInfo(
 /// discharge is seen, so the PB fallback board at load time is the No-PB one;
 /// an explicitly chosen target is served regardless (ghost.lisp:455).
 /// </summary>
-public sealed record GhostFetchRequest(IReadOnlyList<string> Slugs, string? Difficulty, int PartySize, int Pb = 0)
+public sealed record GhostFetchRequest(IReadOnlyList<string> Slugs, string? Difficulty, int PartySize, int Pb = 0,
+    string? AccountMode = null)
 {
     /// <summary>
     /// The request path with its query, as fetch-ghost-splits builds it
@@ -37,6 +40,9 @@ public sealed record GhostFetchRequest(IReadOnlyList<string> Slugs, string? Diff
         if (Difficulty is not null) parameters.Add("difficulty=" + UrlEncodeComponent(Difficulty));
         parameters.Add("party_size=" + PartySize.ToString(System.Globalization.CultureInfo.InvariantCulture));
         parameters.Add("pb=" + Pb.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        // The session's account mode (S25): a player with both a normal and a
+        // sandbox account races the best of the one they are on.
+        if (AccountMode is not null) parameters.Add("account_mode=" + UrlEncodeComponent(AccountMode));
         return $"/api/quests/{Slugs[0]}/ghost?{string.Join("&", parameters)}";
     }
 
@@ -127,7 +133,8 @@ public sealed class GhostSession
         Ghost = null;
         var info = describeLoad();
         if (info.Slugs.Count == 0 || !info.GhostRaceEnabled || !info.HasSubmissionToken) return null;
-        return new GhostFetchRequest(info.Slugs, info.Difficulty, Math.Max(1, info.PartyMembers));
+        return new GhostFetchRequest(info.Slugs, info.Difficulty, Math.Max(1, info.PartyMembers),
+            AccountMode: info.AccountMode);
     }
 
     /// <summary>

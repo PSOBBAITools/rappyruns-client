@@ -493,7 +493,7 @@ duration_ms = run_end_ms + 2000   (run_end_ms が null なら null)
 - キーは検出器ではなく **クエストポインタ** (ロード画面の数秒で通信を隠す)。
 - `quest-ptr` が 0/無し → `*ghost-fetch-ptr* = nil`, `*ghost* = nil` (ロビーで忘れる。同じアドレスで再ロードされても再取得するため)。
 - `quest-name` あり かつ ptr が前回と違う → ptr 記録、`*ghost* = nil`、`find-quest-defs(number, episode, name)` の defs があり `:ghost-race` 真 (既定 t) かつ トークン (ゲスト含む) が空でない時に取得。
-- `GET /api/quests/<slug1>/ghost?slugs=<slug2>,<slug3>&difficulty=<url-enc>&party_size=<n>&pb=0` (slugs は他カテゴリがある時のみ、difficulty は `difficulty-label(difficulty, anguish)` 例 `Very%20Hard`, party_size = `max(1, 人数(NPC除く))`, pb は常に 0)。Bearer = submission-token。200 → パース、404 → なし、401/その他 → エラー (握りつぶし)。
+- `GET /api/quests/<slug1>/ghost?slugs=<slug2>,<slug3>&difficulty=<url-enc>&party_size=<n>&pb=0&account_mode=<mode>` (slugs は他カテゴリがある時のみ、account_mode は名前色が読めた時のみ、difficulty は `difficulty-label(difficulty, anguish)` 例 `Very%20Hard`, party_size = `max(1, 人数(NPC除く))`, pb は常に 0)。Bearer = submission-token。200 → パース、404 → なし、401/その他 → エラー (握りつぶし)。
 - 応答到着時に ptr がまだ同じなら `*ghost*` に設定 (古い取得結果を捨てる)。
 - URL エンコードは UTF-8 パーセントエンコード、非予約文字 `A-Za-z0-9-_.~` 以外全て `%XX` (大文字)。
 
