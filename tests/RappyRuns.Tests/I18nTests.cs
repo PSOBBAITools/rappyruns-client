@@ -24,8 +24,8 @@ public class I18nTests
     [Fact]
     public void TableHasAllKeysInBothLanguages()
     {
-        // strings.json (248) + strings.extra.json (7).
-        Assert.Equal(255, Strings.Default.Entries.Count);
+        // strings.json (248) + strings.extra.json (8).
+        Assert.Equal(256, Strings.Default.Entries.Count);
         Assert.Equal("OK", Strings.Default.Tr(Language.En, "dialog-ok"));
         foreach (var (key, entry) in Strings.Default.Entries)
         {

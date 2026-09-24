@@ -130,6 +130,8 @@ internal sealed class SettingsMethods(ClientHost host)
             host.TriggerLog.Close();
             return null;
         }
-        return Notice.Info("trigger-log-on", host.TriggerLog.Start());
+        // trigger-log-on plus the rotated file (S41): the lines a long
+        // session needs may already sit in trigger-log.old.txt.
+        return Notice.Info("trigger-log-on-rotated", host.TriggerLog.Start(), host.TriggerLog.OldPath);
     }
 }

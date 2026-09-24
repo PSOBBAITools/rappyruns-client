@@ -189,7 +189,7 @@ when no request is waiting for it. Results of UI requests come back in the respo
 | `settings.setAutoPublish` | `{enabled}` | `{enabled, notice: Notice\|null}` | Auth/API. The UI already asked `:auto-publish-confirm` when turning on. `POST /api/me/auto-publish`; on success save the cache; on failure return the last known server value and `:auto-publish-failed <msg>` (R18). |
 | `settings.setAutostart` | `{enabled}` | `{enabled}` | Autostart (registry). Write, then **read back** and return the real state (R17). |
 | `settings.chooseRecordDir` | – | `{recordDir}` or null | Recording. Native folder picker (`:choose-record-dir` title); saves at once; null on cancel. Emits `state`. |
-| `settings.setTriggerLog` | `{enabled}` | Notice? | Trigger log. On: `start-trigger-log` then `:trigger-log-on <path>`; off: close. |
+| `settings.setTriggerLog` | `{enabled}` | Notice? | Trigger log. On: `start-trigger-log` then `trigger-log-on-rotated <path> <old path>` (the Lisp `:trigger-log-on <path>` plus the rotated file, S41); off: close. |
 
 ### account — auth
 
