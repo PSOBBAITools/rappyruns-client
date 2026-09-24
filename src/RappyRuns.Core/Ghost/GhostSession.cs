@@ -84,6 +84,7 @@ public sealed class GhostSession
     private CameraState? _liveCamera;
     // The quest-ptr the current fetch was started (or skipped) for; 0 = none.
     private long _fetchPtr;
+    private string? _fetchName; // with the pointer, what identifies a load (poll thread only)
     // Makes a landing fetch's "still the same load?" check and its write one
     // step against Reset (the poll thread) - else an exited game's ghost could
     // land just after the reset.
@@ -139,11 +140,13 @@ public sealed class GhostSession
             ForgetLoad();
             return (null, 0);
         }
-        if (questName is null || ptr == Volatile.Read(ref _fetchPtr)) return (null, 0);
+        // A different name at the same pointer is a new load too (no lobby frame seen in between).
+        if (questName is null || (ptr == Volatile.Read(ref _fetchPtr) && questName == _fetchName)) return (null, 0);
         long load;
         lock (_gate)
         {
             Volatile.Write(ref _fetchPtr, ptr);
+            _fetchName = questName;
             load = ++_load;
             Ghost = null;
         }
@@ -236,9 +239,8 @@ public sealed class GhostSession
     {
         lock (_gate)
         {
-            // Once per unload, not every lobby frame.
-            if (Volatile.Read(ref _fetchPtr) == 0 && Ghost is null) return;
             Volatile.Write(ref _fetchPtr, 0);
+            _fetchName = null;
             _load++;
             Ghost = null;
         }

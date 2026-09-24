@@ -30,6 +30,8 @@ public sealed class PinSetTracker
     private PinSet? _current;
     private IReadOnlyList<string>? _questSlugs;
     private long? _fetchPtr;
+    private string? _fetchName; // with the pointer, what identifies a load
+    private bool _refetch;      // Refetch asked: the next snapshot adopts the same quest anew
     private long _load = 1; // S36: bumped per quest load, Refetch and Reset; 0 = none
 
     /// <param name="resolveSlugs">Every category slug matching the quest, primary first (Lisp <c>find-quest-defs</c> → <c>quest-def-slug</c>).</param>
@@ -66,7 +68,7 @@ public sealed class PinSetTracker
         get { lock (_lock) return _questSlugs; }
     }
 
-    /// <summary>The quest pointer the fetch last ran for; null forces a fetch on the next snapshot.</summary>
+    /// <summary>The quest pointer of the current load; null while none is loaded.</summary>
     public long? FetchPtr
     {
         get { lock (_lock) return _fetchPtr; }
@@ -104,10 +106,18 @@ public sealed class PinSetTracker
                 ForgetLoad();
                 return (null, 0);
             }
-            if (snapshot.QuestName is null || snapshot.QuestPtr == _fetchPtr) return (null, 0);
+            if (snapshot.QuestName is null) return (null, 0);
+            // A different name at the same pointer is a new load too (no
+            // lobby frame was seen in between).
+            var same = snapshot.QuestPtr == _fetchPtr && snapshot.QuestName == _fetchName;
+            if (same && !_refetch) return (null, 0);
+            _refetch = false;
             _fetchPtr = snapshot.QuestPtr;
+            _fetchName = snapshot.QuestName;
             _current = null;
-            _questSlugs = null; // the previous quest's, until this load's resolve
+            // A new quest's slugs replace the previous quest's below; until
+            // then there are none. A refetch keeps them (same quest).
+            if (!same) _questSlugs = null;
             load = ++_load;
         }
         var slugs = _resolveSlugs(snapshot);
@@ -171,10 +181,10 @@ public sealed class PinSetTracker
     // Callers hold _lock.
     private void ForgetLoad()
     {
-        // Once per unload, not every lobby frame.
-        if (_fetchPtr is null && _current is null && _questSlugs is null) return;
         _load++;
         _fetchPtr = null;
+        _fetchName = null;
+        _refetch = false;
         _questSlugs = null;
         _current = null;
     }
@@ -184,7 +194,7 @@ public sealed class PinSetTracker
     {
         lock (_lock)
         {
-            _fetchPtr = null;
+            _refetch = true;
             _load++; // the pre-overwrite reply still in flight is stale
         }
     }

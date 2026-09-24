@@ -367,6 +367,7 @@ public class PinSharePermissionAndFetchTests
         // Refetch (after an overwrite) starts a fresh fetch for the same load.
         tracker.Refetch();
         var again = tracker.OnSnapshot(new PinShareQuest(10, "B"))!;
+        Assert.Equal(["ep1-a"], tracker.QuestSlugs!); // the same quest: its slugs never blink out
         var pending = Next();
 
         // The game exits and a relaunch loads a quest at the same address.
@@ -380,6 +381,17 @@ public class PinSharePermissionAndFetchTests
         relaunchReply.SetResult(Set("relaunched"));
         await relaunched;
         Assert.Equal("relaunched", tracker.Current!.DisplayName);
+    }
+
+    [Fact(DisplayName = "pin sets: another quest at the same address with no lobby frame between is a new load (S36)")]
+    public void SameAddressNewName()
+    {
+        var tracker = new PinSetTracker(q => [q.QuestName == "A" ? "ep1-a" : "ep1-b"], () => true);
+        Assert.NotNull(tracker.FetchWanted(new PinShareQuest(10, "A")));
+        var loadA = tracker.LoadId;
+        Assert.Equal(["ep1-b"], tracker.FetchWanted(new PinShareQuest(10, "B"))!);
+        Assert.False(tracker.Land(loadA, null));
+        Assert.Equal(["ep1-b"], tracker.QuestSlugs!);
     }
 
     [Fact(DisplayName = "pin sets: a fetch payload without an items object is no set")]
