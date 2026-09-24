@@ -6,8 +6,8 @@ namespace RappyRuns.Tests.Media;
 
 /// <summary>
 /// Port of the recording half of <c>run-video-flow-tests</c>
-/// (client/tests/tests-recorder.lisp:1014-1126): on-keep timing and
-/// link-video-file!. The rest of that suite (submission-updates,
+/// (client/tests/tests-recorder.lisp:1014-1126): on-keep timing.
+/// link-video-file! is tested on the production path in RunQueueTests. The rest of that suite (submission-updates,
 /// trim-finished-runs, entry-active-p, save-queue!, update-run!, clear-runs!,
 /// run-video-label, run-status-label) tests store.lisp / gui.lisp functions and
 /// belongs with the store and UI ports.

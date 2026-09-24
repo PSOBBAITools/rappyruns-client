@@ -58,23 +58,4 @@ public static class SessionRuns
         }
         return end;
     }
-
-    /// <summary>
-    /// <c>same-run-p</c> (store.lisp:425): the natural key a queue entry keeps
-    /// across copy-on-update - quest slug (equal), time-ms and finished-at (eql).
-    /// </summary>
-    public static bool SameRun(Plist a, Plist b) =>
-        Equals(NodeOrNil(a.Get("QUEST-SLUG")), NodeOrNil(b.Get("QUEST-SLUG"))) &&
-        Eql(a.Get("TIME-MS"), b.Get("TIME-MS")) &&
-        Eql(a.Get("FINISHED-AT"), b.Get("FINISHED-AT"));
-
-    private static SexpNode NodeOrNil(SexpNode? node) => node is null || node.IsNil ? SexpNode.Nil : node;
-
-    private static bool Eql(SexpNode? a, SexpNode? b)
-    {
-        var x = NodeOrNil(a);
-        var y = NodeOrNil(b);
-        if (x.IsNil || y.IsNil) return x.IsNil && y.IsNil;
-        return x is SInteger xi && y is SInteger yi ? xi.Value == yi.Value : ReferenceEquals(x, y);
-    }
 }

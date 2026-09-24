@@ -193,9 +193,7 @@ public static class RunDisplay
     /// <param name="language">UI language.</param>
     /// <param name="uploadPercent"><see cref="RunQueue.UploadProgressPercent"/> for this entry.</param>
     public static string RunVideoLabel(Plist entry, Language language, int? uploadPercent) =>
-        RunVideoKey(entry, uploadPercent) is var (key, percent)
-            ? percent is { } p ? Tr(language, key, p) : Tr(language, key)
-            : "";
+        RunVideoKey(entry, uploadPercent) is var (key, percent) ? Tr(language, key, percent) : "";
 
     /// <summary>
     /// The one decision behind the Video column: the strings key for

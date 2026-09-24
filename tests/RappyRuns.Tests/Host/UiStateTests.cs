@@ -108,9 +108,13 @@ public class UiStateTests
         var uploading = P("(:server-id 7 :video-path \"v.mp4\")");
         var msg = StatusMsgs.RunVideo(uploading, 25)!;
         Assert.Equal([25], msg.Args.Cast<int>());
+        Assert.Equal("uploading 25%", msg.Render(Language.En));
         Assert.Equal(RunDisplay.RunVideoLabel(uploading, Language.En, 25), msg.Render(Language.En));
         var attached = P("(:video-path \"v.mp4\" :video-attached t)");
-        Assert.Equal(RunDisplay.RunVideoLabel(attached, Language.Ja, null), StatusMsgs.RunVideo(attached, null)!.Render(Language.Ja));
+        var attachedMsg = StatusMsgs.RunVideo(attached, null)!;
+        Assert.Equal("video-attached", attachedMsg.Key);
+        Assert.Empty(attachedMsg.Args);
+        Assert.Equal("紐付け済み", attachedMsg.Render(Language.Ja));
         Assert.Null(StatusMsgs.RunVideo(P("(:server-id 1)"), null));
     }
 
