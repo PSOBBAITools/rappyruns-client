@@ -1,0 +1,388 @@
+{
+  "ghost": [
+    {
+      "slug": "q",
+      "extra": [],
+      "difficulty": null,
+      "party_size": null,
+      "pb": null,
+      "path": "https://s.example/api/quests/q/ghost"
+    },
+    {
+      "slug": "q",
+      "extra": [
+        "a",
+        "b"
+      ],
+      "difficulty": null,
+      "party_size": null,
+      "pb": null,
+      "path": "https://s.example/api/quests/q/ghost?slugs=a,b"
+    },
+    {
+      "slug": "q",
+      "extra": [],
+      "difficulty": "Very Hard",
+      "party_size": null,
+      "pb": null,
+      "path": "https://s.example/api/quests/q/ghost?difficulty=Very%20Hard"
+    },
+    {
+      "slug": "q",
+      "extra": [
+        "seg-1"
+      ],
+      "difficulty": "Ultimate",
+      "party_size": 4,
+      "pb": 0,
+      "path": "https://s.example/api/quests/q/ghost?slugs=seg-1&difficulty=Ultimate&party_size=4&pb=0"
+    },
+    {
+      "slug": "q",
+      "extra": [],
+      "difficulty": "Anguish 3",
+      "party_size": 1,
+      "pb": 0,
+      "path": "https://s.example/api/quests/q/ghost?difficulty=Anguish%203&party_size=1&pb=0"
+    },
+    {
+      "slug": "q",
+      "extra": [],
+      "difficulty": null,
+      "party_size": 2,
+      "pb": null,
+      "path": "https://s.example/api/quests/q/ghost?party_size=2"
+    },
+    {
+      "slug": "q",
+      "extra": [],
+      "difficulty": null,
+      "party_size": null,
+      "pb": 1,
+      "path": "https://s.example/api/quests/q/ghost?pb=1"
+    }
+  ],
+  "pins": [
+    {
+      "slug": "q",
+      "extra": [],
+      "path": "https://s.example/api/quests/q/pins"
+    },
+    {
+      "slug": "q",
+      "extra": [
+        "a"
+      ],
+      "path": "https://s.example/api/quests/q/pins?slugs=a"
+    },
+    {
+      "slug": "q",
+      "extra": [
+        "a",
+        "b"
+      ],
+      "path": "https://s.example/api/quests/q/pins?slugs=a,b"
+    }
+  ],
+  "encode": [
+    {
+      "in": "Very Hard",
+      "out": "Very%20Hard"
+    },
+    {
+      "in": "Aあ",
+      "out": "A%E3%81%82"
+    },
+    {
+      "in": "Ultimate",
+      "out": "Ultimate"
+    },
+    {
+      "in": "Anguish 3",
+      "out": "Anguish%203"
+    },
+    {
+      "in": "a-b_c.d~e",
+      "out": "a-b_c.d~e"
+    },
+    {
+      "in": "x/y?z=1&w",
+      "out": "x%2Fy%3Fz%3D1%26w"
+    },
+    {
+      "in": "100%",
+      "out": "100%25"
+    },
+    {
+      "in": "é",
+      "out": "%C3%A9"
+    },
+    {
+      "in": "😀",
+      "out": "%F0%9F%98%80"
+    }
+  ],
+  "reasons": [
+    {
+      "body": "{\"message\":\"nope\"}",
+      "reason": "nope "
+    },
+    {
+      "body": "{\"message\":\"Invalid run\",\"errors\":[\"time_ms too small\",\"unknown quest\"]}",
+      "reason": "Invalid run time_ms too small; unknown quest"
+    },
+    {
+      "body": "{\"errors\":[\"a\"]}",
+      "reason": "a"
+    },
+    {
+      "body": "{\"errors\":[]}",
+      "reason": ""
+    },
+    {
+      "body": "{\"message\":\"m\",\"errors\":[]}",
+      "reason": "m "
+    },
+    {
+      "body": "{}",
+      "reason": ""
+    },
+    {
+      "body": "{\"message\":\"m\",\"errors\":[1,2]}",
+      "reason": "m 1; 2"
+    }
+  ],
+  "standings": [
+    {
+      "body": "{\"id\":7,\"url\":\"https://x/runs/7\",\"standing\":{\"rank\":2,\"parties\":5,\"previous_best_ms\":605000,\"delta_ms\":-3210}}",
+      "server_id": 7,
+      "url": "https://x/runs/7",
+      "rank": 2,
+      "parties": 5,
+      "prev": 605000,
+      "delta": -3210
+    },
+    {
+      "body": "{\"id\":7,\"standing\":{\"rank\":1,\"parties\":1}}",
+      "server_id": 7,
+      "url": null,
+      "rank": 1,
+      "parties": 1,
+      "prev": null,
+      "delta": null
+    },
+    {
+      "body": "{\"id\":7,\"standing\":{\"rank\":1,\"parties\":1,\"previous_best_ms\":5}}",
+      "server_id": 7,
+      "url": null,
+      "rank": 1,
+      "parties": 1,
+      "prev": null,
+      "delta": null
+    },
+    {
+      "body": "{\"id\":7,\"standing\":{\"rank\":1.0,\"parties\":1}}",
+      "server_id": 7,
+      "url": null,
+      "rank": null,
+      "parties": null,
+      "prev": null,
+      "delta": null
+    },
+    {
+      "body": "{\"id\":7,\"standing\":null}",
+      "server_id": 7,
+      "url": null,
+      "rank": null,
+      "parties": null,
+      "prev": null,
+      "delta": null
+    },
+    {
+      "body": "{\"id\":7}",
+      "server_id": 7,
+      "url": null,
+      "rank": null,
+      "parties": null,
+      "prev": null,
+      "delta": null
+    },
+    {
+      "body": "{\"url\":\"u\"}",
+      "server_id": null,
+      "url": "u",
+      "rank": null,
+      "parties": null,
+      "prev": null,
+      "delta": null
+    }
+  ],
+  "errors": [
+    {
+      "message": "WinHttpConnect failed (Windows error 12029)",
+      "code": 12029,
+      "server_en": "Server: could not connect - server down, or no internet?",
+      "server_ja": "サーバー: 接続できませんでした - サーバー停止中またはインターネット未接続?",
+      "token_en": "Token: could not verify (could not connect - server down, or no internet?)",
+      "token_ja": "トークン: 確認できませんでした (接続できませんでした - サーバー停止中またはインターネット未接続?)"
+    },
+    {
+      "message": "WinHttpSendRequest failed (Windows error 12030)",
+      "code": 12030,
+      "server_en": "Server: could not connect - server down, or no internet?",
+      "server_ja": "サーバー: 接続できませんでした - サーバー停止中またはインターネット未接続?",
+      "token_en": "Token: could not verify (could not connect - server down, or no internet?)",
+      "token_ja": "トークン: 確認できませんでした (接続できませんでした - サーバー停止中またはインターネット未接続?)"
+    },
+    {
+      "message": "WinHttpSendRequest failed (Windows error 12007)",
+      "code": 12007,
+      "server_en": "Server: server address not found - check the Server URL",
+      "server_ja": "サーバー: サーバーアドレスが見つかりません - サーバー URL を確認してください",
+      "token_en": "Token: could not verify (server address not found - check the Server URL)",
+      "token_ja": "トークン: 確認できませんでした (サーバーアドレスが見つかりません - サーバー URL を確認してください)"
+    },
+    {
+      "message": "WinHttpReceiveResponse failed (Windows error 12002)",
+      "code": 12002,
+      "server_en": "Server: connection timed out",
+      "server_ja": "サーバー: 接続がタイムアウトしました",
+      "token_en": "Token: could not verify (connection timed out)",
+      "token_ja": "トークン: 確認できませんでした (接続がタイムアウトしました)"
+    },
+    {
+      "message": "WinHttpSendRequest failed (Windows error 12175)",
+      "code": 12175,
+      "server_en": "Server: secure connection (https) failed",
+      "server_ja": "サーバー: セキュア接続 (https) に失敗しました",
+      "token_en": "Token: could not verify (secure connection (https) failed)",
+      "token_ja": "トークン: 確認できませんでした (セキュア接続 (https) に失敗しました)"
+    },
+    {
+      "message": "WinHttpSendRequest failed (Windows error 12157)",
+      "code": 12157,
+      "server_en": "Server: secure connection (https) failed",
+      "server_ja": "サーバー: セキュア接続 (https) に失敗しました",
+      "token_en": "Token: could not verify (secure connection (https) failed)",
+      "token_ja": "トークン: 確認できませんでした (セキュア接続 (https) に失敗しました)"
+    },
+    {
+      "message": "WinHttpSendRequest failed (Windows error 5)",
+      "code": 5,
+      "server_en": "Server: WinHttpSendRequest failed (Windows error 5)",
+      "server_ja": "サーバー: WinHttpSendRequest failed (Windows error 5)",
+      "token_en": "Token: could not verify (WinHttpSendRequest failed (Windows error 5))",
+      "token_ja": "トークン: 確認できませんでした (WinHttpSendRequest failed (Windows error 5))"
+    },
+    {
+      "message": "Bad URL: nonsense",
+      "code": null,
+      "server_en": "Server: the Server URL looks wrong - fix it and press Save & verify",
+      "server_ja": "サーバー: サーバー URL が正しくないようです - 修正して「保存して確認」を押してください",
+      "token_en": "Token: could not verify (Bad URL: nonsense)",
+      "token_ja": "トークン: 確認できませんでした (Bad URL: nonsense)"
+    },
+    {
+      "message": "GET /api/quests -> 500",
+      "code": null,
+      "server_en": "Server: unexpected response (GET /api/quests -> 500) - is the URL right?",
+      "server_ja": "サーバー: 予期しない応答 (GET /api/quests -> 500) - URL は正しいですか?",
+      "token_en": "Token: could not verify (GET /api/quests -> 500)",
+      "token_ja": "トークン: 確認できませんでした (GET /api/quests -> 500)"
+    },
+    {
+      "message": "plain message",
+      "code": null,
+      "server_en": "Server: plain message",
+      "server_ja": "サーバー: plain message",
+      "token_en": "Token: could not verify (plain message)",
+      "token_ja": "トークン: 確認できませんでした (plain message)"
+    }
+  ],
+  "releases": [
+    {
+      "body": "{\"tag_name\":\"v0.6.0\",\"assets\":[{\"name\":\"RappyRunsClient.zip\",\"size\":10,\"browser_download_url\":\"https://x/a.zip\"}]}",
+      "tag": "v0.6.0",
+      "url": "https://x/a.zip",
+      "size": 10
+    },
+    {
+      "body": "{\"tag_name\":\"v0.6.0\",\"assets\":[{\"name\":\"RappyRunsClient.zip\",\"size\":0,\"browser_download_url\":\"https://x/a.zip\"}]}",
+      "tag": "v0.6.0",
+      "url": "https://x/a.zip",
+      "size": null
+    },
+    {
+      "body": "{\"tag_name\":\"v0.6.0\",\"assets\":[{\"name\":\"RappyRunsClient.zip\",\"size\":10.5,\"browser_download_url\":\"https://x/a.zip\"}]}",
+      "tag": "v0.6.0",
+      "url": "https://x/a.zip",
+      "size": null
+    },
+    {
+      "body": "{\"tag_name\":\"v0.6.0\",\"assets\":[{\"name\":\"RappyRunsClient.zip\",\"browser_download_url\":\"https://x/a.zip\"}]}",
+      "tag": "v0.6.0",
+      "url": "https://x/a.zip",
+      "size": null
+    },
+    {
+      "body": "{\"tag_name\":\"v0.6.0\",\"assets\":[{\"name\":\"RappyRunsClient.zip\",\"browser_download_url\":5},{\"name\":\"RappyRunsClient.zip\",\"browser_download_url\":\"https://x/b.zip\"}]}",
+      "tag": null,
+      "url": null,
+      "size": null
+    },
+    {
+      "body": "{\"tag_name\":\"v0.6.0\",\"assets\":[{\"name\":\"rappyrunsclient.zip\",\"browser_download_url\":\"https://x/a.zip\"}]}",
+      "tag": null,
+      "url": null,
+      "size": null
+    },
+    {
+      "body": "{\"tag_name\":6,\"assets\":[{\"name\":\"RappyRunsClient.zip\",\"browser_download_url\":\"https://x/a.zip\"}]}",
+      "tag": null,
+      "url": null,
+      "size": null
+    },
+    {
+      "body": "{\"tag_name\":\"v0.6.0\",\"assets\":{}}",
+      "tag": null,
+      "url": null,
+      "size": null
+    },
+    {
+      "body": "[]",
+      "tag": null,
+      "url": null,
+      "size": null
+    },
+    {
+      "body": "not json",
+      "tag": null,
+      "url": null,
+      "size": null
+    },
+    {
+      "body": "",
+      "tag": null,
+      "url": null,
+      "size": null
+    }
+  ],
+  "triggers": [
+    {
+      "sexp": "(:WARP-IN)",
+      "json": "{\"type\":\"warp-in\"}"
+    },
+    {
+      "sexp": "(:REGISTER 254)",
+      "json": "{\"type\":\"register\",\"register\":254}"
+    },
+    {
+      "sexp": "(:FLOOR-SWITCH 5 2)",
+      "json": "{\"type\":\"floor-switch\",\"floor\":5,\"switch\":2}"
+    },
+    {
+      "sexp": "(:MONSTER-DEAD 1234)",
+      "json": "{\"type\":\"monster\",\"monster\":1234}"
+    }
+  ]
+}
