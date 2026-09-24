@@ -481,7 +481,7 @@ JSON の数値: 浮動小数 (座標等) は **単精度の最短表現** (`12.3
 | `:video-attached`, `:video-uploaded`, `:held`, `:approved` | アップロード成功 | held/approved は応答 `status` |
 | `:next-upload-at` | バックオフ | universal time |
 | `:upload-given-up`, `:upload-error` | 恒久失敗 / ファイル消失 | |
-| `:untrimmed` | remux 失敗で末尾未トリムの録画をリンクした時 (C# 追加、S07) | 自動アップロードしない。保持スイープでは protected。Lisp は無視 |
+| `:untrimmed` | remux 失敗で末尾未トリムの録画をリンクした時 (C# 追加、S07) | 自動アップロードしない。active でも protected でもない (upload-given-up と同じ扱い)。後から正常な録画をリンクすると消す。Lisp は無視 |
 | `:video-url` | (手動 URL 添付; GUI 側) | `hosted-video-replaceable-p` 判定用 |
 
 ### 9.2 active 判定 (`store.lisp:25 entry-active-p`) — 永続化・トリム対象外の条件

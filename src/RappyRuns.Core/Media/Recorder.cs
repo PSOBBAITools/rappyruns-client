@@ -131,7 +131,7 @@ public sealed class Recorder
     /// <summary>
     /// <c>on-keep</c>: called with (final path, best run, untrimmed) after a
     /// kept file is in place. main.lisp wires it to <c>link-video-file!</c> + a
-    /// list refresh (<see cref="SessionRuns.LinkVideoFile"/>). Untrimmed (the
+    /// list refresh (<see cref="Store.RunQueue.LinkVideoFile"/>). Untrimmed (the
     /// remux failed, so the tail past the run may show the desktop) is a C#
     /// addition (S07): the entry is marked so it is never auto-uploaded.
     /// Exceptions are swallowed.

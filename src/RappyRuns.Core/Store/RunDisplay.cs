@@ -198,6 +198,7 @@ public static class RunDisplay
         if (RunEntries.Is(entry, RunKeys.VideoAttached)) return Tr(language, "video-attached");
         if (uploadPercent is { } percent) return Tr(language, "video-uploading", percent);
         if (RunEntries.Is(entry, RunKeys.UploadGivenUp)) return Tr(language, "video-upload-failed");
+        if (RunEntries.Is(entry, RunKeys.Untrimmed)) return Tr(language, "video-untrimmed");
         if (RunEntries.Is(entry, RunKeys.VideoPath)) return Tr(language, "video-saved");
         return "";
     }

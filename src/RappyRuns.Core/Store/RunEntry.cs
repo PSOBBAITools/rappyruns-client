@@ -131,17 +131,18 @@ public static class RunEntries
     /// file and a server draft, and nothing rules it out. Aborted and unranked
     /// runs never upload, a permanently rejected upload is as finished as a
     /// rejected run, and an untrimmed recording (C#, S07) is left for the
-    /// player to check and attach by hand - unless
-    /// <paramref name="orByHand"/> asks about that manual upload too.
+    /// player to check and attach by hand - like a given-up upload, it is no
+    /// longer the client's business, so it is not active and its file is not
+    /// protected from the retention sweep.
     /// </summary>
-    public static bool AwaitsUpload(Plist entry, bool orByHand = false) =>
+    public static bool AwaitsUpload(Plist entry) =>
         Is(entry, RunKeys.VideoPath)
         && Is(entry, RunKeys.ServerId)
         && !Is(entry, RunKeys.Aborted)
         && !Is(entry, RunKeys.Unranked)
         && !Is(entry, RunKeys.VideoAttached)
         && !Is(entry, RunKeys.UploadGivenUp)
-        && (orByHand || !Is(entry, RunKeys.Untrimmed));
+        && !Is(entry, RunKeys.Untrimmed);
 
     /// <summary>
     /// entry-unsent-p (store.lisp:303): :queued or :failed - runs that exist

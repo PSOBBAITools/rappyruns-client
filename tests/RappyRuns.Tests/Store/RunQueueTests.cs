@@ -204,8 +204,13 @@ public sealed class RunQueueTests : IDisposable
         Assert.True(linked!.Is(RunKeys.Untrimmed));
         Assert.Null(q.UploadCandidate(_now).Candidate);
         Assert.False(RunEntries.IsActive(linked.Data));
-        Assert.Contains(_video, q.VideoPathRetentionSets().Protected);
+        Assert.DoesNotContain(_video, q.VideoPathRetentionSets().Protected);
         Assert.Equal("draft - use Upload to YouTube", RunDisplay.RunStatusLabel(linked.Data, Language.En, hasSubmissionToken: true));
+        Assert.Equal("saved - check the end", RunDisplay.RunVideoLabel(linked.Data, Language.En, null));
+        // A clean file linked later clears the mark and the entry uploads again.
+        var relinked = q.LinkVideoFile(run, _video);
+        Assert.False(relinked!.Is(RunKeys.Untrimmed));
+        Assert.Equal(7, q.UploadCandidate(_now).Candidate?.ServerId);
     }
 
     [Fact]

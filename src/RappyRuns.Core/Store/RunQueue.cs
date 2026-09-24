@@ -203,15 +203,17 @@ public sealed class RunQueue
 
     /// <summary>
     /// link-video-file!: record <paramref name="videoPath"/> on the entry for
-    /// <paramref name="run"/> (matched by <see cref="RunEntries.SameRun"/>).
+    /// <paramref name="run"/> (matched by <see cref="RunEntries.SameRun"/>),
+    /// with <c>:untrimmed t</c> when the remux failed (C#, S07).
     /// Returns the updated entry, or null when the run is no longer listed.
     /// </summary>
     public RunEntry? LinkVideoFile(Plist run, string videoPath, bool untrimmed = false)
     {
         var entry = Entries.FirstOrDefault(e => RunEntries.SameRun(run, e.Raw));
         if (entry is null) return null;
-        return untrimmed
-            ? Update(entry, (RunKeys.VideoPath, SexpNode.Str(videoPath)), (RunKeys.Untrimmed, SexpNode.T))
+        // A clean file linked over an untrimmed one clears the mark.
+        return untrimmed || entry.Is(RunKeys.Untrimmed)
+            ? Update(entry, (RunKeys.VideoPath, SexpNode.Str(videoPath)), (RunKeys.Untrimmed, SexpNode.Bool(untrimmed)))
             : Update(entry, (RunKeys.VideoPath, SexpNode.Str(videoPath)));
     }
 
@@ -243,7 +245,7 @@ public sealed class RunQueue
     /// <summary>
     /// video-path-retention-sets (store.lisp:510): recordings the local
     /// storage sweep must never take (<c>Protected</c>: still awaiting their
-    /// upload, an untrimmed one's by hand included) and those it reclaims first (<c>Uploaded</c>: the site holds
+    /// upload) and those it reclaims first (<c>Uploaded</c>: the site holds
     /// them). A file in neither list is an orphan. Order mirrors the Lisp
     /// push (oldest entry first).
     /// </summary>
@@ -255,7 +257,7 @@ public sealed class RunQueue
         {
             if (entry.VideoPath is not { } path) continue;
             if (entry.Is(RunKeys.VideoAttached)) uploaded.Insert(0, path);
-            else if (RunEntries.AwaitsUpload(entry.Raw, orByHand: true))
+            else if (RunEntries.AwaitsUpload(entry.Raw))
                 @protected.Insert(0, path);
         }
         return (@protected, uploaded);
