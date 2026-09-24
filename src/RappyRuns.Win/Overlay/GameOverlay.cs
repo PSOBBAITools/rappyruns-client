@@ -91,7 +91,11 @@ public sealed class GameOverlay : IDisposable
     private (int X, int Y, int W, int H)? _placement;
     private uint _timerCurrentMs;
     private long? _topmostAt;
-    private bool _topmostFailed;
+    // Change-only diagnostics (S08): the last visibility state, (mode, size)
+    // and topmost result written to the log, so a steady state logs nothing.
+    private string? _loggedState;
+    private (bool Full, int W, int H)? _loggedShape;
+    private bool? _loggedTopmost;
     private bool _inputEnabled;
     private DragState? _drag;
     private nint _gameHwnd;
@@ -234,7 +238,10 @@ public sealed class GameOverlay : IDisposable
             _full = false;
             _placement = null;
             _topmostAt = null;
-            _topmostFailed = false;
+            _loggedState = null;
+            _loggedShape = null;
+            _loggedTopmost = null;
+            _log?.Invoke("overlay: window created");
             // Drag state must not survive a thread restart: the fresh window
             // starts WS_EX_TRANSPARENT, so a stale drag could never receive its
             // button-up and would pin the panel forever.
@@ -412,12 +419,16 @@ public sealed class GameOverlay : IDisposable
             _timerCurrentMs = wantedMs;
             SetTimer(hwnd, TimerId, wantedMs, 0);
         }
-        var game = _wanted ? _findGameWindow() : 0;
+        var wanted = _wanted;
+        var game = wanted ? _findGameWindow() : 0;
         var fit = game != 0 ? Position(hwnd, game, content) : Fit.Failed;
         _gameHwnd = game;
         if (game == 0 || fit == Fit.Degenerate)
         {
             Conceal(hwnd);
+            LogState(!wanted ? "hidden: not wanted (no quest running)"
+                : game == 0 ? "hidden: game window not found"
+                : "hidden: game client area is empty (minimized?)");
         }
         else if (fit == Fit.Fit || _placement is not null)
         {
@@ -426,6 +437,7 @@ public sealed class GameOverlay : IDisposable
                 ShowWindow(hwnd, SW_SHOWNOACTIVATE);
                 _visible = true;
             }
+            LogState(fit == Fit.Fit ? "shown" : "shown: game client rect unreadable, kept at the last placement");
             // Ctrl arms the drag - but only while the game itself is the
             // foreground window, so Ctrl+clicks aimed at another app that
             // overlaps the topmost panel are never eaten. The same test gates
@@ -437,6 +449,27 @@ public sealed class GameOverlay : IDisposable
             Swallow(() => KeepTopmost(hwnd, foreground));
             InvalidateRect(hwnd, null, false);
         }
+        else
+        {
+            LogState("hidden: game client rect unreadable before the first placement");
+        }
+    }
+
+    /// <summary>
+    /// Log a visibility state once, when it differs from the last one logged
+    /// (the tick runs at 10-30 Hz; a steady state must cost nothing). A shown
+    /// state carries the placement, so "shown but nowhere near the game" can
+    /// be told from "never shown".
+    /// </summary>
+    private void LogState(string state)
+    {
+        if (state == _loggedState) return;
+        _loggedState = state;
+        if (_visible && _placement is { } shown) _loggedShape = (_full, shown.W, shown.H);
+        _log?.Invoke(_visible && _placement is { } p
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"overlay: {state} at {p.X},{p.Y} {p.W}x{p.H} ({(_full ? "full client area" : "panel")}), game hwnd {_gameHwnd:X}")
+            : $"overlay: {state}");
     }
 
     private enum Fit
@@ -470,6 +503,15 @@ public sealed class GameOverlay : IDisposable
         {
             _placement = placement;
             SetWindowPos(hwnd, 0, placement.Item1, placement.Item2, placement.Item3, placement.Item4, SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        // Log a mode or size change while shown - not every move: a drag or a
+        // moving game window would log each tick.
+        var shape = (full, placement.Item3, placement.Item4);
+        if (_visible && _loggedShape is { } logged && logged != shape)
+        {
+            _loggedShape = shape;
+            _log?.Invoke(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"overlay: placement now {placement.Item1},{placement.Item2} {placement.Item3}x{placement.Item4} ({(full ? "full client area" : "panel")})"));
         }
         return Fit.Fit;
     }
@@ -512,6 +554,9 @@ public sealed class GameOverlay : IDisposable
         // Whatever put the game in front of us may have taken the topmost band
         // with it, so the next show re-asserts at once.
         _topmostAt = null;
+        // The next show logs its placement and topmost result afresh.
+        _loggedShape = null;
+        _loggedTopmost = null;
     }
 
     /// <summary>
@@ -520,8 +565,9 @@ public sealed class GameOverlay : IDisposable
     /// player deliberately brought up would be worse than one behind the game
     /// (overlay-keep-topmost, overlay-win32.lisp:977). The timestamp is
     /// committed before the call, so a persistent failure costs one attempt a
-    /// second; its first failure is logged, since "the overlay is behind the
-    /// game" looks exactly like the bug this guards against.
+    /// second. The result is logged when it changes (and once per show), since
+    /// "the overlay is behind the game" looks exactly like the bug this guards
+    /// against.
     /// </summary>
     private void KeepTopmost(nint hwnd, bool gameForeground)
     {
@@ -529,15 +575,12 @@ public sealed class GameOverlay : IDisposable
         var now = Stopwatch.GetTimestamp();
         if (_topmostAt is { } at && Stopwatch.GetElapsedTime(at, now).TotalMilliseconds < TopmostIntervalMs) return;
         _topmostAt = now;
-        if (SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE))
-        {
-            _topmostFailed = false;
-        }
-        else if (!_topmostFailed)
-        {
-            _topmostFailed = true;
-            _log?.Invoke("overlay: HWND_TOPMOST re-assert failed - the panel may be sitting behind the game");
-        }
+        var ok = SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        if (ok == _loggedTopmost) return;
+        _loggedTopmost = ok;
+        _log?.Invoke(ok
+            ? "overlay: HWND_TOPMOST re-asserted"
+            : "overlay: HWND_TOPMOST re-assert failed - the panel may be sitting behind the game");
     }
 
     // --- Painting ---
