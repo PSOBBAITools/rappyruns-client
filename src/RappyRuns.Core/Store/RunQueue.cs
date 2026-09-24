@@ -41,8 +41,8 @@ public sealed class RunQueue
     /// forever, and a server that answers early and resets the connection
     /// never clears on its own. Counted failures back off exponentially
     /// (<see cref="CountedRetrySeconds"/>), so the twelfth comes about a day and
-    /// a half in; a server outage long enough to matter is mostly connect
-    /// failures, which do not count. The count lives on the entry
+    /// a half in. Connect failures do not count, but an outage behind a proxy
+    /// that answers 502/503 does: one longer than that gives up. The count lives on the entry
     /// (<see cref="RunKeys.UploadFailures"/>) and survives restarts; any server
     /// reply and the manual retry (<see cref="ResetUploadFailures"/>) clear it.
     /// </summary>
@@ -214,17 +214,21 @@ public sealed class RunQueue
     /// The manual retry (the Retry button, C# addition for S17): forget every
     /// counted-failure streak and its backoff, and bring back an upload the
     /// streak gave up on (still listed; a count-based give-up is the only one
-    /// that carries a count). Rejections and vanished files stay given up.
+    /// that carries a count). Rejections and vanished files stay given up. A
+    /// given-up entry is not active, so it is not saved: it can be revived
+    /// only until the client restarts. One save and one Changed for the lot.
     /// Returns the number of entries reset.
     /// </summary>
     public int ResetUploadFailures()
     {
         var reset = 0;
-        foreach (var entry in Entries.Where(e => e.Is(RunKeys.UploadFailures)))
+        lock (_lock)
         {
-            Change(entry, current =>
+            for (var i = 0; i < _runs.Count; i++)
             {
-                var copy = current.Clone();
+                var entry = _runs[i];
+                if (!entry.Is(RunKeys.UploadFailures)) continue;
+                var copy = entry.Raw.Clone();
                 if ((RunEntries.Get(copy, RunKeys.UploadFailures).AsLong ?? 0) >= MaxUploadFailures)
                 {
                     copy.Remove(RunKeys.UploadGivenUp);
@@ -232,10 +236,13 @@ public sealed class RunQueue
                 }
                 copy.Remove(RunKeys.UploadFailures);
                 copy.Remove(RunKeys.NextUploadAt);
-                return copy;
-            });
-            reset++;
+                _runs[i] = new RunEntry(entry.Id, copy);
+                reset++;
+            }
         }
+        if (reset == 0) return 0;
+        Save();
+        OnChanged();
         return reset;
     }
 

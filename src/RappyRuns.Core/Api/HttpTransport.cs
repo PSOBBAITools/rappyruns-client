@@ -154,8 +154,14 @@ public sealed class HttpTransport : IDisposable
         catch (Exception ex) when (Map(ex, method, url, cancellationToken) is { } mapped)
         {
             // Whether the body had started tells an upload failure from a
-            // failure to reach the server at all (the queue counts only the former).
-            throw content.Started && mapped is ApiException { BodyStarted: false } api
+            // failure to reach the server at all (the queue counts only the
+            // former). Only a transport failure qualifies: a connect failure
+            // after a stale pooled connection took the first chunk is still a
+            // connect failure, and "file changed during upload" is local.
+            throw content.Started && mapped is ApiException
+            {
+                BodyStarted: false, Failure: TransportFailure.Other or TransportFailure.Timeout,
+            } api
                 ? new ApiException(api.Message, api.Failure, api.InnerException) { Status = api.Status, BodyStarted = true }
                 : mapped;
         }
