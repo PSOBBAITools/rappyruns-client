@@ -473,7 +473,7 @@ public sealed class PollLoop : IFrameHooks
     {
         if (!_s.Config.VideoUpload || Busy || _s.Recorder.State != RecorderState.Idle) return;
         if (_upload is { IsCompleted: false }) return;
-        var (entry, _) = _s.Queue.UploadCandidate(); // a give-up raises Queue.Changed (the runs list refreshes)
+        var entry = _s.Queue.UploadCandidate(); // a give-up raises Queue.Changed (the runs list refreshes)
         if (entry is null) return;
         var token = _cancel.Token;
         _upload = Task.Run(async () =>

@@ -507,7 +507,7 @@ JSON の数値: 浮動小数 (座標等) は **単精度の最短表現** (`12.3
 
 ### 9.5 動画アップロード (`upload-candidate`, `upload-entry-video!`, `main.lisp:172 maybe-start-upload`)
 - 開始条件: `:video-upload` (強制真) かつ ¬`*poll-busy-p*` (クエスト中/録画中でない) かつ レコーダ `:idle` かつ 前のアップロードスレッドが死んでいる。GUI ティック (250ms) 毎と未アタッチ時の検索ループ毎に評価。
-- 候補: キューを**古い順**に走査し、`video-path ∧ server-id ∧ ¬aborted ∧ ¬unranked ∧ ¬video-attached ∧ ¬upload-given-up ∧ (next-upload-at 無し or ≤ now)`。ファイルが消えていれば `:upload-given-up t` にして次へ (GUI 再描画要求を返す)。
+- 候補: キューを**古い順**に走査し、`video-path ∧ server-id ∧ ¬aborted ∧ ¬unranked ∧ ¬video-attached ∧ ¬upload-given-up ∧ (next-upload-at 無し or ≤ now)`。ファイルが消えていれば `:upload-given-up t` にして次へ (Lisp は GUI 再描画要求を返す。C# はその更新が `Changed` を上げるので候補だけを返す)。
 - 結果処理:
   - いずれの結果でもまず診断 (`POST /diagnostics`, 録画ログ末尾 64KB + マシン概要) をベストエフォート送信。
   - attached/duplicate → `:video-attached t :video-uploaded t :held (status=="held") :approved (status=="approved")`。**ローカルファイルは消さない** (保持期間スイープに任せる)。
