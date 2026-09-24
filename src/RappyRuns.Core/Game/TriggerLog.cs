@@ -22,7 +22,9 @@ public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = Tr
 
     private readonly Lock _gate = new();
     private StreamWriter? _stream;
-    private bool _rotateFailed;
+
+    // The stream position past which Writer closes the stream and checks the file for rotation.
+    private long _checkAt;
 
     /// <summary>%APPDATA%\ephinea-ta-client\trigger-log.txt (the config directory; home when APPDATA is unset).</summary>
     public static string DefaultPath()
@@ -45,40 +47,35 @@ public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = Tr
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(Path))!);
             var file = new FileStream(Path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
             _stream = new StreamWriter(file, new UTF8Encoding(false)) { NewLine = "\n", AutoFlush = false };
-            _rotateFailed = false;
         }
         return _stream;
     }
 
     /// <summary>
-    /// The stream for the next lines, rotating first when the file is already
-    /// past the limit, so the lines about to be written (a session header
-    /// included) land together in the fresh file. Every write flushes, so the
-    /// stream position is the file size. An oversized file an earlier session
-    /// left is moved aside before it is opened; the file this stream has open is
-    /// renamed under it (it is shared for delete) and the fresh file starts with
-    /// a line saying where the earlier lines went. When Windows refuses the
-    /// rename, the log keeps appending to the big file and does not try again
-    /// until the stream is reopened.
+    /// The stream for the next lines, rotating first when the file is past
+    /// the limit, so the lines about to be written (a session header included)
+    /// land together in the fresh file. One path does it: once the open
+    /// stream's position (every write flushes, so it tracks the file) passes
+    /// <c>_checkAt</c>, the stream closes; opening then looks at the
+    /// file on disk, moves it aside when it is over the limit, and starts the
+    /// fresh file with a line saying where the earlier lines went. When
+    /// Windows refuses the rename, the log keeps appending to the big file and
+    /// tries again after another limit's worth of growth, not on every write.
     /// </summary>
     private StreamWriter Writer()
     {
-        if (_stream is null)
-        {
-            var existing = new FileInfo(Path);
-            if (existing.Exists && existing.Length > maxBytes) MoveAside();
-            return Stream();
-        }
-        if (_rotateFailed || _stream.BaseStream.Position <= maxBytes) return _stream;
-        if (!MoveAside())
-        {
-            _rotateFailed = true;
-            return _stream;
-        }
-        CloseStream();
+        if (_stream is not null && _stream.BaseStream.Position > _checkAt) CloseStream();
+        if (_stream is not null) return _stream;
+        var existing = new FileInfo(Path);
+        var rotated = existing.Exists && existing.Length > maxBytes && MoveAside();
         var stream = Stream();
-        stream.Write($"=== trigger log rotated {TimeOfDay()}; earlier lines are in {System.IO.Path.GetFileName(OldPath)} ===\n");
-        stream.Flush();
+        var size = stream.BaseStream.Position;
+        _checkAt = size <= maxBytes ? maxBytes : size + maxBytes;
+        if (rotated)
+        {
+            stream.Write($"=== trigger log rotated {TimeOfDay()}; earlier lines are in {System.IO.Path.GetFileName(OldPath)} ===\n");
+            stream.Flush();
+        }
         return stream;
     }
 
