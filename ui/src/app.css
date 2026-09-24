@@ -1,23 +1,65 @@
+/* Tokens (light, then dark). Components use only these. */
 :root {
-  --bg: #ffffff;
-  --surface: #f4f5f7;
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --surface-2: #f7f8fa;
   --text: #1c1f24;
   --muted: #5d6470;
-  --line: #d9dde3;
+  --faint: #8a919c;
+  --line: #dde1e6;
+  --line-strong: #c4cad2;
   --accent: #2f6fdb;
+  --accent-hover: #255fc2;
+  --accent-text: #ffffff;
+  --accent-soft: #e6eefc;
+  --row-hover: #f1f4f9;
+  --row-selected: #dde8fb;
+  --ok: #1f8a4c;
+  --busy: #b7791f;
+  --danger: #c62f2f;
+  --danger-soft: #fdecec;
+  --rec: #d93636;
+  --focus: #2f6fdb66;
+  --shadow: 0 1px 2px #0000000f, 0 1px 3px #00000014;
+  --shadow-lg: 0 12px 32px #00000033;
+  --radius: 8px;
+  --backdrop: #0f141c66;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #17191d;
-    --surface: #1f2227;
+    --bg: #131519;
+    --surface: #1b1e23;
+    --surface-2: #20242a;
     --text: #e6e8eb;
-    --muted: #9aa1ab;
-    --line: #33373e;
+    --muted: #a0a7b1;
+    --faint: #737a85;
+    --line: #2d3138;
+    --line-strong: #3d424b;
     --accent: #6ea0ff;
+    --accent-hover: #8ab3ff;
+    --accent-text: #0d1320;
+    --accent-soft: #1f2d47;
+    --row-hover: #22262d;
+    --row-selected: #253552;
+    --ok: #4cc27f;
+    --busy: #e0a84a;
+    --danger: #ff6b6b;
+    --danger-soft: #3a1f22;
+    --rec: #ff5c5c;
+    --focus: #6ea0ff77;
+    --shadow: 0 1px 2px #00000066;
+    --shadow-lg: 0 12px 32px #000000aa;
+    --backdrop: #000000b3;
     color-scheme: dark;
   }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 html,
@@ -27,9 +69,127 @@ body {
   background: var(--bg);
   color: var(--text);
   /* Segoe UI like the Lisp client (ui-shell §1); Yu Gothic UI for Japanese. */
-  font: 14px/1.5 'Segoe UI', 'Yu Gothic UI', 'Meiryo UI', sans-serif;
+  font: 14px/1.45 'Segoe UI', 'Yu Gothic UI', 'Meiryo UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-input {
+#app {
+  height: 100%;
+}
+
+/* A desktop tool, not a page: no text selection on chrome, only in content. */
+button,
+nav,
+label {
+  user-select: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* ---- Buttons ---- */
+.btn {
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  min-height: 30px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  background: var(--row-hover);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+.btn.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.btn.icon {
+  padding: 0;
+  width: 30px;
+  justify-content: center;
+}
+.btn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+/* ---- Inputs ---- */
+input[type='text'],
+input[type='password'],
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 4px 8px;
+  min-height: 30px;
+}
+input[type='text']:disabled,
+input[type='password']:disabled {
+  opacity: 0.5;
+}
+input[type='text']:focus,
+input[type='password']:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+input[type='checkbox'],
+input[type='radio'] {
   accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: none;
+}
+
+/* ---- Tone dots / text ---- */
+.tone-error {
+  color: var(--danger);
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--faint);
+}
+.dot.ok {
+  background: var(--ok);
+}
+.dot.busy {
+  background: var(--busy);
+}
+.dot.error {
+  background: var(--danger);
+}
+
+.muted {
+  color: var(--muted);
+}
+.num {
+  font-variant-numeric: tabular-nums;
 }

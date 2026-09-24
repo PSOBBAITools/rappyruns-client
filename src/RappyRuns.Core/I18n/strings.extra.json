@@ -1,0 +1,8 @@
+{
+  "dialog-ok": { "en": "OK", "ja": "OK" },
+  "dialog-yes": { "en": "Yes", "ja": "はい" },
+  "dialog-no": { "en": "No", "ja": "いいえ" },
+  "runs-empty": { "en": "No runs yet - finished quests appear here.", "ja": "まだ記録はありません。クエストを終えるとここに表示されます。" },
+  "rooms-empty": { "en": "No rooms yet - play a quest and its rooms and enemies appear here.", "ja": "まだ部屋はありません。クエストをプレイすると、部屋と敵がここに表示されます。" },
+  "run-open-page": { "en": "Open the run page", "ja": "記録ページを開く" }
+}

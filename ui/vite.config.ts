@@ -17,5 +17,7 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // The dev mock imports the i18n tables from ../src/RappyRuns.Core/I18n.
+    fs: { allow: ['..'] },
   },
 });
