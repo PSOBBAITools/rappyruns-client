@@ -22,6 +22,7 @@ public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = Tr
 
     private readonly Lock _gate = new();
     private StreamWriter? _stream;
+    private bool _rotateFailed;
 
     /// <summary>%APPDATA%\ephinea-ta-client\trigger-log.txt (the config directory; home when APPDATA is unset).</summary>
     public static string DefaultPath()
@@ -36,43 +37,52 @@ public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = Tr
     /// <summary>The rotated generation: trigger-log.txt becomes trigger-log.old.txt (one generation, replaced).</summary>
     public string OldPath => System.IO.Path.ChangeExtension(Path, ".old.txt");
 
-    // trigger-log.lisp:34: opened on first use, kept open until closed. A file
-    // an earlier session left oversized is rotated before it is reopened.
+    // trigger-log.lisp:34: opened on first use, kept open until closed.
     private StreamWriter Stream()
     {
         if (_stream is null)
         {
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(Path))!);
-            var existing = new FileInfo(Path);
-            if (existing.Exists && existing.Length > maxBytes) MoveAside();
             var file = new FileStream(Path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
             _stream = new StreamWriter(file, new UTF8Encoding(false)) { NewLine = "\n", AutoFlush = false };
+            _rotateFailed = false;
         }
         return _stream;
     }
 
     /// <summary>
-    /// After a flush: once the open file has grown past the limit, close it,
-    /// move it aside and start the fresh file with a line saying where the
-    /// earlier lines went, so a moderator reading it mid-segment is not left
-    /// with a log that begins in the middle of nothing.
+    /// The stream for the next lines, rotating first when the file is already
+    /// past the limit, so the lines about to be written (a session header
+    /// included) land together in the fresh file. Every write flushes, so the
+    /// stream position is the file size. An oversized file an earlier session
+    /// left is moved aside before it is opened; the file this stream has open is
+    /// renamed under it (it is shared for delete) and the fresh file starts with
+    /// a line saying where the earlier lines went. When Windows refuses the
+    /// rename, the log keeps appending to the big file and does not try again
+    /// until the stream is reopened.
     /// </summary>
-    private void RotateIfFull()
+    private StreamWriter Writer()
     {
-        if (_stream is null || _stream.BaseStream.Length <= maxBytes) return;
-        _stream.Dispose();
-        _stream = null;
-        if (!MoveAside()) return;
+        if (_stream is null)
+        {
+            var existing = new FileInfo(Path);
+            if (existing.Exists && existing.Length > maxBytes) MoveAside();
+            return Stream();
+        }
+        if (_rotateFailed || _stream.BaseStream.Position <= maxBytes) return _stream;
+        if (!MoveAside())
+        {
+            _rotateFailed = true;
+            return _stream;
+        }
+        CloseStream();
         var stream = Stream();
         stream.Write($"=== trigger log rotated {TimeOfDay()}; earlier lines are in {System.IO.Path.GetFileName(OldPath)} ===\n");
         stream.Flush();
+        return stream;
     }
 
-    /// <summary>
-    /// Rename the file to <see cref="OldPath"/>, replacing it. False when
-    /// Windows refuses (the old file is open without delete sharing, say):
-    /// the log then keeps appending to the big file rather than stop.
-    /// </summary>
+    /// <summary>Rename the file to <see cref="OldPath"/>, replacing it. False when Windows refuses (the old file open elsewhere without delete sharing, say).</summary>
     private bool MoveAside()
     {
         try
@@ -97,12 +107,11 @@ public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = Tr
     {
         lock (_gate)
         {
-            var stream = Stream();
+            var stream = Writer();
             // ~& - a fresh line: the stream is only ever left at a line start here.
             stream.Write($"=== trigger logging started {TimeOfDay()} ===\n");
             stream.Write("Play the segment; each register / floor-switch change is listed below.\n");
             stream.Flush();
-            RotateIfFull();
         }
         return Path;
     }
@@ -110,18 +119,20 @@ public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = Tr
     /// <summary>trigger-log.lisp:43 close-trigger-log (logging turned off, or shutdown).</summary>
     public void Close()
     {
-        lock (_gate)
+        lock (_gate) CloseStream();
+    }
+
+    private void CloseStream()
+    {
+        try
         {
-            try
-            {
-                _stream?.Dispose();
-            }
-            catch (IOException)
-            {
-                // ignore-errors, like the Lisp.
-            }
-            _stream = null;
+            _stream?.Dispose();
         }
+        catch (IOException)
+        {
+            // ignore-errors, like the Lisp.
+        }
+        _stream = null;
     }
 
     public void Dispose() => Close();
@@ -138,13 +149,9 @@ public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = Tr
         if (lines is null) return null;
         lock (_gate)
         {
-            var stream = Stream();
+            var stream = Writer();
             foreach (var line in lines) stream.Write(line + "\n");
-            if (lines.Count > 0)
-            {
-                stream.Flush();
-                RotateIfFull();
-            }
+            if (lines.Count > 0) stream.Flush();
         }
         return lines.Count;
     }

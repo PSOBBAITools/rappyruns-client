@@ -922,7 +922,7 @@ active トラッカーのうち経過 ≥ **15000ms** (`+abort-min-ms+`) のも�
   HH:MM:SS "<quest>" monster ID killed (<name|?>, unitxt U)
   ```
   `"<quest>"` は `~s` (ダブルクォート付き、`"` と `\` をエスケープ)。時刻はローカル時刻。レジスタは 0..255 を id 順、スイッチはバイト順・ビット順 (floor = i/32, switch = 8*(i%32)+bit)。
-- OFF で stream を閉じる。C# はローテーションを追加: 開くときと flush の後にファイルが 8 MiB (`TriggerLog.MaxBytes`) を超えていたら `trigger-log.old.txt` へ改名 (前の世代は上書き、1 世代のみ) して新しいファイルを始める。書き込み中に回した場合は新ファイルの先頭に `=== trigger log rotated HH:MM:SS; earlier lines are in trigger-log.old.txt ===` を書く。改名に失敗したら元のファイルへ追記を続ける。
+- OFF で stream を閉じる。C# はローテーションを追加: 書く直前にファイルが 8 MiB (`TriggerLog.MaxBytes`) を超えていたら (開くときは既存ファイルのサイズ、開いている間はストリーム位置で判定) `trigger-log.old.txt` へ改名 (前の世代は上書き、1 世代のみ) して新しいファイルを始める。書き込み中に回した場合は新ファイルの先頭に `=== trigger log rotated HH:MM:SS; earlier lines are in trigger-log.old.txt ===` を書く。改名に失敗したら元のファイルへ追記を続け、ストリームを開き直すまで再試行しない。セッションヘッダーは回した後に書くので、常に自分の行と同じファイルに入る。
 
 ### 16.2 撃破差分 (`newly-killed-monsters`)
 前フレームで hp>0、今フレームで hp==0 のモンスター (今フレームの順序)。
@@ -1108,6 +1108,6 @@ active トラッカーのうち経過 ≥ **15000ms** (`+abort-min-ms+`) のも�
 | 45 | 録画の `:video-offset-ms` は enqueue 前に同一 plist へ追記 (共有構造前提) | recording.lisp:1115 | 明示的に「完了ラン → 録画にオフセットを問い合わせ → enqueue」の順にする |
 | 46 | `poll-detach-step` の `detector-step(NIL)` が返す中断ランは捨てられている (ゲーム終了時の 15 秒超中断ランはキューに入らない)。一方、スナップショットが NIL になるフレーム (my-index 読み失敗) では `poll-frame-step` 経由で中断ランが**キューに入る** | main.lisp:292, 304 | 現行挙動を仕様として固定するか、意図的に直すかを決める (直すとサーバー上の aborted ランが増える) |
 | 47 | my-index が一度読めないだけでスナップショット NIL → 走行中トラッカーが中断扱いになり武装解除される | psobb.lisp:418, detect.lisp:401 | 現行パリティとしては同じだが、リスクとして記録 |
-| 48 | trigger-log.txt は無制限に肥大 (実例 469MB) | trigger-log.lisp:34 | ローテーション追加は可 (パス・形式は維持) |
+| 48 | trigger-log.txt は無制限に肥大 (実例 469MB) | trigger-log.lisp:34 | C# で 8 MiB ローテーションを追加 (§16.1、パス・形式は維持) |
 | 49 | 名前キャッシュ (アイテム/モンスター) はプロセス生涯で消えない (unitxt は静的前提) | psobb.lisp:479,684 | |
 | 50 | 言語切替・モデレーター変化で窓を作り直す際、トレイに隠れている状態を維持 (最小化起動直後にゲーム上へ窓を出さない) | gui.lisp:621 | WebView2 なら再構築不要だが「隠れ状態を勝手に解除しない」は守る |
