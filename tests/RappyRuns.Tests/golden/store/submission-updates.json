@@ -1,0 +1,72 @@
+[
+  {
+    "outcome": "created",
+    "payload": "{\"id\":42,\"url\":\"https://x/runs/42\"}",
+    "updates": "(:STATUS :SUBMITTED :URL \"https://x/runs/42\" :SERVER-ID 42)"
+  },
+  {
+    "outcome": "duplicate",
+    "payload": "{\"id\":42,\"url\":\"https://x/runs/42\"}",
+    "updates": "(:STATUS :DUPLICATE :URL \"https://x/runs/42\" :SERVER-ID 42)"
+  },
+  {
+    "outcome": "created",
+    "payload": "{\"id\":7,\"url\":\"u\",\"standing\":{\"rank\":2,\"parties\":5,\"previous_best_ms\":605000,\"delta_ms\":-3210}}",
+    "updates": "(:STATUS :SUBMITTED :URL \"u\" :SERVER-ID 7 :STANDING-RANK 2 :STANDING-PARTIES 5 :STANDING-PREV-MS 605000 :STANDING-DELTA-MS -3210)"
+  },
+  {
+    "outcome": "created",
+    "payload": "{\"id\":7,\"standing\":{\"rank\":1,\"parties\":1}}",
+    "updates": "(:STATUS :SUBMITTED :URL COMMON-LISP:NIL :SERVER-ID 7 :STANDING-RANK 1 :STANDING-PARTIES 1)"
+  },
+  {
+    "outcome": "created",
+    "payload": "{\"id\":7,\"standing\":{\"rank\":1.5,\"parties\":1}}",
+    "updates": "(:STATUS :SUBMITTED :URL COMMON-LISP:NIL :SERVER-ID 7)"
+  },
+  {
+    "outcome": "created",
+    "payload": "{\"id\":7,\"standing\":{\"rank\":1,\"parties\":1,\"previous_best_ms\":5}}",
+    "updates": "(:STATUS :SUBMITTED :URL COMMON-LISP:NIL :SERVER-ID 7 :STANDING-RANK 1 :STANDING-PARTIES 1)"
+  },
+  {
+    "outcome": "created",
+    "payload": "{\"id\":7,\"standing\":null}",
+    "updates": "(:STATUS :SUBMITTED :URL COMMON-LISP:NIL :SERVER-ID 7)"
+  },
+  {
+    "outcome": "created",
+    "payload": "[]",
+    "updates": "(:STATUS :SUBMITTED :URL COMMON-LISP:NIL :SERVER-ID COMMON-LISP:NIL)"
+  },
+  {
+    "outcome": "rejected",
+    "payload": "{\"message\":\"nope\"}",
+    "updates": "(:STATUS :REJECTED :REASON \"nope \")"
+  },
+  {
+    "outcome": "rejected",
+    "payload": "{\"message\":\"Invalid run\",\"errors\":[\"time too fast\",\"bad quest\"]}",
+    "updates": "(:STATUS :REJECTED :REASON \"Invalid run time too fast; bad quest\")"
+  },
+  {
+    "outcome": "rejected",
+    "payload": "{\"errors\":[\"a\"]}",
+    "updates": "(:STATUS :REJECTED :REASON \"a\")"
+  },
+  {
+    "outcome": "rejected",
+    "payload": "{\"errors\":[]}",
+    "updates": "(:STATUS :REJECTED :REASON \"\")"
+  },
+  {
+    "outcome": "rejected",
+    "payload": "{\"message\":\"x\",\"errors\":[]}",
+    "updates": "(:STATUS :REJECTED :REASON \"x \")"
+  },
+  {
+    "outcome": "rejected",
+    "payload": "{}",
+    "updates": "(:STATUS :REJECTED :REASON \"\")"
+  }
+]
