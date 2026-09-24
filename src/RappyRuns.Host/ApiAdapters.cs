@@ -95,7 +95,7 @@ public sealed class QueueNetwork(ApiClient api, Func<Plist, string> runJson, Fun
         }
         catch (Exception e) when (e is ApiException or HttpRequestException or IOException)
         {
-            return UploadResult.ApiError(e.Message);
+            return UploadResult.ApiError(e.Message, e is ApiException { Failure: TransportFailure.AddressNotFound });
         }
     }
 

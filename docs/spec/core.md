@@ -513,7 +513,7 @@ JSON の数値: 浮動小数 (座標等) は **単精度の最短表現** (`12.3
   - いずれの結果でもまず診断 (`POST /diagnostics`, 録画ログ末尾 64KB + マシン概要) をベストエフォート送信。
   - attached/duplicate → `:video-attached t :video-uploaded t :held (status=="held") :approved (status=="approved")`。**ローカルファイルは消さない** (保持期間スイープに任せる)。
   - rejected: `error == "pending-limit"` → `:next-upload-at now+3600`、それ以外 → `:upload-given-up t :upload-error <message|error|"rejected">`。
-  - api-error → `:next-upload-at now+300`, `:upload-error`, `:upload-failures +1`。C# は 12 回連続 (約 1 時間) で `:upload-given-up t` にして止める (S17、Lisp は無限に再送)。回数は queue.sexp に残るので再起動をまたぐ。api-error 以外の応答 (attached/duplicate/rejected) で回数を消す。クライアントに手動の再アップロード操作は無いので、諦めた動画はサイトで手動添付する。
+  - api-error → `:next-upload-at now+300`, `:upload-error`, `:upload-failures +1`。C# は 12 回連続 (約 1 時間) で `:upload-given-up t` にして止める (S17、Lisp は無限に再送)。回数は queue.sexp に残るので再起動をまたぐ。api-error 以外の応答 (attached/duplicate/rejected) で回数を消す。ホスト名が引けない失敗 (オフライン) は回数に数えない。諦めた回だけは診断を送る。クライアントに手動の再アップロード操作は無いので、諦めた動画はサイトで手動添付する。
 - 進捗: `*upload-progress*` = `(server-id done total)`、整数 % が変わった時だけ再描画。
 - 保持期間 (`apply-recording-retention`, 120 秒毎、レコーダ idle 時のみ): 上限超過で、protected (アップロード待ち) は除外、uploaded (attached) を先に、各層内は古い順に削除。
 

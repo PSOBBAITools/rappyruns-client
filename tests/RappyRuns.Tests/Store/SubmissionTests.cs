@@ -273,9 +273,11 @@ public sealed class SubmissionTests : IDisposable
             Assert.False(backingOff.Is(RunKeys.UploadGivenUp));
             Assert.Equal(i, backingOff.Get(RunKeys.UploadFailures).AsLong);
         }
+        Assert.DoesNotContain(uploader.Log, l => l.StartsWith("diagnostics", StringComparison.Ordinal));
         var updated = await q.UploadEntryVideoAsync(entry, uploader);
         Assert.True(updated.Is(RunKeys.UploadGivenUp));
         Assert.Equal("connection reset", updated.Get(RunKeys.UploadError).AsString);
+        Assert.Equal("diagnostics 7", uploader.Log[^1]);
         Assert.False(RunEntries.IsActive(q.Entries[0].Data));
         Assert.Null(q.UploadCandidate(1_000_000).Candidate);
         Assert.Equal("upload failed", RunDisplay.RunVideoLabel(q.Entries[0].Data, Language.En, null));
@@ -299,10 +301,23 @@ public sealed class SubmissionTests : IDisposable
         for (var i = 1; i < RunQueue.MaxUploadFailures; i++)
             await q.UploadEntryVideoAsync(entry, new FakeUploader(UploadResult.ApiError("down")));
         var limited = await q.UploadEntryVideoAsync(entry, new FakeUploader(new UploadResult(UploadOutcome.Rejected, Error: "pending-limit")));
-        Assert.False(limited.Is(RunKeys.UploadFailures));
+        Assert.Null(limited.Data.Get(RunKeys.UploadFailures));
         var again = await q.UploadEntryVideoAsync(entry, new FakeUploader(UploadResult.ApiError("down")));
         Assert.False(again.Is(RunKeys.UploadGivenUp));
         Assert.Equal(1, again.Get(RunKeys.UploadFailures).AsLong);
+    }
+
+    [Fact]
+    public async Task AnUnreachedServerBacksOffWithoutAStrike()
+    {
+        var (q, entry) = UploadStore(now: 1000);
+        for (var i = 0; i < RunQueue.MaxUploadFailures + 3; i++)
+        {
+            var updated = await q.UploadEntryVideoAsync(entry, new FakeUploader(UploadResult.ApiError("name not resolved", serverUnreached: true)));
+            Assert.False(updated.Is(RunKeys.UploadGivenUp));
+            Assert.Null(updated.Data.Get(RunKeys.UploadFailures));
+            Assert.Equal(1000 + RunQueue.UploadRetrySeconds, updated.Get(RunKeys.NextUploadAt).AsLong);
+        }
     }
 
     [Fact]

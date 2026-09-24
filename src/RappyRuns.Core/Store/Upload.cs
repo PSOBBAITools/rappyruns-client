@@ -25,7 +25,15 @@ public enum UploadOutcome
 /// <param name="Message">The <c>message</c> (rejected), or the api-error text.</param>
 public sealed record UploadResult(UploadOutcome Outcome, string? Status = null, string? Error = null, string? Message = null)
 {
-    public static UploadResult ApiError(string message) => new(UploadOutcome.ApiError, Message: message);
+    public static UploadResult ApiError(string message, bool serverUnreached = false) =>
+        new(UploadOutcome.ApiError, Message: message) { ServerUnreached = serverUnreached };
+
+    /// <summary>
+    /// An api-error that never reached the server (the host did not resolve:
+    /// the PC is offline, most likely). It backs off like any api-error but is
+    /// no strike toward <see cref="RunQueue.MaxUploadFailures"/>.
+    /// </summary>
+    public bool ServerUnreached { get; init; }
 
     /// <summary>The fields from a response body; a non-object body yields none.</summary>
     public static UploadResult FromJson(UploadOutcome outcome, JsonElement? payload)
