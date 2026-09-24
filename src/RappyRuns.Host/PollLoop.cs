@@ -60,6 +60,14 @@ public sealed class PollLoopServices
     /// <summary>gdigrab window-capture probe at the 4 Hz slot (window title).</summary>
     public Action<string?> MaybeStartGdigrabProbe { get; init; } = _ => { };
 
+    /// <summary>
+    /// Stale-recording cleanup at start and the retention sweep. Off for a
+    /// developer copy (recording forced off, or an isolated config): its queue
+    /// knows nothing of the installed client's recordings in the shared folder,
+    /// so both would delete that client's files.
+    /// </summary>
+    public bool ManageRecordingsFolder { get; init; } = true;
+
     /// <summary>The self-updater's busy deferral; null = no updater.</summary>
     public DeferredUpdate? Deferred { get; init; }
 
@@ -88,9 +96,10 @@ public sealed class PollLoopServices
 /// wants it). Attached: ~30 frames a second through
 /// <see cref="GameFrameProcessor.Step"/> with this class as the frame hooks,
 /// plus the 250 ms slot (uploads, retention, gdigrab probe, status). Not
-/// attached: a search every second that keeps stops, retries, uploads and
-/// the status going. Run submission happens synchronously on this thread, as
-/// in Lisp. Nothing a hook or a worker throws ends the loop.
+/// attached: a search every second that keeps stops, uploads and the status
+/// going. Run submission runs on one background worker, never on this thread
+/// (deviation from Lisp, PLAN.md decision 2: an unreachable server must not
+/// stall frames or the recorder). Nothing a hook or a worker throws ends the loop.
 /// </summary>
 public sealed class PollLoop : IFrameHooks
 {
@@ -109,7 +118,10 @@ public sealed class PollLoop : IFrameHooks
     private readonly AccountModeLogger _accountMode = new();
     private readonly Func<int, bool> _wait;
     private Thread? _thread;
-    private int _retry;
+    private readonly object _submitGate = new();
+    private bool _submitPending;
+    private bool _submitToast;
+    private Task? _submitWorker;
     private IProcessMemoryReader? _reader;
     private long? _lastGui;
     private long? _lastSweep;
@@ -137,28 +149,59 @@ public sealed class PollLoop : IFrameHooks
         _thread.Start();
     }
 
+    /// <summary>How long <see cref="Stop"/> waits for an in-flight submission pass (cancelled; the queue is saved per entry).</summary>
+    public static readonly TimeSpan SubmitStopWait = TimeSpan.FromSeconds(3);
+
     /// <summary>
     /// <c>*stop-requested*</c> + join (quit-app, core §2.6): wakes the loop,
     /// which shuts the recorder down on its own thread, then waits up to
-    /// <paramref name="timeout"/>. Safe from any thread but the poll thread itself.
+    /// <paramref name="timeout"/>, plus up to <see cref="SubmitStopWait"/> for a
+    /// submission pass (its HTTP is cancelled; entries not yet answered simply
+    /// stay queued). Safe from any thread but the poll thread itself.
     /// </summary>
     public bool Stop(TimeSpan timeout)
     {
         _stop.Set();
         _cancel.Cancel();
         var thread = _thread;
-        if (thread is null || thread == Thread.CurrentThread) return true;
-        return thread.Join(timeout);
+        var joined = thread is null || thread == Thread.CurrentThread || thread.Join(timeout);
+        if (!WaitForSubmissions(SubmitStopWait)) _s.Log("poll loop: a submission pass was still running at stop");
+        return joined;
     }
 
-    /// <summary>The Retry button (<c>*retry-requested*</c>): submit on the next pass, attached or not.</summary>
-    public void RequestRetry() => Volatile.Write(ref _retry, 1);
+    /// <summary>
+    /// The Retry button and a verified token (<c>*retry-requested*</c>): a
+    /// submission pass on the worker, attached or not. Safe from any thread.
+    /// </summary>
+    public void RequestRetry() => RequestSubmit(toast: false);
+
+    /// <summary>Waits until no submission pass runs or is pending (stop, tests). False on timeout.</summary>
+    internal bool WaitForSubmissions(TimeSpan timeout)
+    {
+        var deadline = Stopwatch.GetTimestamp() + (long)(timeout.TotalSeconds * Stopwatch.Frequency);
+        while (true)
+        {
+            Task? worker;
+            lock (_submitGate) worker = _submitWorker;
+            if (worker is null) return true;
+            var left = deadline - Stopwatch.GetTimestamp();
+            if (left <= 0) return false;
+            try
+            {
+                if (!worker.Wait(TimeSpan.FromSeconds((double)left / Stopwatch.Frequency))) return false;
+            }
+            catch (AggregateException)
+            {
+                // The worker guards everything itself; nothing to add here.
+            }
+        }
+    }
 
     private bool Stopping => _stop.IsSet;
 
     private void Run()
     {
-        Guard("cleanup-stale-recordings", _s.Recorder.CleanupStaleRecordings);
+        Startup();
         try
         {
             while (!Stopping) Iterate();
@@ -167,6 +210,12 @@ public sealed class PollLoop : IFrameHooks
         {
             Shutdown();
         }
+    }
+
+    /// <summary>The loop's start (main.lisp:380): sweep the stale recordings a crash left (not in a developer copy).</summary>
+    internal void Startup()
+    {
+        if (_s.ManageRecordingsFolder) Guard("cleanup-stale-recordings", _s.Recorder.CleanupStaleRecordings);
     }
 
     /// <summary>
@@ -226,7 +275,6 @@ public sealed class PollLoop : IFrameHooks
         }
         // Keep any in-flight stop moving (deletes an abandoned file once ffmpeg exits).
         Guard("recorder", () => _s.Recorder.Step(_s.Frames.Detector.State == DetectorState.InQuest, [], null));
-        MaybeSubmitRetry();
         Guard("upload", MaybeStartUpload);
         Guard("retention", MaybeSweepRecordings);
         Guard("status", () => _s.Tick(new PollTick(false, null, false, _s.Connector.Rejection)));
@@ -245,11 +293,10 @@ public sealed class PollLoop : IFrameHooks
         _s.Frames.Detach(this);
     }
 
-    /// <summary>poll-frame-step (main.lisp:298): the frame, then retry, the 250 ms slot and the wait.</summary>
+    /// <summary>poll-frame-step (main.lisp:298): the frame, then the 250 ms slot and the wait.</summary>
     private void FrameStep(IProcessMemoryReader reader)
     {
         var result = _s.Frames.Step(reader, this);
-        MaybeSubmitRetry();
         var now = _s.Clock.Now;
         if (_lastGui is not { } last || LispMath.ElapsedMs(now, last, _s.Clock.TicksPerSecond) > GuiIntervalMs)
         {
@@ -313,7 +360,9 @@ public sealed class PollLoop : IFrameHooks
     /// handle-completed-runs (main.lisp:136): drop aborted runs unless
     /// :submit-aborted, annotate against the ghost, log the account mode, stamp
     /// tracking-only mode, enqueue, then submit and celebrate. The recorder has
-    /// already stamped :video-offset-ms onto these very plists (step 4).
+    /// already stamped :video-offset-ms onto these very plists (step 4). The
+    /// enqueue happens here on the poll thread; the submission and its toasts
+    /// follow on the submit worker.
     /// </summary>
     internal void HandleCompletedRuns(IReadOnlyList<Plist> runs)
     {
@@ -325,27 +374,56 @@ public sealed class PollLoop : IFrameHooks
             if (_accountMode.LineFor(run, _s.Clock.UniversalTime) is { } line) _s.Log(line);
             _s.Queue.Enqueue(RunEntries.ApplyTrackingMode(run, config.TrackingOnly, config.TrackingPrivate));
         }
-        if (kept.Count > 0 && config.AutoSubmit)
+        if (kept.Count > 0 && config.AutoSubmit) RequestSubmit(toast: true);
+    }
+
+    /// <summary>
+    /// Asks the submit worker for a pass, starting it when idle. Requests made
+    /// while a pass runs coalesce into one more pass; <paramref name="toast"/>
+    /// (a run just completed) makes that pass celebrate its results.
+    /// </summary>
+    private void RequestSubmit(bool toast)
+    {
+        lock (_submitGate)
         {
-            var results = Submit();
-            if (results is not null && config.RankToast)
-            {
-                foreach (var entry in results)
-                {
-                    if (RunDisplay.ToastFor(entry.Data, config.Language) is { } toast)
-                        Guard("toast", () => _s.Toast(toast));
-                }
-            }
+            if (_cancel.IsCancellationRequested) return;
+            _submitPending = true;
+            _submitToast |= toast;
+            _submitWorker ??= Task.Run(SubmitWorker);
         }
     }
 
-    /// <summary>maybe-submit-retry (main.lisp:228).</summary>
-    private void MaybeSubmitRetry()
+    /// <summary>The submit worker: one pass at a time until no request is pending.</summary>
+    private void SubmitWorker()
     {
-        if (Interlocked.Exchange(ref _retry, 0) == 1) Submit();
+        while (true)
+        {
+            bool toast;
+            lock (_submitGate)
+            {
+                if (!_submitPending || _cancel.IsCancellationRequested)
+                {
+                    _submitWorker = null;
+                    return;
+                }
+                toast = _submitToast;
+                _submitPending = false;
+                _submitToast = false;
+            }
+            Guard("submit", () =>
+            {
+                var results = Submit();
+                if (!toast || results is null || !_s.Config.RankToast) return;
+                foreach (var entry in results)
+                {
+                    if (RunDisplay.ToastFor(entry.Data, _s.Config.Language) is { } t)
+                        Guard("toast", () => _s.Toast(t));
+                }
+            });
+        }
     }
 
-    /// <summary>submit-queued! on this thread (synchronous, as in Lisp). Null when no token could be had.</summary>
+    /// <summary>submit-queued! on the submit worker. Null when no token could be had.</summary>
     private IReadOnlyList<RunEntry>? Submit()
     {
         // Deviation (improvement): with nothing unsent there is nothing to do.
@@ -356,6 +434,10 @@ public sealed class PollLoop : IFrameHooks
         {
             return _s.Queue.SubmitQueuedAsync(_s.Config, _s.Registrar, _s.Submitter, _s.MachineName, _cancel.Token)
                 .GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException) when (_cancel.IsCancellationRequested)
+        {
+            return null; // stopping: unanswered entries stay queued
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
@@ -391,6 +473,7 @@ public sealed class PollLoop : IFrameHooks
     /// <summary>maybe-sweep-recordings (main.lisp:33): the size budget, every 120 s.</summary>
     private void MaybeSweepRecordings()
     {
+        if (!_s.ManageRecordingsFolder) return;
         var now = Stopwatch.GetTimestamp();
         if (_lastSweep is { } last && now - last < RecordingRetention.IntervalSeconds * Stopwatch.Frequency) return;
         _lastSweep = now;

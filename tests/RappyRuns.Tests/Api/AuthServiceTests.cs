@@ -22,8 +22,6 @@ public class AuthServiceTests
         Assert.Equal("Desktop client (PC)", AuthService.PairingLabel("PC"));
         Assert.Equal("Desktop client", AuthService.PairingLabel(null));
         Assert.Equal("Desktop client (PC) [login.txt]", AuthService.FileLoginLabel("PC"));
-        Assert.Equal("Desktop client [guest]", AuthService.AnonymousLabel(""));
-        Assert.Equal("Desktop client (PC) [guest]", AuthService.AnonymousLabel("PC"));
     }
 
     [Fact(DisplayName = "pairing: opens the approval page, polls through pending and transport errors, saves the token")]
@@ -145,38 +143,71 @@ public class AuthServiceTests
         Assert.Equal("Token: login.txt login failed (POST /api/login -> 500)", failed.StatusText(Language.En));
     }
 
+    // ---- ensure-submission-token: the queue's one implementation over the real adapter ----
+
+    private sealed class EnsureRig : IDisposable
+    {
+        private readonly string _dir = Path.Combine(Path.GetTempPath(), "rr-ensure-" + Guid.NewGuid().ToString("N"));
+
+        public EnsureRig(Func<SeenRequest, (int, string)> respond, string? serverUrl = null, HttpTransport? transport = null)
+        {
+            Directory.CreateDirectory(_dir);
+            Config = RappyRuns.Core.Config.ConfigStore.Open(_dir);
+            Config.ServerUrl = serverUrl ?? "https://s.example";
+            Handler = new FakeHandler(respond);
+            var api = new ApiClient(transport ?? new HttpTransport(Handler), new RappyRuns.Host.ConfigAuthSettings(Config));
+            Network = new RappyRuns.Host.QueueNetwork(api, _ => "{}", () => "");
+        }
+
+        public RappyRuns.Core.Config.ConfigStore Config { get; }
+        public FakeHandler Handler { get; }
+        public RappyRuns.Host.QueueNetwork Network { get; }
+
+        public Task<string?> Ensure() =>
+            RappyRuns.Core.Store.RunQueue.EnsureSubmissionTokenAsync(Config, Network, "PC");
+
+        public void Dispose()
+        {
+            try
+            {
+                Directory.Delete(_dir, true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
     [Fact(DisplayName = "ensure-submission-token returns an existing token without network")]
     public async Task EnsureExisting()
     {
-        var (auth, handler, _) = Make(_ => (500, ""), new FakeSettings { AnonToken = "eta_g" });
-        Assert.Equal("eta_g", await auth.EnsureSubmissionTokenAsync());
-        Assert.Empty(handler.Requests);
+        using var rig = new EnsureRig(_ => (500, ""));
+        rig.Config.AnonToken = "eta_g";
+        Assert.Equal("eta_g", await rig.Ensure());
+        Assert.Empty(rig.Handler.Requests);
     }
 
     [Fact(DisplayName = "ensure-submission-token registers a guest once and saves it")]
     public async Task EnsureRegisters()
     {
-        var (auth, handler, settings) = Make(_ => (201, """{"token":"eta_new_guest","username":"guest-9"}"""));
-        Assert.Equal("eta_new_guest", await auth.EnsureSubmissionTokenAsync());
-        Assert.Equal("eta_new_guest", settings.AnonToken);
-        Assert.Equal(1, settings.Saves);
-        Assert.Equal("""{"label":"Desktop client (PC) [guest]"}""", handler.Requests[0].Body);
-        Assert.Equal("eta_new_guest", await auth.EnsureSubmissionTokenAsync());
-        Assert.Single(handler.Requests);
+        using var rig = new EnsureRig(_ => (201, """{"token":"eta_new_guest","username":"guest-9"}"""));
+        Assert.Equal("eta_new_guest", await rig.Ensure());
+        Assert.Equal("eta_new_guest", rig.Config.AnonToken);
+        Assert.Equal("""{"label":"Desktop client (PC) [guest]"}""", rig.Handler.Requests[0].Body);
+        Assert.Equal("eta_new_guest", await rig.Ensure());
+        Assert.Single(rig.Handler.Requests);
     }
 
-    [Fact(DisplayName = "submit-queued! parks the queue when registration is unreachable")]
+    [Fact(DisplayName = "ensure-submission-token parks the queue when registration is unreachable or refused")]
     public async Task EnsureUnreachable()
     {
         // Port 9 (discard) refuses immediately; no guest token is saved.
-        var settings = new FakeSettings { ServerUrl = "http://127.0.0.1:9" };
-        var auth = new AuthService(new ApiClient(new HttpTransport(), settings), settings, "PC");
-        Assert.Null(await auth.EnsureSubmissionTokenAsync());
-        Assert.Equal("", auth.SubmissionToken);
-        Assert.Equal(0, settings.Saves);
-        var (limited, _, s2) = Make(_ => (429, """{"error":"rate"}"""));
-        Assert.Null(await limited.EnsureSubmissionTokenAsync());
-        Assert.Equal("", s2.AnonToken);
+        using var offline = new EnsureRig(_ => (500, ""), "http://127.0.0.1:9", new HttpTransport());
+        Assert.Null(await offline.Ensure());
+        Assert.Equal("", offline.Config.SubmissionToken);
+        using var limited = new EnsureRig(_ => (429, """{"error":"rate"}"""));
+        Assert.Null(await limited.Ensure());
+        Assert.Equal("", limited.Config.AnonToken);
     }
 
     [Fact(DisplayName = "check-token: unlinked makes no request and revokes Pin Share")]

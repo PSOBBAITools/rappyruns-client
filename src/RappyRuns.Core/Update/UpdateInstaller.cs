@@ -15,7 +15,13 @@ public sealed record StagedUpdate(string StageDir, string NewExePath);
 /// <param name="OldExe"><see cref="RunningExe"/> + ".old": the rollback copy.</param>
 /// <param name="TargetExe">&lt;installDir&gt;\RappyRunsClient.exe, the new build.</param>
 /// <param name="InstallDir">The install folder.</param>
-public sealed record InstalledUpdate(string RunningExe, string OldExe, string TargetExe, string InstallDir);
+/// <param name="TargetBackup">
+/// When the running exe had another name and a RappyRunsClient.exe already existed,
+/// that file moved aside here (<see cref="TargetExe"/> + ".old") so a rollback can put
+/// it back; null otherwise.
+/// </param>
+public sealed record InstalledUpdate(string RunningExe, string OldExe, string TargetExe, string InstallDir,
+    string? TargetBackup = null);
 
 /// <summary>
 /// The in-process replacement for the Lisp PowerShell helper (<c>updater-script-text</c>,
@@ -94,7 +100,12 @@ public static class UpdateInstaller
     {
         var old = runningExe + UpdateConstants.OldSuffix;
         var target = Path.Combine(installDir, UpdateConstants.ExeName);
-        var installed = new InstalledUpdate(runningExe, old, target, installDir);
+        // A running exe of another name leaves an existing RappyRunsClient.exe in
+        // place: it moves aside too, or a rollback would delete a file this
+        // update never owned.
+        var sameName = string.Equals(Path.GetFullPath(runningExe), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase);
+        var installed = new InstalledUpdate(runningExe, old, target, installDir,
+            sameName ? null : target + UpdateConstants.OldSuffix);
         var moved = false;
         for (var i = 0; i < moveAttempts && !moved; i++)
         {
@@ -112,6 +123,11 @@ public static class UpdateInstaller
         if (!moved) throw new UpdateException("could not move the old exe aside");
         try
         {
+            if (installed.TargetBackup is { } backup)
+            {
+                if (File.Exists(target)) File.Move(target, backup, overwrite: true);
+                else installed = installed with { TargetBackup = null };
+            }
             File.Copy(staged.NewExePath, target, overwrite: true);
             var newData = Path.Combine(staged.StageDir, "data");
             if (Directory.Exists(newData)) MergeCopy(newData, Path.Combine(installDir, "data"));
@@ -141,17 +157,32 @@ public static class UpdateInstaller
     /// Restores "&lt;exe&gt;.old" as the running exe's original name, first removing the
     /// half-installed new exe (whether it has the same or a different name — the Lisp
     /// script left a partially copied same-name exe in place, which then blocked the
-    /// rollback). Also used when launching the new exe fails. Best effort, never throws.
+    /// rollback). A RappyRunsClient.exe that existed beside a differently named running
+    /// exe is restored from <see cref="InstalledUpdate.TargetBackup"/>, never lost. Also
+    /// used when launching the new exe fails. Best effort, never throws.
     /// </summary>
     public static bool Rollback(InstalledUpdate installed)
     {
         try
         {
-            if (!File.Exists(installed.OldExe)) return File.Exists(installed.RunningExe);
-            if (File.Exists(installed.TargetExe)) File.Delete(installed.TargetExe);
-            if (File.Exists(installed.RunningExe)) File.Delete(installed.RunningExe);
-            File.Move(installed.OldExe, installed.RunningExe);
-            return true;
+            bool restored;
+            if (File.Exists(installed.OldExe))
+            {
+                if (File.Exists(installed.TargetExe)) File.Delete(installed.TargetExe);
+                if (File.Exists(installed.RunningExe)) File.Delete(installed.RunningExe);
+                File.Move(installed.OldExe, installed.RunningExe);
+                restored = true;
+            }
+            else
+            {
+                restored = File.Exists(installed.RunningExe);
+            }
+            if (installed.TargetBackup is { } backup && File.Exists(backup))
+            {
+                if (File.Exists(installed.TargetExe)) File.Delete(installed.TargetExe);
+                File.Move(backup, installed.TargetExe);
+            }
+            return restored;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

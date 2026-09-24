@@ -454,6 +454,60 @@ public class UpdaterTests : IDisposable
         Assert.False(File.Exists(installed.OldExe));
     }
 
+    [Fact(DisplayName = "a failed update from another exe name restores an existing RappyRunsClient.exe it never owned")]
+    public void RollbackKeepsForeignTarget()
+    {
+        var i = MakeInstall(exeName: "OldName.exe");
+        var canonical = Path.Combine(i.Dir, "RappyRunsClient.exe");
+        File.WriteAllText(canonical, "other install");
+        var staged = UpdateInstaller.Stage(i.Zip, i.Stage);
+        var locked = Path.Combine(i.Dir, "data", "quest-triggers.sexp");
+        using (new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.None))
+            Assert.Throws<UpdateException>(() => UpdateInstaller.Install(staged, i.Exe, i.Dir));
+        Assert.Equal("old exe", File.ReadAllText(i.Exe));
+        Assert.Equal("other install", File.ReadAllText(canonical));
+        Assert.Empty(Directory.GetFiles(i.Dir, "*.old"));
+    }
+
+    [Fact(DisplayName = "an update from another exe name moves an existing RappyRunsClient.exe aside; rollback puts both back")]
+    public void ForeignTargetMovedAsideAndRestored()
+    {
+        var i = MakeInstall(exeName: "OldName.exe");
+        var canonical = Path.Combine(i.Dir, "RappyRunsClient.exe");
+        File.WriteAllText(canonical, "other install");
+        var installed = UpdateInstaller.Install(UpdateInstaller.Stage(i.Zip, i.Stage), i.Exe, i.Dir);
+        Assert.Equal("new exe", File.ReadAllText(canonical));
+        Assert.Equal("other install", File.ReadAllText(canonical + ".old"));
+        Assert.Equal("old exe", File.ReadAllText(i.Exe + ".old"));
+        Assert.True(UpdateInstaller.Rollback(installed));
+        Assert.Equal("old exe", File.ReadAllText(i.Exe));
+        Assert.Equal("other install", File.ReadAllText(canonical));
+        Assert.Empty(Directory.GetFiles(i.Dir, "*.old"));
+    }
+
+    [Fact(DisplayName = "startup cleanup finds every *.exe.old, whatever the previous exe was called")]
+    public void OldExeNamesIn()
+    {
+        var install = P("install-old-names");
+        Directory.CreateDirectory(install);
+        File.WriteAllText(Path.Combine(install, "RenamedClient.exe.old"), "x");
+        File.WriteAllText(Path.Combine(install, "RappyRunsClient.exe.old"), "x");
+        File.WriteAllText(Path.Combine(install, "notes.txt.old"), "x");
+        var names = UpdateFiles.OldExeNamesIn(install).Order(StringComparer.Ordinal).ToList();
+        Assert.Equal(["RappyRunsClient.exe", "RenamedClient.exe"], names);
+        Assert.True(UpdateFiles.CleanupOldUpdateFiles(install, P("tmp-old-names"), names));
+        Assert.Equal([Path.Combine(install, "notes.txt.old")], Directory.GetFiles(install));
+        Assert.Empty(UpdateFiles.OldExeNamesIn(P("missing-folder")));
+    }
+
+    [Fact(DisplayName = "windows-temp-dir: TEMP, then TMP, then home - the order the Lisp bridge updater uses")]
+    public void TempDirOrder()
+    {
+        Assert.Equal(@"C:\T", UpdateFiles.TempDir(n => n switch { "TEMP" => @"C:\T", "TMP" => @"C:\M", _ => null }));
+        Assert.Equal(@"C:\M", UpdateFiles.TempDir(n => n switch { "TEMP" => "", "TMP" => @"C:\M", _ => null }));
+        Assert.Equal(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), UpdateFiles.TempDir(_ => null));
+    }
+
     [Fact(DisplayName = "a Lisp-built zip (backslash entries, data + ffmpeg) installs for a downgrade")]
     public void LispZipDowngrade()
     {

@@ -193,8 +193,9 @@ public sealed class AuthService
     /// <summary><c>file-login-label</c>: the pairing label + " [login.txt]".</summary>
     public static string FileLoginLabel(string? machineName) => PairingLabel(machineName) + " [login.txt]";
 
-    /// <summary><c>anonymous-client-label</c>: the pairing label + " [guest]".</summary>
-    public static string AnonymousLabel(string? machineName) => PairingLabel(machineName) + " [guest]";
+    // ensure-submission-token and anonymous-client-label live with the queue
+    // (RunQueue.EnsureSubmissionTokenAsync, Submission.AnonymousClientLabel),
+    // the only caller.
 
     private static string? SafeMachineName()
     {
@@ -308,28 +309,6 @@ public sealed class AuthService
         }
     }
 
-    /// <summary>
-    /// <c>ensure-submission-token</c> (spec core §8.4): the submission token, first
-    /// registering an anonymous guest (label "... [guest]") when there is neither a
-    /// linked nor a guest token; the new guest token is saved. Any failure returns null
-    /// ("not now": the queue stays queued and the next pass registers again).
-    /// </summary>
-    public async Task<string?> EnsureSubmissionTokenAsync(CancellationToken cancellationToken = default)
-    {
-        var token = SubmissionToken;
-        if (token.Length > 0) return token;
-        try
-        {
-            var guest = await _api.RegisterAnonymousAsync(AnonymousLabel(_machineName), cancellationToken).ConfigureAwait(false);
-            _settings.AnonToken = guest.Token;
-            _settings.Save();
-            return guest.Token;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return null;
-        }
-    }
 
     /// <summary>
     /// <c>check-token</c> (spec core §8.5): verify the linked token against GET /api/me.

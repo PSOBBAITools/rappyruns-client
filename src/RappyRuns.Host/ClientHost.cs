@@ -85,15 +85,7 @@ public sealed class ClientHost : IDisposable
         // Game.
         Clock = SystemGameClock.Instance;
         Catalog = new QuestCatalog();
-        try
-        {
-            Catalog.LoadBuiltin(QuestCatalog.ResolvePath(options.ExeDir));
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException or InvalidDataException)
-        {
-            // The server's definitions still arrive with check-server.
-            RecordingLog.Write("quest-triggers.sexp could not be read: " + e.Message);
-        }
+        LoadBuiltinQuests(Catalog, QuestCatalog.ResolvePath(options.ExeDir), RecordingLog.Write);
         var detector = new Detector(Catalog, Clock);
         RunLogs = new RunLogs(Clock);
         TriggerLog = new TriggerLog(options.TriggerLogPath, Clock);
@@ -204,6 +196,9 @@ public sealed class ClientHost : IDisposable
             },
             PinSets = PinSets,
             TriggerLog = TriggerLog,
+            // A developer copy's queue does not know the installed client's
+            // recordings in the shared folder: never sweep or clean it.
+            ManageRecordingsFolder = !(options.MultiInstance || options.Isolated),
             SetGameExe = exe => PinShare.GameExe = exe,
             RecordingSettings = RecordingSettings,
             MaybeStartGdigrabProbe = Gdigrab.MaybeStart,
@@ -215,6 +210,26 @@ public sealed class ClientHost : IDisposable
             MachineName = SafeMachineName(),
         };
         Poll = new PollLoop(_pollServices);
+    }
+
+    /// <summary>
+    /// data\quest-triggers.sexp into the catalog, never fatal: anything
+    /// (unreadable, malformed s-expressions, unexpected shapes) is logged and
+    /// leaves the builtin set empty; the server's definitions still arrive with
+    /// check-server. False when the load failed.
+    /// </summary>
+    internal static bool LoadBuiltinQuests(QuestCatalog catalog, string path, Action<string> log)
+    {
+        try
+        {
+            catalog.LoadBuiltin(path);
+            return true;
+        }
+        catch (Exception e) when (e is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
+        {
+            log($"quest-triggers.sexp could not be read: {e.GetType().Name}: {e.Message}");
+            return false;
+        }
     }
 
     // ---- services (internal: the IPC methods use them) ----
@@ -315,7 +330,11 @@ public sealed class ClientHost : IDisposable
             if (!Options.Isolated && !Options.MultiInstance)
             {
                 StartupMarker.Write();
-                _ = UpdateFiles.CleanupOldUpdateFilesAsync(Updater.InstallDir);
+                // Install moved the previous process's exe to "<its name>.old",
+                // whatever it was called: sweep every such leftover.
+                var installDir = Updater.InstallDir;
+                _ = UpdateFiles.CleanupOldUpdateFilesAsync(installDir,
+                    extraOldExeNames: UpdateFiles.OldExeNamesIn(installDir));
             }
             // After this response: the UI has its strings by then.
             _ = Task.Run(async () =>
@@ -655,6 +674,8 @@ public sealed class ClientHost : IDisposable
             }
             if (!Options.MultiInstance) SingleInstance.ClaimForProcess();
             SetVersionNote(Msg.Of("update-download-failed"), error: true);
+            // The old loop's unwind closed the trigger log; reopen it like Start did.
+            if (Config.TriggerLog) Try("trigger log", () => TriggerLog.Start());
             Poll = new PollLoop(_pollServices);
             Poll.Start();
         })
@@ -783,10 +804,12 @@ public sealed class ClientHost : IDisposable
     internal void PublishRuns(bool force = false)
     {
         if (_sink is null || Volatile.Read(ref _helloCount) == 0) return;
-        var rows = BuildRuns();
-        var json = IpcJson.Serialize(rows);
+        // Build, compare and emit under one lock: built outside, an older list
+        // could be emitted after a newer one (Queue.Changed fires on any thread).
         lock (_runsLock)
         {
+            var rows = BuildRuns();
+            var json = IpcJson.Serialize(rows);
             if (!force && json == _lastRunsJson) return;
             _lastRunsJson = json;
             _sink.Emit("runs", rows);

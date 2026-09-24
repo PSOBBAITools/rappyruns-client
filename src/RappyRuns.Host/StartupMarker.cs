@@ -1,5 +1,6 @@
 using System.Text;
 using RappyRuns.Core;
+using RappyRuns.Core.Update;
 
 namespace RappyRuns.Host;
 
@@ -13,8 +14,12 @@ namespace RappyRuns.Host;
 /// </summary>
 public static class StartupMarker
 {
-    // Resolved at run time, never cached at build time (spec core §3.1).
-    public static string FilePath => Path.Combine(Path.GetTempPath(), "rappyruns-client-started.txt");
+    /// <summary>
+    /// started-marker-path (updater.lisp:302): in <c>windows-temp-dir</c> (TEMP, then
+    /// TMP, then home) - the bridge helper reads it there, so never
+    /// <see cref="Path.GetTempPath"/> (TMP first). Resolved at run time (spec core §3.1).
+    /// </summary>
+    public static string FilePath => Path.Combine(UpdateFiles.TempDir(), "rappyruns-client-started.txt");
 
     private static bool _written;
 

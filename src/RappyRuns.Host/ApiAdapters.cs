@@ -40,9 +40,22 @@ public sealed class QueueNetwork(ApiClient api, Func<Plist, string> runJson, Fun
 {
     public async Task<SubmitResult> SubmitAsync(Plist entry, string token, CancellationToken cancellationToken)
     {
+        string body;
         try
         {
-            var r = await api.SubmitRunAsync(runJson(entry), token, cancellationToken).ConfigureAwait(false);
+            body = runJson(entry);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            // One unencodable entry fails alone (:failed with the reason); an
+            // escaping exception would abort every later pass at this entry.
+            var reason = $"could not encode the run: {e.GetType().Name}: {e.Message}";
+            RecordingLog.Write("submit: " + reason);
+            return SubmitResult.ApiError(reason);
+        }
+        try
+        {
+            var r = await api.SubmitRunAsync(body, token, cancellationToken).ConfigureAwait(false);
             var outcome = r.Outcome switch
             {
                 ApiSubmitOutcome.Created => StoreSubmitOutcome.Created,

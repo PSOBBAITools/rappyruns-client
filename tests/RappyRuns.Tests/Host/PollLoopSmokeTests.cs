@@ -80,7 +80,23 @@ public sealed class PollLoopSmokeTests : IDisposable
         List<PollTick> Ticks,
         List<string?> GameExe);
 
-    private Rig Build(bool attached = true, bool record = true)
+    /// <summary>A submitter that blocks until released (an unreachable server).</summary>
+    private sealed class BlockingSubmitter : IRunSubmitter
+    {
+        public ManualResetEventSlim Entered { get; } = new();
+        public ManualResetEventSlim Release { get; } = new();
+
+        public async Task<SubmitResult> SubmitAsync(RappyRuns.Core.Sexp.Plist entry, string token, CancellationToken cancellationToken)
+        {
+            Entered.Set();
+            await Task.Run(() => Release.Wait(cancellationToken), cancellationToken);
+            return SubmitResult.ApiError("offline");
+        }
+    }
+
+    private static readonly TimeSpan Drain = TimeSpan.FromSeconds(10);
+
+    private Rig Build(bool attached = true, bool record = true, bool manageRecordings = true, IRunSubmitter? submitter = null)
     {
         var config = ConfigStore.Open(_dir);
         config.ServerUrl = "https://s.example";
@@ -121,9 +137,10 @@ public sealed class PollLoopSmokeTests : IDisposable
             Recorder = recorder,
             Queue = queue,
             Registrar = network,
-            Submitter = network,
+            Submitter = submitter ?? network,
             Uploader = network,
             Ghost = new GhostSession(),
+            ManageRecordingsFolder = manageRecordings,
             SetGameExe = gameExe.Add,
             Toast = toasts.Add,
             Tick = ticks.Add,
@@ -153,6 +170,7 @@ public sealed class PollLoopSmokeTests : IDisposable
         Assert.Equal(1, rig.Backend.Count("start")); // the capture began on the quest edge
         Frame(rig, TtfReader(start: 1), ms: 60_000);
         Frame(rig, TtfReader(start: 1, end: 1));
+        Assert.True(rig.Loop.WaitForSubmissions(Drain)); // the submit worker
 
         var entry = Assert.Single(rig.Queue.Entries);
         Assert.Equal(RunStatus.Submitted, entry.Status);
@@ -212,6 +230,7 @@ public sealed class PollLoopSmokeTests : IDisposable
 
         rig.Loop.RequestRetry();
         rig.Loop.Iterate();
+        Assert.True(rig.Loop.WaitForSubmissions(Drain));
         Assert.Equal(RunStatus.Submitted, Assert.Single(rig.Queue.Entries).Status);
         Assert.Contains(rig.Ticks, t => !t.Attached);
     }
@@ -222,8 +241,68 @@ public sealed class PollLoopSmokeTests : IDisposable
         var rig = Build(attached: false);
         rig.Loop.RequestRetry();
         rig.Loop.Iterate();
+        Assert.True(rig.Loop.WaitForSubmissions(Drain));
         Assert.Empty(rig.Server.Requests);
         Assert.Equal("", rig.Config.AnonToken);
+    }
+
+    [Fact(DisplayName = "an unreachable server never blocks the poll thread: the run is timed, submitted on the worker")]
+    public void SubmissionDoesNotBlockFrames()
+    {
+        var submitter = new BlockingSubmitter();
+        var rig = Build(record: false, submitter: submitter);
+        rig.Config.AnonToken = "anon-1"; // no registration round trip
+        rig.Loop.Iterate();
+        Frame(rig, LobbyReader());
+        Frame(rig, TtfReader(start: 1));
+        Frame(rig, TtfReader(start: 1), ms: 30_000);
+        Frame(rig, TtfReader(start: 1, end: 1)); // completes: enqueued here, submit requested
+        var entry = Assert.Single(rig.Queue.Entries);
+        Assert.Equal(RunStatus.Queued, entry.Status);
+        Assert.True(submitter.Entered.Wait(Drain), "the worker picked the run up");
+
+        // The worker hangs on the server; frames and a retry request keep flowing.
+        Frame(rig, LobbyReader());
+        rig.Loop.RequestRetry();
+        Frame(rig, LobbyReader());
+        Assert.False(rig.Loop.WaitForSubmissions(TimeSpan.FromMilliseconds(50)));
+
+        submitter.Release.Set();
+        Assert.True(rig.Loop.WaitForSubmissions(Drain));
+        Assert.Equal(RunStatus.Failed, Assert.Single(rig.Queue.Entries).Status);
+        Assert.Empty(rig.Toasts);
+    }
+
+    [Fact(DisplayName = "stop cancels a hanging submission pass instead of waiting for it")]
+    public void StopAbandonsHangingSubmission()
+    {
+        var submitter = new BlockingSubmitter();
+        var rig = Build(attached: false, submitter: submitter);
+        rig.Config.AnonToken = "anon-1";
+        rig.Queue.Enqueue(new RappyRuns.Core.Sexp.Plist()
+            .With("QUEST-SLUG", "ep1-towards-the-future")
+            .With("TIME-MS", 61_000L));
+        rig.Loop.RequestRetry();
+        Assert.True(submitter.Entered.Wait(Drain));
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        Assert.True(rig.Loop.Stop(TimeSpan.FromSeconds(1)));
+        Assert.True(started.Elapsed < PollLoop.SubmitStopWait + TimeSpan.FromSeconds(2));
+        Assert.True(rig.Loop.WaitForSubmissions(Drain));
+        Assert.Equal(RunStatus.Queued, Assert.Single(rig.Queue.Entries).Status);
+    }
+
+    [Theory(DisplayName = "a developer copy never cleans or sweeps the shared recordings folder")]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DevCopyLeavesRecordingsAlone(bool manage)
+    {
+        var rig = Build(attached: false, manageRecordings: manage);
+        rig.Config.Set(ConfigKeys.RecordMaxTotalGb, RappyRuns.Core.Sexp.SexpNode.Int(1));
+        rig.Backend.Stale = [Path.Combine(_dir, "stale.mkv")];
+        rig.Backend.Recordings = [new RecordingFile(Path.Combine(_dir, "big.mp4"), 2L * 1024 * 1024 * 1024, 100)];
+        rig.Loop.Startup();
+        rig.Loop.Iterate();
+        Assert.Equal(manage ? 2 : 0, rig.Backend.Count("delete"));
     }
 
     [Fact(DisplayName = "shutdown stops the recorder and clears the game exe")]

@@ -231,21 +231,11 @@ public sealed class ConfigStore
         });
 
     /// <summary>
-    /// record-max-total-bytes (recording.lisp:1427): the cap in bytes,
-    /// <c>round(gb * 1024^3)</c> with banker's rounding, or null when unset,
-    /// zero or negative (unlimited). A single-float setting is multiplied in
-    /// single precision, as in Lisp.
+    /// record-max-total-bytes (recording.lisp:1427): the cap in bytes, or null
+    /// when unset, zero or negative (unlimited). The one implementation is
+    /// <see cref="Media.RecordingRetention.RecordMaxTotalBytes(SexpNode?)"/>.
     /// </summary>
-    public long? RecordMaxTotalBytes => RecordMaxTotalBytesOf(Get(ConfigKeys.RecordMaxTotalGb));
-
-    /// <summary>The pure part of <see cref="RecordMaxTotalBytes"/>.</summary>
-    public static long? RecordMaxTotalBytesOf(SexpNode value) => value switch
-    {
-        SInteger { Value: > 0 } i => i.Value * 1024 * 1024 * 1024,
-        SFloat { Value: > 0, IsDouble: false } f => (long)MathF.Round((float)f.Value * 1073741824f, MidpointRounding.ToEven),
-        SFloat { Value: > 0 } d => (long)Math.Round(d.Value * 1073741824d, MidpointRounding.ToEven),
-        _ => null,
-    };
+    public long? RecordMaxTotalBytes => Media.RecordingRetention.RecordMaxTotalBytes(Get(ConfigKeys.RecordMaxTotalGb));
 
     public bool AutoPublish { get => GetBool(ConfigKeys.AutoPublish); set => SetBool(ConfigKeys.AutoPublish, value); }
 

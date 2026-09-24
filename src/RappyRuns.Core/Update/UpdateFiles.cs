@@ -10,16 +10,26 @@ public static class UpdateFiles
     private static readonly byte[] ZipMagic = [0x50, 0x4B, 0x03, 0x04]; // "PK\3\4"
 
     /// <summary>
-    /// <c>windows-temp-dir</c>: %TEMP%, else %TMP%, else the .NET temp path. TEMP comes
-    /// first (like the Lisp client) so the C# client finds the leftovers the Lisp
-    /// updater left behind.
+    /// <c>windows-temp-dir</c> (updater.lisp:296): %TEMP%, else %TMP%, else the user's
+    /// home folder, exactly as the Lisp resolves it. TEMP comes first (unlike
+    /// <see cref="Path.GetTempPath"/>, which asks TMP first) so the C# client and the
+    /// Lisp bridge updater agree on the startup marker and the update leftovers.
+    /// <para>Contract paths by resolution: this one - the startup marker, the update
+    /// zip, the stage folder and the Lisp helper script (all <c>windows-temp-dir</c> in
+    /// Lisp). <see cref="Path.GetTempPath"/> - the recording log and the gdigrab probe's
+    /// stderr (<c>hcl:get-temp-directory</c> in Lisp).</para>
     /// </summary>
-    public static string TempDir()
+    public static string TempDir() => TempDir(Environment.GetEnvironmentVariable);
+
+    /// <summary><see cref="TempDir()"/> over a given environment (tests).</summary>
+    public static string TempDir(Func<string, string?> getenv)
     {
-        var temp = Environment.GetEnvironmentVariable("TEMP");
+        var temp = getenv("TEMP");
         if (!string.IsNullOrEmpty(temp)) return temp;
-        var tmp = Environment.GetEnvironmentVariable("TMP");
-        return string.IsNullOrEmpty(tmp) ? Path.GetTempPath() : tmp;
+        var tmp = getenv("TMP");
+        if (!string.IsNullOrEmpty(tmp)) return tmp;
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return string.IsNullOrEmpty(home) ? Path.GetTempPath() : home;
     }
 
     /// <summary><c>update-zip-path</c>: %TEMP%\RappyRunsClient-update.zip.</summary>
@@ -127,6 +137,30 @@ public static class UpdateFiles
             clean &= TryDelete(old);
         }
         return clean;
+    }
+
+    /// <summary>
+    /// The exe names (without ".old") of every "*.exe.old" in <paramref name="installDir"/>:
+    /// <see cref="UpdateInstaller.Install"/> moves the RUNNING exe to "&lt;its name&gt;.old",
+    /// and a client started under another name (a renamed or pre-rename exe) comes back
+    /// as RappyRunsClient.exe, which cannot know the old name. Deviation from the Lisp
+    /// sweep (RappyRunsClient.exe.old only), which left such files behind.
+    /// </summary>
+    public static IReadOnlyList<string> OldExeNamesIn(string installDir)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(installDir, "*.exe" + UpdateConstants.OldSuffix)
+                .Select(Path.GetFileName)
+                .OfType<string>()
+                .Where(n => n.EndsWith(".exe" + UpdateConstants.OldSuffix, StringComparison.OrdinalIgnoreCase))
+                .Select(n => n[..^UpdateConstants.OldSuffix.Length])
+                .ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return [];
+        }
     }
 
     /// <summary>
