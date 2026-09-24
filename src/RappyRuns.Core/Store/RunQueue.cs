@@ -34,6 +34,16 @@ public sealed class RunQueue
     /// </summary>
     public const long UploadLimitRetrySeconds = 3600;
 
+    /// <summary>
+    /// Consecutive api-errors after which an upload gives up, as a rejection
+    /// does (S17): 12 tries 300 s apart is about an hour. The Lisp client
+    /// retried forever, and some failures never clear on their own (a revoked
+    /// token's 401, a server that answers early and resets the connection).
+    /// The count lives on the entry (<see cref="RunKeys.UploadFailures"/>), so
+    /// it survives restarts; any reply from the server resets it.
+    /// </summary>
+    public const int MaxUploadFailures = 12;
+
     private readonly object _lock = new();
     private readonly object _saveLock = new();
     private readonly Func<long> _now;
@@ -342,7 +352,8 @@ public sealed class RunQueue
     /// <c>:video-attached :video-uploaded</c> with <c>:held</c>/<c>:approved</c>
     /// from the reply's status; the local file is NOT deleted (the retention
     /// sweep reclaims it). A "pending-limit" rejection backs off an hour, any
-    /// other rejection gives up; an api-error backs off five minutes.
+    /// other rejection gives up; an api-error backs off five minutes, and the
+    /// <see cref="MaxUploadFailures"/>th one in a row gives up like a rejection.
     /// Run it on a worker thread, one upload at a time (spec core §9.5).
     /// </summary>
     public async Task<RunEntry> UploadEntryVideoAsync(RunEntry entry, IVideoUploader uploader,
@@ -369,8 +380,12 @@ public sealed class RunQueue
 
             if (result.Outcome == UploadOutcome.ApiError)
             {
+                var failures = ((Find(entry.Id) ?? entry).Get(RunKeys.UploadFailures).AsLong ?? 0) + 1;
                 return Update(entry,
-                    (RunKeys.NextUploadAt, SexpNode.Int(_now() + UploadRetrySeconds)),
+                    failures >= MaxUploadFailures
+                        ? (RunKeys.UploadGivenUp, SexpNode.T)
+                        : (RunKeys.NextUploadAt, SexpNode.Int(_now() + UploadRetrySeconds)),
+                    (RunKeys.UploadFailures, SexpNode.Int(failures)),
                     (RunKeys.UploadError, SexpNode.Str(result.Message ?? "")));
             }
 
@@ -383,18 +398,31 @@ public sealed class RunQueue
                 // Diagnostics must never break the upload flow.
             }
 
+            // The server answered, so any api-error streak is over.
+            (string, SexpNode)[] reset = (Find(entry.Id) ?? entry).Is(RunKeys.UploadFailures)
+                ? [(RunKeys.UploadFailures, SexpNode.Nil)]
+                : [];
             return result.Outcome switch
             {
                 UploadOutcome.Attached or UploadOutcome.Duplicate => Update(entry,
+                [
                     (RunKeys.VideoAttached, SexpNode.T),
                     (RunKeys.VideoUploaded, SexpNode.T),
                     (RunKeys.Held, SexpNode.Bool(result.Status == "held")),
-                    (RunKeys.Approved, SexpNode.Bool(result.Status == "approved"))),
+                    (RunKeys.Approved, SexpNode.Bool(result.Status == "approved")),
+                    .. reset,
+                ]),
                 _ when result.Error == "pending-limit" => Update(entry,
-                    (RunKeys.NextUploadAt, SexpNode.Int(_now() + UploadLimitRetrySeconds))),
+                [
+                    (RunKeys.NextUploadAt, SexpNode.Int(_now() + UploadLimitRetrySeconds)),
+                    .. reset,
+                ]),
                 _ => Update(entry,
+                [
                     (RunKeys.UploadGivenUp, SexpNode.T),
-                    (RunKeys.UploadError, SexpNode.Str(result.Message ?? result.Error ?? "rejected"))),
+                    (RunKeys.UploadError, SexpNode.Str(result.Message ?? result.Error ?? "rejected")),
+                    .. reset,
+                ]),
             };
         }
         finally

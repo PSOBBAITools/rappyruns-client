@@ -323,10 +323,10 @@ duration_ms = run_end_ms + 2000   (run_end_ms が null なら null)
 - 応答: 200/201 → JSON `duplicate` 真なら `:duplicate` 他は `:attached`; 400/403/404/409/411/413 → `:rejected`; 401 → エラー "Invalid or revoked API token"; その他 → エラー。
   - attached/duplicate: `:video-attached t :video-uploaded t :held (status=="held") :approved (status=="approved")`。**ローカルファイルは削除しない** (保持スイープに任せる。即削除は壊れたアップロードを復旧不能にした)。
   - rejected: `error == "pending-limit"` → `next-upload-at = now + 3600s`; それ以外 → `upload-given-up t :upload-error <message|code|"rejected">`。
-  - 通信例外 → `next-upload-at = now + 300s`, `:upload-error`。
+  - 通信例外 → `next-upload-at = now + 300s`, `:upload-error`, `:upload-failures +1`。C# は 12 回連続で `upload-given-up` (core §9.5)。
   - どの結果でも続けて診断送信: `POST /api/runs/<id>/diagnostics` JSON `{"log": <report>, "client_version": <ver>}` (失敗は無視)。
 - **held**: サーバーはクライアントからの動画を `held` (非公開) で受ける。公開はブラウザで本人が行う (issue 105)。クライアントは表示ラベル `:status-video-held` ("video uploaded - publish it in the browser") のみ。自動公開はサーバー側ユーザーフラグ `auto_publish` (GUI チェック → `POST /api/me/auto-publish {"enabled":0|1}`、ON 時は確認ダイアログ、失敗時チェックを戻す。`/api/me` の `auto_publish` で再同期)。
-- 既知リスク (S17): 本番 WinHTTP がボディ未読 close を RST で受けると応答が読めず 300 秒毎に再送し続ける。
+- 既知リスク (S17): 本番 WinHTTP がボディ未読 close を RST で受けると応答が読めず 300 秒毎に再送し続ける。C# は api-error 12 連続 (約 1 時間) で諦める。
 
 **手動 YouTube フロー** (`upload-video-callback` gui.lisp:713):
 - 対象: 選択行 (動画パスがあるもの)。未選択なら最新の「動画パスあり かつ (未 attached または ホスト動画が差し替え可能 = `video-uploaded` かつ `video-url` なし)」。

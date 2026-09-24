@@ -38,6 +38,9 @@ public static class RunKeys
     public const string NextUploadAt = "NEXT-UPLOAD-AT";
     public const string UploadGivenUp = "UPLOAD-GIVEN-UP";
     public const string UploadError = "UPLOAD-ERROR";
+
+    /// <summary>Consecutive api-error upload attempts (C# addition, S17; the Lisp client ignores it).</summary>
+    public const string UploadFailures = "UPLOAD-FAILURES";
 }
 
 /// <summary>The <c>:status</c> keyword names.</summary>
