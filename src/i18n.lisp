@@ -52,7 +52,7 @@
     ("Server: not checked"
      "サーバー: 未確認")
     :server-ok
-    ("Server: OK (~d quests, ~d timed category~:p~@[; ~d local trigger~:p unknown~])"
+    ("Server: OK (~d quests, ~d timed categor~:@p~@[; ~d local trigger~:p unknown~])"
      "サーバー: OK (クエスト ~d 件、計測カテゴリ ~d 件~@[、不明なローカルトリガー ~d 件~])")
     :token-not-checked
     ("Token: not checked"
