@@ -22,7 +22,7 @@ public class Win32BackendTests : IDisposable
 
     public void Dispose()
     {
-        RecordingLog.PathOverride = null;
+        RecordingLog.PathOverride = TestLog.Path;
         try
         {
             Directory.Delete(_dir, recursive: true);
