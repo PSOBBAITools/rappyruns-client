@@ -201,6 +201,20 @@ public sealed class GhostSession
         }
     }
 
+    /// <summary>
+    /// The game exited (C#, S37; the Lisp kept all of it until the next
+    /// attach's first frame): forget the load, the ghost, the race and the
+    /// camera. Poll thread only, after the detach has annotated its aborted
+    /// runs against the ghost.
+    /// </summary>
+    public void Reset()
+    {
+        Volatile.Write(ref _fetchPtr, 0);
+        Ghost = null;
+        Race = null;
+        LiveCamera = null;
+    }
+
     /// <summary>The overlay's ghost snapshot now (see <see cref="GhostOverlayData.From"/>), or null.</summary>
     public GhostOverlayData? OverlayData(long elapsedMs, bool marker) =>
         Race is { } race ? GhostOverlayData.From(race, elapsedMs, marker, Stopwatch.GetTimestamp()) : null;

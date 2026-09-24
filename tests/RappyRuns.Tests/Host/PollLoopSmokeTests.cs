@@ -5,6 +5,7 @@ using RappyRuns.Core.Game;
 using RappyRuns.Core.Ghost;
 using RappyRuns.Core.I18n;
 using RappyRuns.Core.Media;
+using RappyRuns.Core.PinShare;
 using RappyRuns.Core.Store;
 using RappyRuns.Host;
 using RappyRuns.Tests.Api;
@@ -103,7 +104,8 @@ public sealed class PollLoopSmokeTests : IDisposable
     private static readonly TimeSpan Drain = TimeSpan.FromSeconds(10);
 
     private Rig Build(bool attached = true, bool record = true, bool manageRecordings = true, IRunSubmitter? submitter = null,
-        Func<IAnonymousRegistrar, IAnonymousRegistrar>? registrar = null)
+        Func<IAnonymousRegistrar, IAnonymousRegistrar>? registrar = null, GhostSession? ghost = null,
+        PinSetTracker? pinSets = null)
     {
         var config = ConfigStore.Open(_dir.Path);
         config.ServerUrl = "https://s.example";
@@ -146,7 +148,8 @@ public sealed class PollLoopSmokeTests : IDisposable
             Registrar = registrar?.Invoke(network) ?? network,
             Submitter = submitter ?? network,
             Uploader = network,
-            Ghost = new GhostSession(),
+            Ghost = ghost ?? new GhostSession(),
+            PinSets = pinSets,
             ManageRecordingsFolder = manageRecordings,
             SetGameExe = gameExe.Add,
             Toast = toasts.Add,
@@ -220,6 +223,37 @@ public sealed class PollLoopSmokeTests : IDisposable
         var entry = Assert.Single(rig.Queue.Entries);
         Assert.True(entry.Is(RunKeys.Aborted));
         Assert.Null(rig.GameExe.Last());
+    }
+
+    [Fact(DisplayName = "the game exiting forgets the ghost, the race and the pin set (S37)")]
+    public void DetachResetsGhostAndPinSet()
+    {
+        var ghost = new GhostSession();
+        var pinSets = new PinSetTracker(_ => ["ep1-towards-the-future"], () => false);
+        var rig = Build(record: false, ghost: ghost, pinSets: pinSets);
+        rig.Loop.Iterate();
+        Frame(rig, LobbyReader());
+        Frame(rig, TtfReader(start: 1));
+        Frame(rig, TtfReader(start: 1), ms: 20_000);
+        ghost.Ghost = GhostReference.Parse("""{"quest":"ep1-towards-the-future","time_ms":60000,"rooms":[]}""");
+        var ptr = pinSets.FetchPtr;
+        Assert.NotNull(ptr); // the snapshot hook saw the quest load
+        Assert.True(pinSets.Land(ptr, new PinSet(System.Text.Json.JsonDocument.Parse("""{"name":"route","items":{"pins":[]}}""").RootElement)));
+        Assert.NotNull(pinSets.Current);
+        Assert.NotNull(ghost.Race);
+
+        rig.Process!.Alive = false;
+        rig.Loop.Iterate(); // detach
+
+        Assert.Null(ghost.Ghost);
+        Assert.Null(ghost.Race);
+        Assert.Null(ghost.LiveCamera);
+        Assert.Null(pinSets.Current);
+        Assert.Null(pinSets.QuestSlugs);
+        Assert.Null(pinSets.FetchPtr);
+        Assert.False(pinSets.Land(ptr, null), "a fetch still in flight for the exited game lands nowhere");
+        // The detach itself still ran first: the aborted run is queued.
+        Assert.True(Assert.Single(rig.Queue.Entries).Is(RunKeys.Aborted));
     }
 
     [Fact(DisplayName = "Retry submits the queue while no game is running")]

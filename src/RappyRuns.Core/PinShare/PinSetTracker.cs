@@ -139,6 +139,21 @@ public sealed class PinSetTracker
         return true;
     }
 
+    /// <summary>
+    /// The game exited (C#, S37): forget the set, the slugs and the load, as
+    /// an unloaded quest does, so the Settings line stops naming a set for a
+    /// game that is gone and a fetch still in flight lands nowhere.
+    /// </summary>
+    public void Reset()
+    {
+        lock (_lock)
+        {
+            _fetchPtr = null;
+            _questSlugs = null;
+            _current = null;
+        }
+    }
+
     /// <summary>Ask again for the loaded quest's set on the next snapshot (after an overwrite, so the locked copy shows the new pins).</summary>
     public void Refetch()
     {
