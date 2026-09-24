@@ -61,6 +61,7 @@ public sealed class RunQueue
     private readonly Func<string, bool> _fileExists;
     private List<RunEntry> _runs = [];
     private volatile UploadProgress? _uploadProgress;
+    private volatile bool _unsaved; // the last Save failed: the file is older than memory
 
     /// <param name="path">queue.sexp (<see cref="ConfigStore.QueuePath"/> in production).</param>
     /// <param name="universalNow">The clock, as CL universal time; defaults to <see cref="UniversalTime.Now"/>.</param>
@@ -142,9 +143,11 @@ public sealed class RunQueue
             try
             {
                 SexpWriter.WriteFile(Path, form);
+                _unsaved = false;
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
+                _unsaved = true;
                 SaveFailed?.Invoke(this, e);
             }
         }
@@ -178,8 +181,9 @@ public sealed class RunQueue
     /// submitted/duplicate/rejected - the megabytes of frames live on the
     /// server then (spec core §22 #22). Replaces the entry with the same id,
     /// trims, saves and returns the copy. When the entry already left the
-    /// list the copy is still returned, as in Lisp, but nothing is stored,
-    /// saved or announced (no <see cref="Changed"/>).
+    /// list the copy is still returned, as in Lisp, but nothing is stored.
+    /// Deviation (S40): the Lisp still saved then; here a gone entry raises no
+    /// <see cref="Changed"/> and saves only to retry a failed earlier save.
     /// </summary>
     public RunEntry Update(RunEntry entry, IEnumerable<KeyValuePair<string, SexpNode>> updates) =>
         Change(entry, current => Apply(current, updates));
@@ -188,20 +192,23 @@ public sealed class RunQueue
     private RunEntry Change(RunEntry entry, Func<Plist, Plist> change)
     {
         RunEntry updated;
+        bool found;
         lock (_lock)
         {
-            // Build on the current version, not the caller's possibly stale copy.
-            var current = _runs.Find(e => e.Id == entry.Id) ?? entry;
-            updated = new RunEntry(entry.Id, change(current.Raw));
             var index = _runs.FindIndex(e => e.Id == entry.Id);
-            // Gone (cleared or trimmed meanwhile): nothing changed, so no save
-            // and no Changed (S40).
-            if (index < 0) return updated;
-            _runs[index] = updated;
-            _runs = RunEntries.TrimFinished(_runs, e => e.Raw, MaxFinishedRuns, _now());
+            found = index >= 0;
+            // Build on the current version, not the caller's possibly stale copy.
+            updated = new RunEntry(entry.Id, change(found ? _runs[index].Raw : entry.Raw));
+            if (found)
+            {
+                _runs[index] = updated;
+                _runs = RunEntries.TrimFinished(_runs, e => e.Raw, MaxFinishedRuns, _now());
+            }
         }
-        Save();
-        OnChanged();
+        // Gone (cleared or trimmed meanwhile): nothing changed, so no Changed,
+        // and no save unless the last one failed and is owed a retry (S40).
+        if (found || _unsaved) Save();
+        if (found) OnChanged();
         return updated;
     }
 

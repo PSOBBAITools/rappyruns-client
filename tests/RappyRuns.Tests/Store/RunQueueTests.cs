@@ -96,6 +96,24 @@ public sealed class RunQueueTests : IDisposable
     }
 
     [Fact]
+    public void UpdatingAGoneEntryStillRetriesAFailedSave()
+    {
+        var q = Store("(:status :queued)", "(:status :submitted :server-id 1)");
+        var gone = q.Entries.Single(e => e.ServerId == 1);
+        Directory.CreateDirectory(q.Path); // a directory in the way: the save fails
+        var failures = 0;
+        q.SaveFailed += (_, _) => failures++;
+        q.Clear();
+        Assert.Equal(1, failures);
+        Directory.Delete(q.Path);
+        var changes = 0;
+        q.Changed += (_, _) => changes++;
+        q.Update(gone, (RunKeys.Held, SexpNode.T));
+        Assert.Equal(0, changes);
+        Assert.True(File.Exists(q.Path), "the owed save is retried");
+    }
+
+    [Fact]
     public void EntriesWithoutAServerDraftCannotUploadYet() =>
         Assert.Null(Store($"(:status :queued :video-path {V})").UploadCandidate(_now));
 
