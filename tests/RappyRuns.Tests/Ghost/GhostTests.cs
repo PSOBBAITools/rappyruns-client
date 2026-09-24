@@ -275,6 +275,37 @@ public class GhostTests
         Assert.Equal(123456, session.Ghost?.TimeMs);
     }
 
+    [Fact(DisplayName = "a late reply for an earlier load at the same address is dropped; the new load's reply lands (S36)")]
+    public async Task LateReplySameAddress()
+    {
+        var session = new GhostSession();
+        var first = new TaskCompletionSource<string?>();
+        var second = new TaskCompletionSource<string?>();
+        var old = session.MaybeStartFetch(4660, "q", () => Load(), _ => first.Task);
+        session.FetchWanted(0, null, () => Load()); // back to the lobby
+        var fresh = session.MaybeStartFetch(4660, "q", () => Load(), _ => second.Task); // next quest, same address
+        Assert.NotNull(fresh);
+        first.SetResult(GhostPayload); // the slow first reply arrives now
+        await old!;
+        Assert.Null(session.Ghost);
+        second.SetResult(GhostPayload);
+        await fresh;
+        Assert.Equal(123456, session.Ghost?.TimeMs);
+    }
+
+    [Fact(DisplayName = "a reply after Reset and a relaunch at the same address is dropped (S36)")]
+    public async Task LateReplyAfterRelaunch()
+    {
+        var session = new GhostSession();
+        var gate = new TaskCompletionSource<string?>();
+        var old = session.MaybeStartFetch(4660, "q", () => Load(), _ => gate.Task);
+        session.Reset(); // the game exited
+        Assert.Null(session.MaybeStartFetch(4660, "q", () => Load(enabled: false), _ => Task.FromResult<string?>(null)));
+        gate.SetResult(GhostPayload);
+        await old!;
+        Assert.Null(session.Ghost);
+    }
+
     [Fact(DisplayName = "Reset (the game exited) drops the ghost, the race and a fetch still in flight (S37)")]
     public async Task ResetDropsInFlightFetch()
     {

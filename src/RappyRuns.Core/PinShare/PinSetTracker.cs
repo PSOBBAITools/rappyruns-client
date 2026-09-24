@@ -30,6 +30,7 @@ public sealed class PinSetTracker
     private PinSet? _current;
     private IReadOnlyList<string>? _questSlugs;
     private long? _fetchPtr;
+    private long _load; // S36: bumped per quest load, Refetch and Reset
 
     /// <param name="resolveSlugs">Every category slug matching the quest, primary first (Lisp <c>find-quest-defs</c> → <c>quest-def-slug</c>).</param>
     /// <param name="fetchAllowed">
@@ -72,6 +73,16 @@ public sealed class PinSetTracker
     }
 
     /// <summary>
+    /// The current quest load's number (C#, S36). A fetch lands only while it
+    /// is unchanged: the quest pointer alone cannot tell a later quest loaded
+    /// at the same address (or a relaunched game) from the one the fetch was for.
+    /// </summary>
+    public long LoadId
+    {
+        get { lock (_lock) return _load; }
+    }
+
+    /// <summary>
     /// The slugs to fetch a pin set for when <paramref name="snapshot"/>'s
     /// quest has just loaded, else null (pinshare.lisp:663). A null snapshot
     /// is a failed read (normal for a frame at warps) and changes nothing -
@@ -79,24 +90,34 @@ public sealed class PinSetTracker
     /// No quest loaded forgets the set, the slugs and the load, so a quest's
     /// pins never show up in the next one.
     /// </summary>
-    public IReadOnlyList<string>? FetchWanted(PinShareQuest? snapshot)
+    public IReadOnlyList<string>? FetchWanted(PinShareQuest? snapshot) => Wanted(snapshot).Slugs;
+
+    // FetchWanted plus the load it started, read in the same step.
+    private (IReadOnlyList<string>? Slugs, long Load) Wanted(PinShareQuest? snapshot)
     {
-        if (snapshot is null) return null;
+        if (snapshot is null) return (null, 0);
+        long load;
         lock (_lock)
         {
             if (snapshot.QuestPtr <= 0)
             {
                 ForgetLoad();
-                return null;
+                return (null, 0);
             }
-            if (snapshot.QuestName is null || snapshot.QuestPtr == _fetchPtr) return null;
+            if (snapshot.QuestName is null || snapshot.QuestPtr == _fetchPtr) return (null, 0);
             _fetchPtr = snapshot.QuestPtr;
             _current = null;
+            load = ++_load;
         }
         var slugs = _resolveSlugs(snapshot);
         var list = slugs.Count > 0 ? slugs : null;
-        lock (_lock) _questSlugs = list;
-        return list is not null && _fetchAllowed() ? list : null;
+        lock (_lock)
+        {
+            // A Reset / newer load meanwhile owns the slugs now.
+            if (load != _load) return (null, 0);
+            _questSlugs = list;
+        }
+        return (list is not null && _fetchAllowed() ? list : null, load);
     }
 
     /// <summary>
@@ -107,9 +128,8 @@ public sealed class PinSetTracker
     /// </summary>
     public Task? OnSnapshot(PinShareQuest? snapshot, CancellationToken cancellationToken = default)
     {
-        var slugs = FetchWanted(snapshot);
+        var (slugs, load) = Wanted(snapshot);
         if (slugs is null || _fetch is null) return null;
-        var ptr = FetchPtr;
         return Task.Run(async () =>
         {
             PinSet? set = null;
@@ -121,16 +141,16 @@ public sealed class PinSetTracker
             {
                 _log?.Invoke($"pin set fetch failed: {e.Message}");
             }
-            Land(ptr, set);
+            Land(load, set);
         }, CancellationToken.None);
     }
 
-    /// <summary>Adopts a fetched set when <paramref name="ptr"/> is still the current load; true when adopted.</summary>
-    public bool Land(long? ptr, PinSet? set)
+    /// <summary>Adopts a fetched set when <paramref name="load"/> (<see cref="LoadId"/> at the fetch) is still the current load; true when adopted.</summary>
+    public bool Land(long load, PinSet? set)
     {
         lock (_lock)
         {
-            if (ptr != _fetchPtr) return false;
+            if (load != _load) return false;
             _current = set;
         }
         if (set is not null) _log?.Invoke($"pin share: drawing pin set \"{set.DisplayName}\"");
@@ -150,6 +170,7 @@ public sealed class PinSetTracker
     // Callers hold _lock.
     private void ForgetLoad()
     {
+        _load++;
         _fetchPtr = null;
         _questSlugs = null;
         _current = null;
@@ -158,7 +179,11 @@ public sealed class PinSetTracker
     /// <summary>Ask again for the loaded quest's set on the next snapshot (after an overwrite, so the locked copy shows the new pins).</summary>
     public void Refetch()
     {
-        lock (_lock) _fetchPtr = null;
+        lock (_lock)
+        {
+            _fetchPtr = null;
+            _load++; // the pre-overwrite reply still in flight is stale
+        }
     }
 
     /// <summary>The Settings line naming the set drawn for the loaded quest (gui.lisp:1229).</summary>

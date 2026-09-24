@@ -227,7 +227,7 @@ public class PinShareRelayIntegrationTests
         await WaitFor(() => supervisor.Status.Kind == PinShareStatusKind.NoChannel, "no-channel");
 
         tracker.FetchWanted(new PinShareQuest(42, "Q"));
-        tracker.Land(42, new PinSet(PinShareJson.TryParse("""{"name":"Route","items":{"pins":[{"area":1,"x":0,"y":0,"z":0}]}}""")!.Value));
+        tracker.Land(tracker.LoadId, new PinSet(PinShareJson.TryParse("""{"name":"Route","items":{"pins":[{"area":1,"x":0,"y":0,"z":0}]}}""")!.Value));
         await WaitFor(() => Inbox(game).Contains("pinset\tRoute\nend\n", StringComparison.Ordinal), "local set drawn");
         Assert.Contains("status\tlocal\t\n", Inbox(game), StringComparison.Ordinal);
         Assert.Equal(new PinShareStatus(PinShareStatusKind.LocalOnly, "Route"), supervisor.Status);
@@ -318,8 +318,9 @@ public class PinSharePermissionAndFetchTests
         Assert.Equal("Pin set: \"S\" by T", tracker.PinSetText(RappyRuns.Core.I18n.Language.En));
 
         // A late answer for load 10 after load 11 started is dropped.
+        var load10 = tracker.LoadId;
         tracker.FetchWanted(new PinShareQuest(11, "B"));
-        Assert.False(tracker.Land(10, new PinSet(Json("""{"name":"old","items":{}}"""))));
+        Assert.False(tracker.Land(load10, new PinSet(Json("""{"name":"old","items":{}}"""))));
         Assert.Null(tracker.Current);
 
         // Refetch after an overwrite asks again for the same load.
@@ -335,6 +336,50 @@ public class PinSharePermissionAndFetchTests
         Assert.Equal(
             "Pin set: none for this quest (choose one on the quest's Pin sets tab on the site)",
             new PinSetTracker(_ => ["x"], () => false).Also(t => t.FetchWanted(new PinShareQuest(1, "Q"))).PinSetText(RappyRuns.Core.I18n.Language.En));
+    }
+
+    [Fact(DisplayName = "pin sets: a late reply for an earlier load at the same address, or from before a Refetch or Reset, is dropped (S36)")]
+    public async Task LateReplySameAddress()
+    {
+        // The fetch runs on a pool thread: each call hands the test its reply to complete.
+        using var replies = new System.Collections.Concurrent.BlockingCollection<TaskCompletionSource<JsonElement?>>();
+        TaskCompletionSource<JsonElement?> Next() =>
+            replies.TryTake(out var reply, TimeSpan.FromSeconds(10)) ? reply : throw new TimeoutException("no fetch started");
+        var tracker = new PinSetTracker(_ => ["ep1-a"], () => true, (_, _, _) =>
+        {
+            var reply = new TaskCompletionSource<JsonElement?>();
+            replies.Add(reply);
+            return reply.Task;
+        });
+        JsonElement Set(string name) => Json($$$"""{"name":"{{{name}}}","items":{"pins":[]}}""");
+
+        var old = tracker.OnSnapshot(new PinShareQuest(10, "A"))!;
+        var first = Next();
+        tracker.FetchWanted(new PinShareQuest(0, null)); // back to the lobby
+        var fresh = tracker.OnSnapshot(new PinShareQuest(10, "B"))!; // next quest, same address
+        first.SetResult(Set("old"));
+        await old;
+        Assert.Null(tracker.Current);
+        Next().SetResult(Set("new"));
+        await fresh;
+        Assert.Equal("new", tracker.Current!.DisplayName);
+
+        // Refetch (after an overwrite) starts a fresh fetch for the same load.
+        tracker.Refetch();
+        var again = tracker.OnSnapshot(new PinShareQuest(10, "B"))!;
+        var pending = Next();
+
+        // The game exits and a relaunch loads a quest at the same address.
+        tracker.Reset();
+        Assert.Null(tracker.OnSnapshot(null));
+        var relaunched = tracker.OnSnapshot(new PinShareQuest(10, "C"))!;
+        var relaunchReply = Next();
+        pending.SetResult(Set("pre-exit"));
+        await again;
+        Assert.Null(tracker.Current);
+        relaunchReply.SetResult(Set("relaunched"));
+        await relaunched;
+        Assert.Equal("relaunched", tracker.Current!.DisplayName);
     }
 
     [Fact(DisplayName = "pin sets: a fetch payload without an items object is no set")]

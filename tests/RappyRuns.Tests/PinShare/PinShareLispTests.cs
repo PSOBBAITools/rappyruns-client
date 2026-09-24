@@ -423,7 +423,7 @@ public class PinShareLispTests
     {
         var tracker = new PinSetTracker(_ => ["x"], () => true);
         Assert.NotNull(tracker.FetchWanted(new PinShareQuest(1234, "Towards the Future")));
-        Assert.True(tracker.Land(1234, new PinSet(Parsed(TtfSet))));
+        Assert.True(tracker.Land(tracker.LoadId, new PinSet(Parsed(TtfSet))));
         return tracker;
     }
 

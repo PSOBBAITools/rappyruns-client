@@ -88,6 +88,10 @@ public sealed class GhostSession
     // step against Reset (the poll thread) - else an exited game's ghost could
     // land just after the reset.
     private readonly Lock _gate = new();
+    // S36: bumped on every new load and every forget, under _gate. A fetch
+    // lands only while it is unchanged: the pointer alone cannot tell a later
+    // quest loaded at the same address (or a relaunched game) from its own.
+    private long _load;
 
     /// <summary>The ghost fetched for the currently loaded quest, or null.</summary>
     public GhostReference? Ghost
@@ -135,6 +139,7 @@ public sealed class GhostSession
         lock (_gate)
         {
             Volatile.Write(ref _fetchPtr, ptr);
+            _load++;
             Ghost = null;
         }
         var info = describeLoad();
@@ -157,7 +162,8 @@ public sealed class GhostSession
     {
         var request = FetchWanted(questPtr, questName, describeLoad);
         if (request is null) return null;
-        var ptr = Volatile.Read(ref _fetchPtr);
+        long load;
+        lock (_gate) load = _load;
         return Task.Run(async () =>
         {
             GhostReference? ghost;
@@ -171,7 +177,7 @@ public sealed class GhostSession
             }
             lock (_gate)
             {
-                if (Volatile.Read(ref _fetchPtr) == ptr) Ghost = ghost;
+                if (_load == load) Ghost = ghost;
             }
         });
     }
@@ -228,6 +234,7 @@ public sealed class GhostSession
         lock (_gate)
         {
             Volatile.Write(ref _fetchPtr, 0);
+            _load++;
             Ghost = null;
         }
     }

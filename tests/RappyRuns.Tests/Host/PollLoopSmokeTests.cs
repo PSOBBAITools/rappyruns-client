@@ -236,9 +236,9 @@ public sealed class PollLoopSmokeTests : IDisposable
         Frame(rig, TtfReader(start: 1));
         Frame(rig, TtfReader(start: 1), ms: 20_000);
         ghost.Ghost = GhostReference.Parse("""{"quest":"ep1-towards-the-future","time_ms":60000,"rooms":[]}""");
-        var ptr = pinSets.FetchPtr;
-        Assert.NotNull(ptr); // the snapshot hook saw the quest load
-        Assert.True(pinSets.Land(ptr, new PinSet(System.Text.Json.JsonDocument.Parse("""{"name":"route","items":{"pins":[]}}""").RootElement)));
+        Assert.NotNull(pinSets.FetchPtr); // the snapshot hook saw the quest load
+        var load = pinSets.LoadId;
+        Assert.True(pinSets.Land(load, new PinSet(System.Text.Json.JsonDocument.Parse("""{"name":"route","items":{"pins":[]}}""").RootElement)));
         Assert.NotNull(pinSets.Current);
         Assert.NotNull(ghost.Race);
 
@@ -251,7 +251,7 @@ public sealed class PollLoopSmokeTests : IDisposable
         Assert.Null(pinSets.Current);
         Assert.Null(pinSets.QuestSlugs);
         Assert.Null(pinSets.FetchPtr);
-        Assert.False(pinSets.Land(ptr, null), "a fetch still in flight for the exited game lands nowhere");
+        Assert.False(pinSets.Land(load, null), "a fetch still in flight for the exited game lands nowhere");
         // The detach itself still ran: the aborted run is queued.
         Assert.True(Assert.Single(rig.Queue.Entries).Is(RunKeys.Aborted));
     }
