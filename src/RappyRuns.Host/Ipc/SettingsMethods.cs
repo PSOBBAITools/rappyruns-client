@@ -1,6 +1,7 @@
 using System.Text.Json;
 using RappyRuns.Core.Api;
 using RappyRuns.Core.Config;
+using RappyRuns.Core.Game;
 using RappyRuns.Core.Ghost;
 using RappyRuns.Core.Media;
 
@@ -132,6 +133,7 @@ internal sealed class SettingsMethods(ClientHost host)
         }
         // trigger-log-on plus the rotated file (S41): the lines a long
         // session needs may already sit in trigger-log.old.txt.
-        return Notice.Info("trigger-log-on-rotated", host.TriggerLog.Start(), host.TriggerLog.OldPath);
+        return Notice.Info("trigger-log-on-rotated", Msg.Of("trigger-log-on", host.TriggerLog.Start()),
+            host.TriggerLog.OldPath, TriggerLog.MaxBytes / (1024 * 1024));
     }
 }

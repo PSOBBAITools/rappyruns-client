@@ -272,7 +272,7 @@ export function createMockHost(variant: string): Transport {
     },
     'settings.setTriggerLog': (p) => {
       setSettings({ triggerLog: Boolean(p.enabled) });
-      return p.enabled ? notice(m('trigger-log-on-rotated', 'C:\\Users\\teapot\\AppData\\Roaming\\ephinea-ta-client\\trigger-log.txt', 'C:\\Users\\teapot\\AppData\\Roaming\\ephinea-ta-client\\trigger-log.old.txt')) : null;
+      return p.enabled ? notice(m('trigger-log-on-rotated', m('trigger-log-on', 'C:\\Users\\teapot\\AppData\\Roaming\\ephinea-ta-client\\trigger-log.txt'), 'C:\\Users\\teapot\\AppData\\Roaming\\ephinea-ta-client\\trigger-log.old.txt', 8)) : null;
     },
 
     'account.link': () => {

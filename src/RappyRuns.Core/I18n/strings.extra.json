@@ -6,5 +6,5 @@
   "rooms-empty": { "en": "No rooms yet - play a quest and its rooms and enemies appear here.", "ja": "まだ部屋はありません。クエストをプレイすると、部屋と敵がここに表示されます。" },
   "run-open-page": { "en": "Open the run page", "ja": "記録ページを開く" },
   "video-untrimmed": { "en": "saved - check the end", "ja": "保存済み - 終わりを確認" },
-  "trigger-log-on-rotated": { "en": "Trigger logging is on. Play the segment, then open:\n\n{0}\n\nPast 8 MiB it is renamed to {1} and a fresh file starts, so check both. The floor switch (or register) that flips when the room is cleared is your end trigger.", "ja": "トリガーログを有効にしました。対象の区間をプレイしてから、次のファイルを開いてください:\n\n{0}\n\n8 MiB を超えると {1} に名前が変わり新しいファイルが始まるので、両方を確認してください。部屋のクリア時に変化するフロアスイッチ (またはレジスタ) が終了トリガーです。" }
+  "trigger-log-on-rotated": { "en": "{0}\n\n(Once the log grows past {2} MiB it is renamed to {1} and a fresh file starts, so check both.)", "ja": "{0}\n\n(ログが {2} MiB を超えると {1} に名前が変わり新しいファイルが始まるので、両方を確認してください。)" }
 }

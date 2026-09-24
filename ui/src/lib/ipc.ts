@@ -118,7 +118,7 @@ export const settings = {
   setAutostart: (enabled: boolean) => call<{ enabled: boolean }>('settings.setAutostart', { enabled }),
   /** Native folder picker; null when cancelled. */
   chooseRecordDir: () => call<{ recordDir: string } | null>('settings.chooseRecordDir'),
-  /** Toggles trigger-log.txt; turning it on returns the :trigger-log-on notice. */
+  /** Toggles trigger-log.txt; turning it on returns the trigger-log-on-rotated notice (trigger-log-on plus the rotated file). */
   setTriggerLog: (enabled: boolean) => call<Notice | null>('settings.setTriggerLog', { enabled }),
 };
 

@@ -118,6 +118,15 @@ public class UiStateTests
         Assert.Null(StatusMsgs.RunVideo(P("(:server-id 1)"), null));
     }
 
+    [Fact(DisplayName = "the trigger-log notice keeps the Lisp text and adds the rotated file (S41)")]
+    public void TriggerLogNotice()
+    {
+        var text = Msg.Of("trigger-log-on-rotated", Msg.Of("trigger-log-on", "C:/t/trigger-log.txt"), "C:/t/trigger-log.old.txt", 8)
+            .Render(Language.En);
+        Assert.StartsWith(Strings.Default.Tr(Language.En, "trigger-log-on", "C:/t/trigger-log.txt"), text, StringComparison.Ordinal);
+        Assert.EndsWith("past 8 MiB it is renamed to C:/t/trigger-log.old.txt and a fresh file starts, so check both.)", text, StringComparison.Ordinal);
+    }
+
     [Fact(DisplayName = "a patch made while the hello snapshot is delivered leaves after it (PR #330 review)")]
     public void DeliverHoldsPatchesBack()
     {
