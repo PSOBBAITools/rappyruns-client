@@ -38,6 +38,7 @@
   <ItemGroup>
     <ProjectReference Include="..\RappyRuns.Core\RappyRuns.Core.csproj" />
     <ProjectReference Include="..\RappyRuns.Win\RappyRuns.Win.csproj" />
+    <ProjectReference Include="..\RappyRuns.Host\RappyRuns.Host.csproj" />
   </ItemGroup>
 
   <!-- The WebView2 package references its WPF control for every .NET 5+ app,

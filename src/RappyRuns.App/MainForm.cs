@@ -1,35 +1,38 @@
-using System.Diagnostics;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using RappyRuns.App.Host;
+using RappyRuns.Core.Media;
+using RappyRuns.Host;
 
 namespace RappyRuns.App;
 
 /// <summary>
 /// The main window: a bare WinForms frame around WebView2. Everything visible
-/// is the Svelte UI; the frame only hosts it and relays messages.
+/// is the Svelte UI; the frame only hosts it, relays messages and follows the
+/// shell rules (close-to-tray, start minimized, the live window title).
 /// </summary>
 internal sealed class MainForm : Form
 {
-    private const string Title = "Rappy Runs Client";
-
-    private readonly CommandLine _options;
+    private readonly ClientHost _host;
+    private readonly bool _developer;
+    private readonly bool _startMinimized;
     private readonly WebView2 _webView;
     // RAPPYRUNS_UI_DEV_URL (e.g. http://localhost:5173/) points the window at
     // the Vite dev server for hot reload instead of the embedded build.
     private readonly Uri? _devUrl;
 
-    public MainForm(CommandLine options)
+    public MainForm(ClientHost host, bool startMinimized)
     {
-        _options = options;
+        _host = host;
+        _startMinimized = startMinimized;
         _devUrl = Uri.TryCreate(Environment.GetEnvironmentVariable("RAPPYRUNS_UI_DEV_URL"), UriKind.Absolute, out var dev) ? dev : null;
+        _developer = host.Config.DebugMode || _devUrl is not null;
 
-        Text = Title;
+        Text = ClientHost.WindowTitle;
         Icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath!);
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(960, 680);
         MinimumSize = new Size(640, 420);
-        if (options.Minimized) WindowState = FormWindowState.Minimized;
 
         _webView = new WebView2
         {
@@ -39,12 +42,34 @@ internal sealed class MainForm : Form
             {
                 // Next to the config, not next to the exe: the install folder
                 // may be read-only and the updater would carry the cache along.
-                UserDataFolder = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "ephinea-ta-client", "WebView2"),
+                UserDataFolder = host.Options.WebViewDataDir,
             },
         };
         Controls.Add(_webView);
+        host.AttachWindow(() => IsDisposed ? null : this, SetTitle);
+    }
+
+    /// <summary>set-window-title: the caller dedupes; any thread, never blocks.</summary>
+    private void SetTitle(string title)
+    {
+        if (IsDisposed || !IsHandleCreated) return;
+        try
+        {
+            BeginInvoke(() => Text = title);
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        // The window is realized: tray, relay, poll thread, server/token checks.
+        _host.Start();
+        // Launch straight to the tray (autostart --minimized, or the setting):
+        // shown once, then hidden, after the tray exists (ui-shell §4.1 step 14).
+        if (_startMinimized) Hide();
     }
 
     protected override async void OnLoad(EventArgs e)
@@ -56,18 +81,17 @@ internal sealed class MainForm : Form
         }
         catch (Exception ex)
         {
+            RecordingLog.Write("WebView2 failed to start: " + ex);
             MessageBox.Show(this,
                 "The window could not be created (WebView2 failed to start).\n画面を作成できませんでした (WebView2 の起動に失敗)。\n\n" + ex.Message,
-                Title, MessageBoxButtons.OK, MessageBoxIcon.Error);
-            Close();
+                ClientHost.WindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 
         var core = _webView.CoreWebView2;
-        var developer = _options.Debug || _devUrl is not null;
-        core.Settings.AreDevToolsEnabled = developer;
-        core.Settings.AreDefaultContextMenusEnabled = developer;
-        core.Settings.AreBrowserAcceleratorKeysEnabled = developer;
+        core.Settings.AreDevToolsEnabled = _developer;
+        core.Settings.AreDefaultContextMenusEnabled = _developer;
+        core.Settings.AreBrowserAcceleratorKeysEnabled = _developer;
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = false;
         core.Settings.IsPinchZoomEnabled = false;
@@ -76,11 +100,20 @@ internal sealed class MainForm : Form
         core.WebResourceRequested += ServeAsset;
         core.NavigationStarting += KeepNavigationInApp;
         core.NewWindowRequested += OpenNewWindowsExternally;
+        core.ProcessFailed += (_, args) => RecordingLog.Write($"WebView2 process failed: {args.ProcessFailedKind}");
 
         var ipc = new IpcHost(core, this, IsAppSource);
-        _ = new AppService(ipc, _options);
+        _host.AttachIpc(ipc, ipc);
 
         core.Navigate(_devUrl?.ToString() ?? UiAssets.Origin + "/index.html");
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        // client-confirm-destroy: close-to-tray hides; otherwise a real quit
+        // (which ends the process through ExitProcess).
+        _host.Shell.HandleFormClosing(this, e, _host.Config.CloseToTray);
+        base.OnFormClosing(e);
     }
 
     private bool IsAppSource(string source) =>
@@ -108,19 +141,12 @@ internal sealed class MainForm : Form
     {
         if (IsAppUri(Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri) ? uri : null)) return;
         e.Cancel = true;
-        OpenExternally(e.Uri);
+        ClientHost.OpenExternal(e.Uri);
     }
 
     private void OpenNewWindowsExternally(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
     {
         e.Handled = true;
-        OpenExternally(e.Uri);
-    }
-
-    internal static void OpenExternally(string url)
-    {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
-            return;
-        Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+        ClientHost.OpenExternal(e.Uri);
     }
 }

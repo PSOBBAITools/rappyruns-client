@@ -1,7 +1,7 @@
 using System.Text;
 using RappyRuns.Core;
 
-namespace RappyRuns.App.Host;
+namespace RappyRuns.Host;
 
 /// <summary>
 /// "Started OK" marker for the bridge updater (Lisp v0.61.x, PLAN.md
@@ -11,7 +11,7 @@ namespace RappyRuns.App.Host;
 /// talked to the host, so a client that cannot show its window never
 /// counts as installed.
 /// </summary>
-internal static class StartupMarker
+public static class StartupMarker
 {
     // Resolved at run time, never cached at build time (spec core §3.1).
     public static string FilePath => Path.Combine(Path.GetTempPath(), "rappyruns-client-started.txt");

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The composition root: owns every service, the poll loop, the UI state
+       and the IPC methods. Kept out of RappyRuns.App (the WebView2 exe) so
+       the tests can drive the whole client without a window or a UI build. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <RootNamespace>RappyRuns.Host</RootNamespace>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RappyRuns.Core\RappyRuns.Core.csproj" />
+    <ProjectReference Include="..\RappyRuns.Win\RappyRuns.Win.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="RappyRuns.Tests" />
+    <InternalsVisibleTo Include="RappyRunsClient" />
+  </ItemGroup>
+
+</Project>

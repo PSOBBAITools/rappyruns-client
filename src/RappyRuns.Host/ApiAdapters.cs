@@ -8,10 +8,10 @@ using RappyRuns.Core.Store;
 using ApiSubmitOutcome = RappyRuns.Core.Api.SubmitOutcome;
 using StoreSubmitOutcome = RappyRuns.Core.Store.SubmitOutcome;
 
-namespace RappyRuns.App.Integration;
+namespace RappyRuns.Host;
 
 /// <summary>The API client's settings, backed by config.sexp.</summary>
-internal sealed class ConfigAuthSettings(ConfigStore config) : IAuthSettings
+public sealed class ConfigAuthSettings(ConfigStore config) : IAuthSettings
 {
     public string ServerUrl => config.ServerUrl;
 
@@ -35,7 +35,7 @@ internal sealed class ConfigAuthSettings(ConfigStore config) : IAuthSettings
 /// (API port). Every transport failure becomes the Lisp API-ERROR outcome here,
 /// because the queue only expects those, never exceptions.
 /// </summary>
-internal sealed class QueueNetwork(ApiClient api, Func<Plist, string> runJson, Func<string> diagnosticsLog)
+public sealed class QueueNetwork(ApiClient api, Func<Plist, string> runJson, Func<string> diagnosticsLog)
     : IRunSubmitter, IAnonymousRegistrar, IVideoUploader
 {
     public async Task<SubmitResult> SubmitAsync(Plist entry, string token, CancellationToken cancellationToken)

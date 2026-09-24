@@ -246,7 +246,11 @@ Errors keep the form open; Register closes it and shows the returned notice.
 
 ## Host module map
 
-| Area | Host module (planned) |
+Implemented in `src/RappyRuns.Host`: `ClientHost` (services, startup/quit, status tick),
+`UiState` (the `state` diff), `PollLoop`, and one `Ipc/<Area>Methods.cs` per area below.
+`src/RappyRuns.App/Host/IpcHost.cs` is only the WebView2 transport.
+
+| Area | Host module |
 |---|---|
 | `app.*` | `AppService` (App) + config store (Core) + tray texts (Win) |
 | `settings.set` | config store (Core); overlay (Win) for ghost keys |

@@ -20,6 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\RappyRuns.Core\RappyRuns.Core.csproj" />
     <ProjectReference Include="..\..\src\RappyRuns.Win\RappyRuns.Win.csproj" />
+    <ProjectReference Include="..\..\src\RappyRuns.Host\RappyRuns.Host.csproj" />
   </ItemGroup>
 
   <!-- Expected outputs exported from the Lisp client (desktop/tools/*.lisp). -->

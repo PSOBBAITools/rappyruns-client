@@ -1,12 +1,13 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Web.WebView2.Core;
+using RappyRuns.Core.Media;
+using RappyRuns.Host;
 
 namespace RappyRuns.App.Host;
 
 /// <summary>
 /// JSON messages between the host and the web UI (ui/src/lib/ipc.ts is the
-/// other end; keep the two in step).
+/// other end; keep the two in step, docs/ipc.md is the catalog).
 /// <code>
 /// UI -> host   {"kind":"request","id":7,"method":"app.hello","params":{...}}
 /// host -> UI   {"kind":"response","id":7,"ok":true,"result":...}
@@ -14,21 +15,15 @@ namespace RappyRuns.App.Host;
 /// host -> UI   {"kind":"event","name":"state","data":...}
 /// </code>
 /// Handlers run on the UI thread (WebMessageReceived is raised there) and may
-/// await; <see cref="Emit"/> can be called from any thread.
+/// await; <see cref="Emit"/> can be called from any thread and never blocks
+/// (BeginInvoke: the poll thread must never wait on the UI thread).
 /// </summary>
-internal sealed class IpcHost
+internal sealed class IpcHost : IIpcRegistry, IUiSink
 {
-    public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
-    {
-        DefaultIgnoreCondition = JsonIgnoreCondition.Never,
-    };
-
-    public delegate Task<object?> Handler(JsonElement parameters);
-
     private readonly CoreWebView2 _webView;
     private readonly Control _uiThread;
     private readonly Func<string, bool> _trustedSource;
-    private readonly Dictionary<string, Handler> _handlers = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, IpcHandler> _handlers = new(StringComparer.Ordinal);
 
     public IpcHost(CoreWebView2 webView, Control uiThread, Func<string, bool> trustedSource)
     {
@@ -38,10 +33,7 @@ internal sealed class IpcHost
         _webView.WebMessageReceived += OnMessage;
     }
 
-    public void Register(string method, Handler handler) => _handlers.Add(method, handler);
-
-    public void Register(string method, Func<JsonElement, object?> handler) =>
-        _handlers.Add(method, p => Task.FromResult(handler(p)));
+    public void Register(string method, IpcHandler handler) => _handlers.Add(method, handler);
 
     /// <summary>Pushes an event to the UI. Safe from any thread; dropped once the window is gone.</summary>
     public void Emit(string name, object? data) =>
@@ -56,7 +48,7 @@ internal sealed class IpcHost
         Request? request;
         try
         {
-            request = JsonSerializer.Deserialize<Request>(e.WebMessageAsJson, Json);
+            request = JsonSerializer.Deserialize<Request>(e.WebMessageAsJson, IpcJson.Options);
         }
         catch (JsonException)
         {
@@ -77,13 +69,23 @@ internal sealed class IpcHost
         }
         catch (Exception ex)
         {
+            RecordingLog.Write($"ipc {request.Method} failed: {ex}");
             Post(new { kind = "response", id = request.Id, ok = false, error = ex.Message });
         }
     }
 
     private void Post(object message)
     {
-        var json = JsonSerializer.Serialize(message, Json);
+        string json;
+        try
+        {
+            json = JsonSerializer.Serialize(message, IpcJson.Options);
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or JsonException)
+        {
+            RecordingLog.Write("ipc: could not serialize a message: " + ex.Message);
+            return;
+        }
         if (_uiThread.IsDisposed) return;
         if (_uiThread.InvokeRequired)
         {
@@ -105,7 +107,14 @@ internal sealed class IpcHost
     private void PostOnUiThread(string json)
     {
         if (_uiThread.IsDisposed) return;
-        _webView.PostWebMessageAsJson(json);
+        try
+        {
+            _webView.PostWebMessageAsJson(json);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException)
+        {
+            // The WebView2 process went away (crash, shutdown).
+        }
     }
 
     private sealed record Request(string? Kind, long Id, string? Method, JsonElement Params);
