@@ -53,6 +53,9 @@ public sealed class GameOverlay : IDisposable
     /// </summary>
     private const long TopmostIntervalMs = 1000;
 
+    /// <summary>At most one mode/size log line per 5 s (S08): the mode can flip at the 4 Hz content rate.</summary>
+    private const long ShapeLogIntervalMs = 5000;
+
     // COLORREF is 0x00BBGGRR (overlay-win32.lisp:421-438).
     /// <summary>Magenta color key: never used by a visible element; GDI solid fills reproduce it exactly.</summary>
     private const uint KeyColor = 0xFF00FF;
@@ -94,7 +97,11 @@ public sealed class GameOverlay : IDisposable
     // Change-only diagnostics (S08): the last visibility state, (mode, size)
     // and topmost result written to the log, so a steady state logs nothing.
     private string? _loggedState;
+    // The (mode, size) last seen while shown, the mode/size changes not yet
+    // logged, and when the last mode/size line went out (LogShape).
     private (bool Full, int W, int H)? _loggedShape;
+    private int _shapeChanges;
+    private long? _shapeLoggedAt;
     private bool? _loggedTopmost;
     private bool _inputEnabled;
     private DragState? _drag;
@@ -240,6 +247,8 @@ public sealed class GameOverlay : IDisposable
             _topmostAt = null;
             _loggedState = null;
             _loggedShape = null;
+            _shapeChanges = 0;
+            _shapeLoggedAt = null;
             _loggedTopmost = null;
             _log?.Invoke("overlay: window created");
             // Drag state must not survive a thread restart: the fresh window
@@ -470,7 +479,9 @@ public sealed class GameOverlay : IDisposable
         _loggedState = state;
         if (_visible && _placement is { } p)
         {
+            // The show line carries the placement: nothing held back is still news.
             _loggedShape = (_full, p.W, p.H);
+            _shapeChanges = 0;
             _log?.Invoke($"overlay: {state} at {FormatPlacement()}, game hwnd {_gameHwnd:X}");
         }
         else
@@ -480,17 +491,31 @@ public sealed class GameOverlay : IDisposable
     }
 
     /// <summary>
-    /// While shown, log a mode (panel / full client area) or size change once.
-    /// Moves alone are not logged: a Ctrl+drag or a moving game window would
-    /// write a line every tick.
+    /// While shown, log a mode (panel / full client area) or size change -
+    /// coalesced to at most one line per <see cref="ShapeLogIntervalMs"/>: the
+    /// mode follows the ghost data at 4 Hz and can flip on and off. Changes
+    /// held back meanwhile are counted into the next line ("(+N changes)"),
+    /// which is written once the interval has passed even if nothing else
+    /// changes. Moves alone are not logged: a Ctrl+drag or a moving game
+    /// window would write a line every tick.
     /// </summary>
     private void LogShape()
     {
-        if (_placement is not { } p || _loggedShape is not { } logged) return;
+        if (_placement is not { } p || _loggedShape is null) return;
         var shape = (_full, p.W, p.H);
-        if (logged == shape) return;
-        _loggedShape = shape;
-        _log?.Invoke($"overlay: placement now {FormatPlacement()}");
+        if (shape != _loggedShape)
+        {
+            _loggedShape = shape;
+            _shapeChanges++;
+        }
+        if (_shapeChanges == 0) return;
+        var now = Stopwatch.GetTimestamp();
+        if (_shapeLoggedAt is { } at && Stopwatch.GetElapsedTime(at, now).TotalMilliseconds < ShapeLogIntervalMs) return;
+        var held = _shapeChanges - 1;
+        _shapeChanges = 0;
+        _shapeLoggedAt = now;
+        _log?.Invoke($"overlay: placement now {FormatPlacement()}" +
+                     (held > 0 ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $" (+{held} changes)") : ""));
     }
 
     /// <summary>"X,Y WxH (panel|full client area)" of the current placement, for the log.</summary>
@@ -575,6 +600,7 @@ public sealed class GameOverlay : IDisposable
         _topmostAt = null;
         // The next show logs its placement and topmost result afresh.
         _loggedShape = null;
+        _shapeChanges = 0;
         _loggedTopmost = null;
     }
 
