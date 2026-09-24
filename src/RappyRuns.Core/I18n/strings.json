@@ -188,6 +188,7 @@
   "update-download-failed": { "en": "download failed", "ja": "ダウンロードに失敗しました" },
   "update-not-writable": { "en": "install folder not writable", "ja": "インストール先フォルダに書き込めません" },
   "update-after-run": { "en": "{0} downloaded - installs after this run", "ja": "{0} ダウンロード済み - 現在のプレイ終了後にインストールします" },
+  "update-rejected": { "en": "The latest update could not start on this PC and was rolled back; it is not installed automatically", "ja": "最新のアップデートはこの PC で起動できなかったため元に戻しました。自動ではインストールしません" },
   "update-restarting": { "en": "installing {0} - restarting...", "ja": "{0} をインストール中 - 再起動します..." },
   "clear-list-confirm": { "en": "Clear the list?\n\nRuns not submitted yet are kept. Recordings stay on disk and drafts stay on the server (videos can still be added on the site), but this client forgets which recording belongs to which draft.\n\nNothing is deleted on the server.", "ja": "一覧をクリアしますか?\n\n未送信の記録は残ります。録画ファイルとサーバー上の下書きもそのまま残ります (動画の追加はサイトからできます) が、どの録画がどの下書きのものかの対応はこのクライアントから消えます。\n\nサーバー上のデータは削除されません。" },
   "choose-record-dir": { "en": "Choose the recordings folder", "ja": "録画フォルダを選択" },

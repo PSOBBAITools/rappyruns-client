@@ -24,7 +24,7 @@ public class I18nTests
     [Fact]
     public void TableHasAllKeysInBothLanguages()
     {
-        Assert.Equal(247, Strings.Default.Entries.Count);
+        Assert.Equal(248, Strings.Default.Entries.Count);
         foreach (var (key, entry) in Strings.Default.Entries)
         {
             Assert.False(string.IsNullOrEmpty(entry.En), key);

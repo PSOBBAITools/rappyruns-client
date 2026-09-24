@@ -51,7 +51,7 @@ public abstract record SexpNode
         _ => throw new InvalidCastException($"not a list: {this}"),
     };
 
-    public override string ToString() => SexpWriter.Write(this);
+    public sealed override string ToString() => SexpWriter.Write(this);
 }
 
 /// <summary>A symbol other than a keyword. Names are stored upcased (the Lisp reader upcases).</summary>
