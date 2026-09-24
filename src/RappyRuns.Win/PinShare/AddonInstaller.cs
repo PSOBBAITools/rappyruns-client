@@ -135,7 +135,9 @@ public sealed class AddonInstaller
     /// <c>&lt;name&gt;.old-&lt;universal time&gt;</c> and writes anew; if that write
     /// fails too, the cause was not the lock (antivirus, permissions), so the
     /// working copy is put back rather than leave an aside file the next
-    /// install would delete. Throws on failure; each caller handles it.
+    /// install would delete. Only the DLL uses <paramref name="renameAside"/>:
+    /// <see cref="OldInputDlls"/> is what cleans those aside copies up.
+    /// Throws on failure; each caller handles it.
     /// </summary>
     private bool InstallFile(string name, string addonDir, bool renameAside)
     {
