@@ -596,8 +596,9 @@ public sealed class GameOverlay : IDisposable
         _topmostAt = now;
         var ok = SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         // The first result of each show is logged; after that only the start
-        // of a failure streak, as before - a recovery is not worth a line, and
-        // an alternating result must not log every second.
+        // of a failure streak, as the Lisp did - a recovery is not worth a
+        // line. (A result alternating ok/fail still logs each failure, every
+        // 2 s, exactly as before this change.)
         var first = _loggedTopmost is null;
         var failureStarts = !ok && _loggedTopmost != false;
         _loggedTopmost = ok;
