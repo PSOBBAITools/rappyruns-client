@@ -290,11 +290,17 @@ public sealed class PollLoop : IFrameHooks
         Guard("reader close", reader.Dispose);
         _s.Recorder.AudioTargetPid = null;
         Guard("pin share game", () => _s.SetGameExe(null));
-        _s.Frames.Detach(this);
-        // After the detach: its aborted runs are annotated against the ghost.
-        // Then nothing of the exited game's quest may outlive it (S37).
-        Guard("ghost reset", _s.Ghost.Reset);
-        Guard("pin set reset", () => _s.PinSets?.Reset());
+        try
+        {
+            _s.Frames.Detach(this);
+        }
+        finally
+        {
+            // Nothing of the exited game's quest may outlive it (S37), even
+            // when the detach throws: DetachStep never runs twice.
+            Guard("ghost reset", _s.Ghost.Reset);
+            Guard("pin set reset", () => _s.PinSets?.Reset());
+        }
     }
 
     /// <summary>poll-frame-step (main.lisp:298): the frame, then the 250 ms slot and the wait.</summary>

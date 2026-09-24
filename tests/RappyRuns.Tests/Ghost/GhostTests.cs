@@ -275,6 +275,22 @@ public class GhostTests
         Assert.Equal(123456, session.Ghost?.TimeMs);
     }
 
+    [Fact(DisplayName = "Reset (the game exited) drops the ghost, the race and a fetch still in flight (S37)")]
+    public async Task ResetDropsInFlightFetch()
+    {
+        var session = new GhostSession();
+        var gate = new TaskCompletionSource<string?>();
+        var task = session.MaybeStartFetch(4660, "q", () => Load(), _ => gate.Task);
+        session.Step(true, new CameraState(0, 0, 0, 0, 0, 1, 1), new GhostPlayer(1, 10, 5f), 800, _ => true);
+        Assert.NotNull(session.Race);
+        session.Reset();
+        Assert.Null(session.Race);
+        Assert.Null(session.LiveCamera);
+        gate.SetResult(GhostPayload);
+        await task!;
+        Assert.Null(session.Ghost);
+    }
+
     [Fact(DisplayName = "a failing fetch leaves no ghost")]
     public async Task FailingFetch()
     {

@@ -84,6 +84,10 @@ public sealed class GhostSession
     private CameraState? _liveCamera;
     // The quest-ptr the current fetch was started (or skipped) for; 0 = none.
     private long _fetchPtr;
+    // Makes a landing fetch's "still the same load?" check and its write one
+    // step against Reset (the poll thread) - else an exited game's ghost could
+    // land just after the reset.
+    private readonly Lock _gate = new();
 
     /// <summary>The ghost fetched for the currently loaded quest, or null.</summary>
     public GhostReference? Ghost
@@ -124,13 +128,15 @@ public sealed class GhostSession
             // No quest loaded: forget the load AND the ghost, so a stale
             // reference can never race the next quest. (Completed runs are
             // annotated while the quest is still loaded.)
-            Volatile.Write(ref _fetchPtr, 0);
-            Ghost = null;
+            ForgetLoad();
             return null;
         }
         if (questName is null || ptr == Volatile.Read(ref _fetchPtr)) return null;
-        Volatile.Write(ref _fetchPtr, ptr);
-        Ghost = null;
+        lock (_gate)
+        {
+            Volatile.Write(ref _fetchPtr, ptr);
+            Ghost = null;
+        }
         var info = describeLoad();
         if (info.Slugs.Count == 0 || !info.GhostRaceEnabled || !info.HasSubmissionToken) return null;
         return new GhostFetchRequest(info.Slugs, info.Difficulty, Math.Max(1, info.PartyMembers),
@@ -163,7 +169,10 @@ public sealed class GhostSession
             {
                 ghost = null;
             }
-            if (Volatile.Read(ref _fetchPtr) == ptr) Ghost = ghost;
+            lock (_gate)
+            {
+                if (Volatile.Read(ref _fetchPtr) == ptr) Ghost = ghost;
+            }
         });
     }
 
@@ -204,15 +213,23 @@ public sealed class GhostSession
     /// <summary>
     /// The game exited (C#, S37; the Lisp kept all of it until the next
     /// attach's first frame): forget the load, the ghost, the race and the
-    /// camera. Poll thread only, after the detach has annotated its aborted
-    /// runs against the ghost.
+    /// camera, as an unloaded quest and a non-quest frame do. Poll thread only.
     /// </summary>
     public void Reset()
     {
-        Volatile.Write(ref _fetchPtr, 0);
-        Ghost = null;
+        ForgetLoad();
         Race = null;
         LiveCamera = null;
+    }
+
+    // No load: a fetch still in flight lands nowhere (it checks under the same lock).
+    private void ForgetLoad()
+    {
+        lock (_gate)
+        {
+            Volatile.Write(ref _fetchPtr, 0);
+            Ghost = null;
+        }
     }
 
     /// <summary>The overlay's ghost snapshot now (see <see cref="GhostOverlayData.From"/>), or null.</summary>

@@ -252,7 +252,7 @@ public sealed class PollLoopSmokeTests : IDisposable
         Assert.Null(pinSets.QuestSlugs);
         Assert.Null(pinSets.FetchPtr);
         Assert.False(pinSets.Land(ptr, null), "a fetch still in flight for the exited game lands nowhere");
-        // The detach itself still ran first: the aborted run is queued.
+        // The detach itself still ran: the aborted run is queued.
         Assert.True(Assert.Single(rig.Queue.Entries).Is(RunKeys.Aborted));
     }
 

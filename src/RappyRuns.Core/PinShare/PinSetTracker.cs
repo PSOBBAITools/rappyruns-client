@@ -86,9 +86,7 @@ public sealed class PinSetTracker
         {
             if (snapshot.QuestPtr <= 0)
             {
-                _fetchPtr = null;
-                _questSlugs = null;
-                _current = null;
+                ForgetLoad();
                 return null;
             }
             if (snapshot.QuestName is null || snapshot.QuestPtr == _fetchPtr) return null;
@@ -146,12 +144,15 @@ public sealed class PinSetTracker
     /// </summary>
     public void Reset()
     {
-        lock (_lock)
-        {
-            _fetchPtr = null;
-            _questSlugs = null;
-            _current = null;
-        }
+        lock (_lock) ForgetLoad();
+    }
+
+    // Callers hold _lock.
+    private void ForgetLoad()
+    {
+        _fetchPtr = null;
+        _questSlugs = null;
+        _current = null;
     }
 
     /// <summary>Ask again for the loaded quest's set on the next snapshot (after an overwrite, so the locked copy shows the new pins).</summary>

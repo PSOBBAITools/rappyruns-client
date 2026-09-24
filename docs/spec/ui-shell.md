@@ -373,7 +373,7 @@ trigger json は `{"type":"monster","monster":id}` / `{"type":"floor-switch","fl
 - 毎周回 `note-poll-activity` (`main.lisp:215`): `*poll-busy-p*` = クエスト中か録画中。暇になった瞬間に、先送りしていたアップデートを 1 回だけ適用する
 - 未接続: `poll-search-step` (`main.lisp:237`)。1 秒ごとにゲームを探す。見つけたら Authenticode で署名を確かめ、公式クライアントでなければ接続しない。同じ pid の判定は使い回す。`*pinshare-game-exe*` は**署名を確かめたゲームのときだけ**設定する。未接続の間も録画の停止処理、Retry、アップロード、容量整理、GUI 更新は続ける
 - 接続中: `poll-frame-step` (`main.lisp:298`)。30Hz。スナップショット、検出、録画、ゴースト、ピンセット取得 (`maybe-start-pin-set-fetch`)、ラン完了時の処理、トリガーログを行う。GUI 更新とアップロード、容量整理、gdigrab のプローブは `+gui-update-interval+` = 1/4 秒ごと
-- プロセスが消えたら `poll-detach-step`: `*audio-target-pid*` と `*pinshare-game-exe*` を nil にする。C# 版はさらに、中断ランを渡し終えた後でゴースト (ロード・参照・レース・カメラ) とピンセット (セット・スラッグ・ロード) を忘れる (S37)。Lisp は次のアタッチ後の最初のフレームまで残していた
+- プロセスが消えたら `poll-detach-step`: `*audio-target-pid*` と `*pinshare-game-exe*` を nil にする。C# 版はさらに、デタッチ処理の後 (例外時も) でゴースト (ロード・参照・レース・カメラ) とピンセット (セット・スラッグ・ロード) を忘れる (S37)。Lisp は次のアタッチ後の最初のフレームまで残していた
 - 終了時 (unwind-protect): `recorder-shutdown`、`close-trigger-log`、`close-reader`
 
 ラン完了時の処理 (`run-completion-sounds`, `main.lisp:152`): `:completion-sound` は固定で nil なので、いまは音を鳴らさない。`handle-completed-runs` → `enqueue-run!` → `submit-queued!` → `notify-standing-toasts`。
