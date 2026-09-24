@@ -247,30 +247,24 @@ public class GameFrameTests
     [Fact(DisplayName = "trigger log is written only while enabled")]
     public void TriggerLogToggle()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"eta-frame-trigger-log-{Guid.NewGuid():N}.txt");
-        try
+        using var temp = new TempDir("eta-frame-trigger-log");
+        var path = temp.File("trigger-log.txt");
+        var clock = new ManualGameClock();
+        using var log = new TriggerLog(path, clock);
+        foreach (var enabled in new[] { false, true })
         {
-            var clock = new ManualGameClock();
-            using var log = new TriggerLog(path, clock);
-            foreach (var enabled in new[] { false, true })
-            {
-                var detector = new Detector(BuiltinCatalog(), clock);
-                var frames = new GameFrameProcessor(detector, new RunLogs(clock), clock,
-                    new GameFrameOptions { TriggerLogEnabled = () => enabled }, log);
-                var p = new FakeProcess(TtfReader());
-                var hooks = new Hooks();
-                frames.Attach();
-                Frame(frames, clock, p, hooks, TtfReader());
-                Frame(frames, clock, p, hooks, TtfReader(start: 1));
-            }
-            log.Close();
-            var lines = File.ReadAllLines(path);
-            Assert.Equal(["12:00:00 \"Towards the Future\" register 12: 0 -> 1"], lines);
+            var detector = new Detector(BuiltinCatalog(), clock);
+            var frames = new GameFrameProcessor(detector, new RunLogs(clock), clock,
+                new GameFrameOptions { TriggerLogEnabled = () => enabled }, log);
+            var p = new FakeProcess(TtfReader());
+            var hooks = new Hooks();
+            frames.Attach();
+            Frame(frames, clock, p, hooks, TtfReader());
+            Frame(frames, clock, p, hooks, TtfReader(start: 1));
         }
-        finally
-        {
-            File.Delete(path);
-        }
+        log.Close();
+        var lines = File.ReadAllLines(path);
+        Assert.Equal(["12:00:00 \"Towards the Future\" register 12: 0 -> 1"], lines);
     }
 
     [Fact(DisplayName = "last kill and run logs follow the frames")]

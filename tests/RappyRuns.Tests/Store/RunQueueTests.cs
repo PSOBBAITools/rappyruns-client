@@ -13,7 +13,7 @@ namespace RappyRuns.Tests.Store;
 /// </summary>
 public sealed class RunQueueTests : IDisposable
 {
-    private readonly TempDir _dir = new();
+    private readonly TempDir _dir = new("rr-store-test");
     private readonly string _video;
     private readonly long _now = UniversalTime.Now();
 
@@ -37,7 +37,7 @@ public sealed class RunQueueTests : IDisposable
         var q = Store($"(:status :submitted :server-id 3 :video-path {V})",
                       $"(:status :submitted :server-id 2 :video-path {V} :video-attached t)",
                       $"(:status :submitted :server-id 1 :video-path {V})");
-        Assert.Equal(1, q.UploadCandidate(_now).Candidate?.ServerId);
+        Assert.Equal(1, q.UploadCandidate(_now)?.ServerId);
     }
 
     [Fact]
@@ -45,15 +45,15 @@ public sealed class RunQueueTests : IDisposable
     {
         var q = Store($"(:status :submitted :server-id 2 :video-path {V})",
                       $"(:status :submitted :server-id 1 :video-path {V} :next-upload-at {_now + 900})");
-        Assert.True(2 == q.UploadCandidate(_now).Candidate?.ServerId, "a backing-off entry is skipped");
-        Assert.True(1 == q.UploadCandidate(_now + 1000).Candidate?.ServerId, "the backoff expires with time");
+        Assert.True(2 == q.UploadCandidate(_now)?.ServerId, "a backing-off entry is skipped");
+        Assert.True(1 == q.UploadCandidate(_now + 1000)?.ServerId, "the backoff expires with time");
     }
 
     [Fact]
     public void AGivenUpEntryIsNeverACandidate()
     {
         var q = Store($"(:status :submitted :server-id 1 :video-path {V} :upload-given-up t)");
-        Assert.Null(q.UploadCandidate(_now).Candidate);
+        Assert.Null(q.UploadCandidate(_now));
     }
 
     [Fact]
@@ -61,40 +61,43 @@ public sealed class RunQueueTests : IDisposable
     {
         var q = Store($"(:status :submitted :server-id 2 :video-path {V})",
                       "(:status :submitted :server-id 1 :video-path \"C:/nowhere/gone.mp4\")");
-        var (candidate, gaveUp) = q.UploadCandidate(_now);
+        var changes = 0;
+        q.Changed += (_, _) => changes++;
+        var candidate = q.UploadCandidate(_now);
         Assert.True(2 == candidate?.ServerId, "a vanished recording gives up and the scan moves on");
-        Assert.True(gaveUp, "the give-up is reported so the GUI can repaint");
+        Assert.Equal(1, changes); // the give-up raises Changed so the GUI can repaint
         Assert.True(q.Entries.Single(e => e.ServerId == 1).Is(RunKeys.UploadGivenUp), "the vanished entry is marked given up");
     }
 
     [Fact]
-    public void ACleanScanReportsNoGiveUp()
+    public void ACleanScanRaisesNoChange()
     {
         var q = Store($"(:status :submitted :server-id 1 :video-path {V})");
-        var (candidate, gaveUp) = q.UploadCandidate(_now);
-        Assert.NotNull(candidate);
-        Assert.False(gaveUp);
+        var changes = 0;
+        q.Changed += (_, _) => changes++;
+        Assert.NotNull(q.UploadCandidate(_now));
+        Assert.Equal(0, changes);
     }
 
     [Fact]
     public void EntriesWithoutAServerDraftCannotUploadYet() =>
-        Assert.Null(Store($"(:status :queued :video-path {V})").UploadCandidate(_now).Candidate);
+        Assert.Null(Store($"(:status :queued :video-path {V})").UploadCandidate(_now));
 
     [Fact]
     public void AnAbortedRunsRecordingNeverUploads()
     {
         var q = Store($"(:status :submitted :server-id 2 :video-path {V})",
                       $"(:status :submitted :server-id 1 :video-path {V} :aborted t)");
-        Assert.Equal(2, q.UploadCandidate(_now).Candidate?.ServerId);
+        Assert.Equal(2, q.UploadCandidate(_now)?.ServerId);
     }
 
     [Fact]
     public void AnAbortedOnlyQueueHasNoUploadCandidate() =>
-        Assert.Null(Store($"(:status :submitted :server-id 1 :video-path {V} :aborted t)").UploadCandidate(_now).Candidate);
+        Assert.Null(Store($"(:status :submitted :server-id 1 :video-path {V} :aborted t)").UploadCandidate(_now));
 
     [Fact]
     public void AnUnrankedRunsRecordingNeverUploads() =>
-        Assert.Null(Store($"(:status :submitted :server-id 1 :video-path {V} :unranked t)").UploadCandidate(_now).Candidate);
+        Assert.Null(Store($"(:status :submitted :server-id 1 :video-path {V} :unranked t)").UploadCandidate(_now));
 
     [Theory]
     [InlineData("a given-up upload is no longer active", "(:status :submitted :server-id 1 :video-path \"v.mp4\" :upload-given-up t)")]
@@ -195,23 +198,55 @@ public sealed class RunQueueTests : IDisposable
     [Fact]
     public void AnUntrimmedRecordingIsLinkedButNeverAutoUploaded()
     {
-        var q = Store();
-        var run = TestRun();
+        var now = _now;
+        var q = TestStore(_dir, () => now, null);
+        // Finished a day ago: inside the 14-day hold.
+        var run = P($"(:quest-slug \"ep1-test-quest\" :time-ms 599123 :finished-at {now - 86400})");
         var entry = q.Enqueue(run);
         q.Update(entry, (RunKeys.Status, SexpNode.Kw(RunStatus.Submitted)), (RunKeys.ServerId, SexpNode.Int(7)));
         var linked = q.LinkVideoFile(run, _video, untrimmed: true);
         Assert.Equal(_video, linked?.VideoPath);
         Assert.True(linked!.Is(RunKeys.Untrimmed));
-        Assert.Null(q.UploadCandidate(_now).Candidate);
-        Assert.False(RunEntries.IsActive(linked.Data));
-        Assert.DoesNotContain(_video, q.VideoPathRetentionSets().Protected);
+        Assert.Null(q.UploadCandidate(now));
+        Assert.True(RunEntries.IsActive(linked.Data, now));
+        Assert.Contains(_video, q.VideoPathRetentionSets().Protected);
         Assert.Equal("draft - use Upload to YouTube", RunDisplay.RunStatusLabel(linked.Data, Language.En, hasSubmissionToken: true));
         Assert.Equal("saved - check the end", RunDisplay.RunVideoLabel(linked.Data, Language.En, null));
+        // Kept across a restart while held.
+        var reloaded = new RunQueue(q.Path, () => now, null);
+        reloaded.Load();
+        Assert.True(reloaded.Entries.Single().Is(RunKeys.Untrimmed));
         // A clean file linked later clears the mark and the entry uploads again.
         var relinked = q.LinkVideoFile(run, _video);
         Assert.False(relinked!.Is(RunKeys.Untrimmed));
-        Assert.Equal(7, q.UploadCandidate(_now).Candidate?.ServerId);
+        Assert.Equal(7, q.UploadCandidate(now)?.ServerId);
     }
+
+    [Fact]
+    public void AnUntrimmedRecordingIsReleasedFourteenDaysAfterTheRun()
+    {
+        var now = _now;
+        var q = TestStore(_dir, () => now, null);
+        var finished = now - RunEntries.UntrimmedKeepSeconds + 60;
+        var run = P($"(:quest-slug \"ep1-test-quest\" :time-ms 599123 :finished-at {finished})");
+        var entry = q.Enqueue(run);
+        q.Update(entry, (RunKeys.Status, SexpNode.Kw(RunStatus.Submitted)), (RunKeys.ServerId, SexpNode.Int(7)));
+        var linked = q.LinkVideoFile(run, _video, untrimmed: true)!;
+        Assert.True(RunEntries.IsActive(linked.Data, now));
+        Assert.Contains(_video, q.VideoPathRetentionSets().Protected);
+        now += 60; // exactly 14 days after the run
+        Assert.False(RunEntries.IsActive(linked.Data, now));
+        Assert.DoesNotContain(_video, q.VideoPathRetentionSets().Protected);
+        Assert.Null(q.UploadCandidate(now));
+        q.Save();
+        var reloaded = new RunQueue(q.Path, () => now, null);
+        reloaded.Load();
+        Assert.Empty(reloaded.Entries);
+    }
+
+    [Fact]
+    public void AnUntrimmedRecordingWithoutAFinishTimeIsNotHeld() =>
+        Assert.False(RunEntries.IsActive(P("(:status :submitted :server-id 1 :video-path \"v.mp4\" :untrimmed t)"), 1000));
 
     [Fact]
     public void ActiveEntriesSurviveTrimmingAttachedOnesDoNot()

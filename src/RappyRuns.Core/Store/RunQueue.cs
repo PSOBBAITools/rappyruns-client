@@ -34,6 +34,27 @@ public sealed class RunQueue
     /// </summary>
     public const long UploadLimitRetrySeconds = 3600;
 
+    /// <summary>
+    /// Consecutive counted failures (<see cref="UploadResult.Counted"/>: the
+    /// upload itself failed mid-body, timed out, or got a 5xx) after which an
+    /// upload gives up, as a rejection does (S17). The Lisp client retried
+    /// forever, and a server that answers early and resets the connection
+    /// never clears on its own. Counted failures back off exponentially
+    /// (<see cref="CountedRetrySeconds"/>), so the twelfth comes about a day and
+    /// a half in. Connect failures do not count, but an outage behind a proxy
+    /// that answers 502/503 does: one longer than that gives up. The count lives on the entry
+    /// (<see cref="RunKeys.UploadFailures"/>) and survives restarts; any server
+    /// reply and the manual retry (<see cref="ResetUploadFailures"/>) clear it.
+    /// </summary>
+    public const int MaxUploadFailures = 12;
+
+    /// <summary>The backoff cap for counted failures: 6 hours.</summary>
+    public const long MaxUploadRetrySeconds = 6 * 3600;
+
+    /// <summary>The backoff after the <paramref name="failures"/>th counted failure in a row: 300 s, doubling, capped at 6 h.</summary>
+    public static long CountedRetrySeconds(long failures) =>
+        failures >= 8 ? MaxUploadRetrySeconds : Math.Min(MaxUploadRetrySeconds, UploadRetrySeconds << (int)Math.Max(0, failures - 1));
+
     private readonly object _lock = new();
     private readonly object _saveLock = new();
     private readonly Func<long> _now;
@@ -110,10 +131,11 @@ public sealed class RunQueue
         lock (_saveLock)
         {
             SexpNode form;
+            var now = _now();
             lock (_lock)
             {
                 form = new SList(_runs
-                    .Where(e => RunEntries.IsActive(e.Raw))
+                    .Where(e => RunEntries.IsActive(e.Raw, now))
                     .Select(e => RunEntries.Persistable(e.Raw).ToSexp())
                     .ToList());
             }
@@ -142,7 +164,7 @@ public sealed class RunQueue
         lock (_lock)
         {
             _runs.Insert(0, entry);
-            _runs = RunEntries.TrimFinished(_runs, e => e.Raw, MaxFinishedRuns);
+            _runs = RunEntries.TrimFinished(_runs, e => e.Raw, MaxFinishedRuns, _now());
         }
         Save();
         OnChanged();
@@ -158,19 +180,23 @@ public sealed class RunQueue
     /// trims, saves and returns the copy. When the entry already left the
     /// list the copy is still returned, as in Lisp, but nothing is stored.
     /// </summary>
-    public RunEntry Update(RunEntry entry, IEnumerable<KeyValuePair<string, SexpNode>> updates)
+    public RunEntry Update(RunEntry entry, IEnumerable<KeyValuePair<string, SexpNode>> updates) =>
+        Change(entry, current => Apply(current, updates));
+
+    /// <summary><see cref="Update(RunEntry, IEnumerable{KeyValuePair{string, SexpNode}})"/>, computing the new plist from the current one under the lock (read-modify-write).</summary>
+    private RunEntry Change(RunEntry entry, Func<Plist, Plist> change)
     {
         RunEntry updated;
         lock (_lock)
         {
             // Build on the current version, not the caller's possibly stale copy.
             var current = _runs.Find(e => e.Id == entry.Id) ?? entry;
-            updated = new RunEntry(entry.Id, Apply(current.Raw, updates));
+            updated = new RunEntry(entry.Id, change(current.Raw));
             var index = _runs.FindIndex(e => e.Id == entry.Id);
             if (index >= 0)
             {
                 _runs[index] = updated;
-                _runs = RunEntries.TrimFinished(_runs, e => e.Raw, MaxFinishedRuns);
+                _runs = RunEntries.TrimFinished(_runs, e => e.Raw, MaxFinishedRuns, _now());
             }
         }
         Save();
@@ -180,7 +206,46 @@ public sealed class RunQueue
 
     /// <summary><see cref="Update(RunEntry, IEnumerable{KeyValuePair{string, SexpNode}})"/> with inline pairs.</summary>
     public RunEntry Update(RunEntry entry, params (string Key, SexpNode Value)[] updates) =>
-        Update(entry, updates.Select(u => new KeyValuePair<string, SexpNode>(u.Key, u.Value)));
+        Update(entry, Pairs(updates));
+
+    private static IEnumerable<KeyValuePair<string, SexpNode>> Pairs((string Key, SexpNode Value)[] updates) =>
+        updates.Select(u => new KeyValuePair<string, SexpNode>(u.Key, u.Value));
+
+    /// <summary>
+    /// The manual retry (the Retry button, C# addition for S17): forget every
+    /// counted-failure streak and its backoff, and bring back an upload the
+    /// streak gave up on (still listed; a count-based give-up is the only one
+    /// that carries a count). Rejections and vanished files stay given up. A
+    /// given-up entry is not active, so it is not saved: it can be revived
+    /// only until the client restarts. One save and one Changed for the lot.
+    /// Returns the number of entries reset.
+    /// </summary>
+    public int ResetUploadFailures()
+    {
+        var reset = 0;
+        lock (_lock)
+        {
+            for (var i = 0; i < _runs.Count; i++)
+            {
+                var entry = _runs[i];
+                if (!entry.Is(RunKeys.UploadFailures)) continue;
+                var copy = entry.Raw.Clone();
+                if ((RunEntries.Get(copy, RunKeys.UploadFailures).AsLong ?? 0) >= MaxUploadFailures)
+                {
+                    copy.Remove(RunKeys.UploadGivenUp);
+                    copy.Remove(RunKeys.UploadError);
+                }
+                copy.Remove(RunKeys.UploadFailures);
+                copy.Remove(RunKeys.NextUploadAt);
+                _runs[i] = new RunEntry(entry.Id, copy);
+                reset++;
+            }
+        }
+        if (reset == 0) return 0;
+        Save();
+        OnChanged();
+        return reset;
+    }
 
     /// <summary>
     /// clear-runs!: drop every entry except unsent ones (:queued/:failed).
@@ -221,13 +286,12 @@ public sealed class RunQueue
     /// upload-candidate (store.lisp:477): the oldest entry whose saved
     /// recording still needs uploading and is not backing off. Aborted and
     /// unranked runs never upload. An entry whose file vanished gives up on
-    /// the spot and the scan moves on; <c>GaveUp</c> then tells the caller the
-    /// runs list needs a refresh (the <see cref="Changed"/> event fires too).
+    /// the spot and the scan moves on; that update raises <see cref="Changed"/>,
+    /// which refreshes the runs list (the Lisp returned a repaint flag instead).
     /// </summary>
-    public (RunEntry? Candidate, bool GaveUp) UploadCandidate(long? now = null)
+    public RunEntry? UploadCandidate(long? now = null)
     {
         var at = now ?? _now();
-        var gaveUp = false;
         var snapshot = Entries;
         for (var i = snapshot.Count - 1; i >= 0; i--)
         {
@@ -235,29 +299,29 @@ public sealed class RunQueue
             if (!(RunEntries.AwaitsUpload(entry.Raw)
                   && (entry.Get(RunKeys.NextUploadAt) is var next && (next.IsNil || next.AsNumber is { } n && n <= at))))
                 continue;
-            if (entry.VideoPath is { } path && _fileExists(path)) return (entry, gaveUp);
+            if (entry.VideoPath is { } path && _fileExists(path)) return entry;
             Update(entry, (RunKeys.UploadGivenUp, SexpNode.T));
-            gaveUp = true;
         }
-        return (null, gaveUp);
+        return null;
     }
 
     /// <summary>
     /// video-path-retention-sets (store.lisp:510): recordings the local
     /// storage sweep must never take (<c>Protected</c>: still awaiting their
-    /// upload) and those it reclaims first (<c>Uploaded</c>: the site holds
+    /// upload, automatic or - an untrimmed one, for 14 days - by hand) and those it reclaims first (<c>Uploaded</c>: the site holds
     /// them). A file in neither list is an orphan. Order mirrors the Lisp
     /// push (oldest entry first).
     /// </summary>
     public (IReadOnlyList<string> Protected, IReadOnlyList<string> Uploaded) VideoPathRetentionSets()
     {
+        var now = _now();
         var @protected = new List<string>();
         var uploaded = new List<string>();
         foreach (var entry in Entries)
         {
             if (entry.VideoPath is not { } path) continue;
             if (entry.Is(RunKeys.VideoAttached)) uploaded.Insert(0, path);
-            else if (RunEntries.AwaitsUpload(entry.Raw))
+            else if (RunEntries.AwaitsUpload(entry.Raw) || RunEntries.AwaitsManualAttach(entry.Raw, now))
                 @protected.Insert(0, path);
         }
         return (@protected, uploaded);
@@ -336,12 +400,13 @@ public sealed class RunQueue
     /// <summary>
     /// upload-entry-video! (store.lisp:552): upload the entry's recording to
     /// its server draft, tracking <see cref="CurrentUpload"/> meanwhile.
-    /// Whatever the server answered, the capture diagnostics follow
+    /// Whatever the server answered (and after a final api-error), the capture diagnostics follow
     /// (best effort). Attached/duplicate mark the entry
     /// <c>:video-attached :video-uploaded</c> with <c>:held</c>/<c>:approved</c>
     /// from the reply's status; the local file is NOT deleted (the retention
     /// sweep reclaims it). A "pending-limit" rejection backs off an hour, any
-    /// other rejection gives up; an api-error backs off five minutes.
+    /// other rejection gives up; an api-error backs off five minutes, and the
+    /// <see cref="MaxUploadFailures"/>th one in a row gives up like a rejection.
     /// Run it on a worker thread, one upload at a time (spec core §9.5).
     /// </summary>
     public async Task<RunEntry> UploadEntryVideoAsync(RunEntry entry, IVideoUploader uploader,
@@ -368,30 +433,38 @@ public sealed class RunQueue
 
             if (result.Outcome == UploadOutcome.ApiError)
             {
-                return Update(entry,
-                    (RunKeys.NextUploadAt, SexpNode.Int(_now() + UploadRetrySeconds)),
-                    (RunKeys.UploadError, SexpNode.Str(result.Message ?? "")));
+                var error = (RunKeys.UploadError, SexpNode.Str(result.Message ?? ""));
+                // Not the upload's own failure (offline, connect, 401): the old
+                // fixed backoff, the streak left as it is, never a give-up.
+                if (!result.Counted)
+                    return Update(entry, (RunKeys.NextUploadAt, SexpNode.Int(_now() + UploadRetrySeconds)), error);
+                var gaveUp = false;
+                var updated = Change(entry, current =>
+                {
+                    var failures = (RunEntries.Get(current, RunKeys.UploadFailures).AsLong ?? 0) + 1;
+                    gaveUp = failures >= MaxUploadFailures;
+                    return Apply(current, Pairs([gaveUp
+                            ? (RunKeys.UploadGivenUp, SexpNode.T)
+                            : (RunKeys.NextUploadAt, SexpNode.Int(_now() + CountedRetrySeconds(failures))),
+                        (RunKeys.UploadFailures, SexpNode.Int(failures)), error]));
+                });
+                // A final failure is worth the capture log on the server, as a rejection's is.
+                if (gaveUp) await SendDiagnosticsAsync(uploader, serverId, cancellationToken).ConfigureAwait(false);
+                return updated;
             }
 
-            try
-            {
-                await uploader.SendDiagnosticsAsync(serverId, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception e) when (e is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
-            {
-                // Diagnostics must never break the upload flow.
-            }
+            await SendDiagnosticsAsync(uploader, serverId, cancellationToken).ConfigureAwait(false);
 
             return result.Outcome switch
             {
-                UploadOutcome.Attached or UploadOutcome.Duplicate => Update(entry,
+                UploadOutcome.Attached or UploadOutcome.Duplicate => Settle(entry,
                     (RunKeys.VideoAttached, SexpNode.T),
                     (RunKeys.VideoUploaded, SexpNode.T),
                     (RunKeys.Held, SexpNode.Bool(result.Status == "held")),
                     (RunKeys.Approved, SexpNode.Bool(result.Status == "approved"))),
-                _ when result.Error == "pending-limit" => Update(entry,
+                _ when result.Error == "pending-limit" => Settle(entry,
                     (RunKeys.NextUploadAt, SexpNode.Int(_now() + UploadLimitRetrySeconds))),
-                _ => Update(entry,
+                _ => Settle(entry,
                     (RunKeys.UploadGivenUp, SexpNode.T),
                     (RunKeys.UploadError, SexpNode.Str(result.Message ?? result.Error ?? "rejected"))),
             };
@@ -402,6 +475,28 @@ public sealed class RunQueue
             UploadProgressChanged?.Invoke(this, EventArgs.Empty);
         }
     }
+
+    /// <summary>The capture diagnostics after an upload, best effort.</summary>
+    private static async Task SendDiagnosticsAsync(IVideoUploader uploader, long serverId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await uploader.SendDiagnosticsAsync(serverId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // Diagnostics must never break the upload flow.
+        }
+    }
+
+    /// <summary>Update after a server reply: the reply also ends any api-error streak, so the count is removed.</summary>
+    private RunEntry Settle(RunEntry entry, params (string Key, SexpNode Value)[] updates) =>
+        Change(entry, current =>
+        {
+            var settled = Apply(current, Pairs(updates));
+            settled.Remove(RunKeys.UploadFailures);
+            return settled;
+        });
 
     /// <summary>Replace the whole list (tests: the Lisp with-test-store). Does not save.</summary>
     public void ResetForTests(IEnumerable<Plist> runs)

@@ -25,7 +25,18 @@ public enum UploadOutcome
 /// <param name="Message">The <c>message</c> (rejected), or the api-error text.</param>
 public sealed record UploadResult(UploadOutcome Outcome, string? Status = null, string? Error = null, string? Message = null)
 {
-    public static UploadResult ApiError(string message) => new(UploadOutcome.ApiError, Message: message);
+    public static UploadResult ApiError(string message, bool counted = false) =>
+        new(UploadOutcome.ApiError, Message: message) { Counted = counted };
+
+    /// <summary>
+    /// An api-error that happened after the request body started going out
+    /// (a reset mid-body, a timeout while sending or awaiting the reply) or a
+    /// 5xx reply: the upload itself is what fails. These count toward
+    /// <see cref="RunQueue.MaxUploadFailures"/> and back off exponentially.
+    /// A failure before the body (DNS, connect, offline) or a 401 is not
+    /// counted: it says nothing about this upload and never gives it up.
+    /// </summary>
+    public bool Counted { get; init; }
 
     /// <summary>The fields from a response body; a non-object body yields none.</summary>
     public static UploadResult FromJson(UploadOutcome outcome, JsonElement? payload)

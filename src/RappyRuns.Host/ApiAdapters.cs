@@ -78,6 +78,14 @@ public sealed class QueueNetwork(ApiClient api, Func<Plist, string> runJson, Fun
         return r.Token;
     }
 
+    /// <summary>
+    /// Is this upload failure the upload's own (<see cref="UploadResult.Counted"/>,
+    /// S17)? A 5xx reply, or any failure after the body started going out. Not:
+    /// DNS / connect failures, a 401, other statuses, local file errors.
+    /// </summary>
+    internal static bool CountsAgainstUpload(Exception e) =>
+        e is ApiException { Status: >= 500 } or ApiException { Status: null, BodyStarted: true };
+
     public async Task<UploadResult> UploadVideoAsync(long serverId, string videoPath, long? offsetMs,
         Action<long, long>? progress, CancellationToken cancellationToken)
     {
@@ -95,7 +103,7 @@ public sealed class QueueNetwork(ApiClient api, Func<Plist, string> runJson, Fun
         }
         catch (Exception e) when (e is ApiException or HttpRequestException or IOException)
         {
-            return UploadResult.ApiError(e.Message);
+            return UploadResult.ApiError(e.Message, CountsAgainstUpload(e));
         }
     }
 

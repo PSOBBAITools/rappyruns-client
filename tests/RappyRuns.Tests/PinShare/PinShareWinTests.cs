@@ -9,9 +9,10 @@ namespace RappyRuns.Tests.PinShare;
 /// <summary>A throwaway game folder: PsoBB.exe, the Solybum plugin and a bundled data\pin-share.</summary>
 internal sealed class GameFolder : IDisposable
 {
+    private readonly TempDir _dir = new("rr-pinshare");
+
     public GameFolder(bool plugin = true, bool dll = true)
     {
-        Root = Path.Combine(Path.GetTempPath(), "rr-pinshare-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(Root, "game", "addons"));
         Directory.CreateDirectory(Bundled);
         File.WriteAllText(Exe, "");
@@ -20,7 +21,7 @@ internal sealed class GameFolder : IDisposable
         if (dll) File.WriteAllBytes(Path.Combine(Bundled, "pinshare-input.dll"), [1, 2, 3, 4]);
     }
 
-    public string Root { get; }
+    public string Root => _dir.Path;
     public string Exe => Path.Combine(Root, "game", "PsoBB.exe");
     public string Bundled => Path.Combine(Root, "client", "data", "pin-share");
     public string AddonDir => Path.Combine(Root, "game", "addons", "Pin Share");
@@ -29,10 +30,7 @@ internal sealed class GameFolder : IDisposable
 
     public AddonInstaller Installer(Action<string>? log = null) => new([Bundled], log, () => 3900000000);
 
-    public void Dispose()
-    {
-        try { Directory.Delete(Root, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
-    }
+    public void Dispose() => _dir.Dispose();
 }
 
 public class PinShareInstallerTests

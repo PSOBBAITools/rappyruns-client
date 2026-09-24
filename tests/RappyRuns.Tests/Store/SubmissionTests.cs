@@ -1,5 +1,6 @@
 using System.Text.Json;
 using RappyRuns.Core.Config;
+using RappyRuns.Core.I18n;
 using RappyRuns.Core.Sexp;
 using RappyRuns.Core.Store;
 using static RappyRuns.Tests.Store.StoreTestSupport;
@@ -14,7 +15,7 @@ namespace RappyRuns.Tests.Store;
 /// </summary>
 public sealed class SubmissionTests : IDisposable
 {
-    private readonly TempDir _dir = new();
+    private readonly TempDir _dir = new("rr-store-test");
 
     public void Dispose() => _dir.Dispose();
 
@@ -258,6 +259,112 @@ public sealed class SubmissionTests : IDisposable
         Assert.Equal(1000 + RunQueue.UploadRetrySeconds, updated.Get(RunKeys.NextUploadAt).AsLong);
         Assert.Equal("WinHttpSendRequest failed", updated.Get(RunKeys.UploadError).AsString);
         Assert.DoesNotContain(uploader.Log, l => l.StartsWith("diagnostics", StringComparison.Ordinal));
+        Assert.Null(updated.Data.Get(RunKeys.UploadFailures));
+    }
+
+    [Theory]
+    [InlineData(1, 300)]
+    [InlineData(2, 600)]
+    [InlineData(3, 1200)]
+    [InlineData(7, 19200)]
+    [InlineData(8, 21600)]
+    [InlineData(11, 21600)]
+    [InlineData(1000, 21600)]
+    public void CountedFailuresBackOffExponentiallyUpToSixHours(long failures, long seconds) =>
+        Assert.Equal(seconds, RunQueue.CountedRetrySeconds(failures));
+
+    [Fact]
+    public async Task TwelveCountedFailuresInARowGiveUpLikeARejection()
+    {
+        var (q, entry) = UploadStore(now: 1000);
+        var uploader = new FakeUploader(UploadResult.ApiError("connection reset", counted: true));
+        for (var i = 1; i < RunQueue.MaxUploadFailures; i++)
+        {
+            var backingOff = await q.UploadEntryVideoAsync(entry, uploader);
+            Assert.False(backingOff.Is(RunKeys.UploadGivenUp));
+            Assert.Equal(i, backingOff.Get(RunKeys.UploadFailures).AsLong);
+            Assert.Equal(1000 + RunQueue.CountedRetrySeconds(i), backingOff.Get(RunKeys.NextUploadAt).AsLong);
+        }
+        Assert.DoesNotContain(uploader.Log, l => l.StartsWith("diagnostics", StringComparison.Ordinal));
+        var updated = await q.UploadEntryVideoAsync(entry, uploader);
+        Assert.True(updated.Is(RunKeys.UploadGivenUp));
+        Assert.Equal("connection reset", updated.Get(RunKeys.UploadError).AsString);
+        Assert.Equal("diagnostics 7", uploader.Log[^1]);
+        Assert.False(RunEntries.IsActive(q.Entries[0].Data));
+        Assert.Null(q.UploadCandidate(1_000_000));
+        Assert.Equal("upload failed", RunDisplay.RunVideoLabel(q.Entries[0].Data, Language.En, null));
+    }
+
+    [Fact]
+    public async Task AnUncountedFailureNeitherCountsNorBreaksTheStreak()
+    {
+        var (q, entry) = UploadStore(now: 1000);
+        await q.UploadEntryVideoAsync(entry, new FakeUploader(UploadResult.ApiError("reset", counted: true)));
+        for (var i = 0; i < RunQueue.MaxUploadFailures + 3; i++)
+        {
+            var updated = await q.UploadEntryVideoAsync(entry, new FakeUploader(UploadResult.ApiError("could not connect")));
+            Assert.False(updated.Is(RunKeys.UploadGivenUp));
+            Assert.Equal(1, updated.Get(RunKeys.UploadFailures).AsLong);
+            Assert.Equal(1000 + RunQueue.UploadRetrySeconds, updated.Get(RunKeys.NextUploadAt).AsLong);
+        }
+    }
+
+    [Fact]
+    public async Task TheFailureCountSurvivesARestart()
+    {
+        var (q, entry) = UploadStore(now: 1000);
+        await q.UploadEntryVideoAsync(entry, new FakeUploader(UploadResult.ApiError("down", counted: true)));
+        await q.UploadEntryVideoAsync(entry, new FakeUploader(UploadResult.ApiError("down", counted: true)));
+        var reloaded = new RunQueue(q.Path, () => 1000, _ => true);
+        reloaded.Load();
+        Assert.Equal(2, reloaded.Entries.Single().Get(RunKeys.UploadFailures).AsLong);
+    }
+
+    [Fact]
+    public async Task AServerReplyEndsTheFailureStreak()
+    {
+        var (q, entry) = UploadStore(now: 1000);
+        for (var i = 1; i < RunQueue.MaxUploadFailures; i++)
+            await q.UploadEntryVideoAsync(entry, new FakeUploader(UploadResult.ApiError("down", counted: true)));
+        var limited = await q.UploadEntryVideoAsync(entry, new FakeUploader(new UploadResult(UploadOutcome.Rejected, Error: "pending-limit")));
+        Assert.Null(limited.Data.Get(RunKeys.UploadFailures));
+        var again = await q.UploadEntryVideoAsync(entry, new FakeUploader(UploadResult.ApiError("down", counted: true)));
+        Assert.False(again.Is(RunKeys.UploadGivenUp));
+        Assert.Equal(1, again.Get(RunKeys.UploadFailures).AsLong);
+    }
+
+    [Fact]
+    public async Task TheManualRetryResetsTheStreakAndRevivesACountedGiveUp()
+    {
+        var (q, entry) = UploadStore(now: 1000);
+        for (var i = 0; i < RunQueue.MaxUploadFailures; i++)
+            await q.UploadEntryVideoAsync(entry, new FakeUploader(UploadResult.ApiError("down", counted: true)));
+        Assert.True(q.Entries[0].Is(RunKeys.UploadGivenUp));
+        Assert.Equal(1, q.ResetUploadFailures());
+        var revived = q.Entries[0];
+        Assert.False(revived.Is(RunKeys.UploadGivenUp));
+        Assert.Null(revived.Data.Get(RunKeys.UploadFailures));
+        Assert.Null(revived.Data.Get(RunKeys.NextUploadAt));
+        Assert.Equal(7, q.UploadCandidate(1000)?.ServerId);
+        Assert.Equal(0, q.ResetUploadFailures());
+    }
+
+    [Fact]
+    public async Task TheManualRetryLeavesARejectionGivenUp()
+    {
+        var (q, entry) = UploadStore(now: 1000);
+        await q.UploadEntryVideoAsync(entry, new FakeUploader(UploadResult.ApiError("down", counted: true)));
+        await q.UploadEntryVideoAsync(entry, new FakeUploader(new UploadResult(UploadOutcome.Rejected, Error: "too-big")));
+        Assert.Equal(0, q.ResetUploadFailures());
+        Assert.True(q.Entries[0].Is(RunKeys.UploadGivenUp));
+    }
+
+    [Fact]
+    public async Task AnUploadWithoutAStreakAddsNoFailureKey()
+    {
+        var (q, entry) = UploadStore();
+        var updated = await q.UploadEntryVideoAsync(entry, new FakeUploader(new UploadResult(UploadOutcome.Attached, Status: "held")));
+        Assert.Null(updated.Data.Get(RunKeys.UploadFailures));
     }
 
     [Fact]

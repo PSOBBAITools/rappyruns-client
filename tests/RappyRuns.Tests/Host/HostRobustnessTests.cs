@@ -11,19 +11,24 @@ namespace RappyRuns.Tests.Host;
 /// <summary>Composition-root failure paths: bad data files, unencodable runs, the %TEMP% contracts.</summary>
 public sealed class HostRobustnessTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "rr-hostfix-" + Guid.NewGuid().ToString("N"));
-
-    public HostRobustnessTests() => Directory.CreateDirectory(_dir);
+    private readonly TempDir _dir = new("rr-hostfix");
 
     public void Dispose()
     {
-        try
-        {
-            Directory.Delete(_dir, true);
-        }
-        catch (IOException)
-        {
-        }
+        _dir.Dispose();
+    }
+
+    [Fact(DisplayName = "only the upload's own failures count toward giving it up (S17)")]
+    public void UploadFailureCounting()
+    {
+        Assert.True(QueueNetwork.CountsAgainstUpload(new ApiException("POST ... -> 502: x") { Status = 502 }));
+        Assert.True(QueueNetwork.CountsAgainstUpload(new ApiException("reset", TransportFailure.Other) { BodyStarted = true }));
+        Assert.True(QueueNetwork.CountsAgainstUpload(new ApiException("timed out", TransportFailure.Timeout) { BodyStarted = true }));
+        Assert.False(QueueNetwork.CountsAgainstUpload(ApiException.InvalidToken()));
+        Assert.False(QueueNetwork.CountsAgainstUpload(new ApiException("dns", TransportFailure.AddressNotFound)));
+        Assert.False(QueueNetwork.CountsAgainstUpload(new ApiException("refused", TransportFailure.ConnectFailed)));
+        Assert.False(QueueNetwork.CountsAgainstUpload(new ApiException("file too large to upload (5 bytes)")));
+        Assert.False(QueueNetwork.CountsAgainstUpload(new IOException("locked")));
     }
 
     [Theory(DisplayName = "a malformed or missing quest-triggers.sexp is logged, never fatal")]
@@ -33,7 +38,7 @@ public sealed class HostRobustnessTests : IDisposable
     [InlineData(null, true)]                                  // no file at all
     public void MalformedBuiltinTriggers(string? text, bool mustFail)
     {
-        var path = Path.Combine(_dir, "quest-triggers.sexp");
+        var path = Path.Combine(_dir.Path, "quest-triggers.sexp");
         if (text is not null) File.WriteAllText(path, text);
         var catalog = new QuestCatalog();
         var log = new List<string>();
@@ -49,7 +54,7 @@ public sealed class HostRobustnessTests : IDisposable
     [Fact(DisplayName = "a run that cannot be encoded fails alone with the reason; the pass goes on")]
     public async Task UnencodableRunFailsAlone()
     {
-        var config = RappyRuns.Core.Config.ConfigStore.Open(_dir);
+        var config = RappyRuns.Core.Config.ConfigStore.Open(_dir.Path);
         config.ServerUrl = "https://s.example";
         config.AnonToken = "anon-1";
         var server = new FakeHandler(_ => (201, """{"id":7,"url":"https://s.example/runs/7"}"""));

@@ -147,12 +147,11 @@ public class AuthServiceTests
 
     private sealed class EnsureRig : IDisposable
     {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "rr-ensure-" + Guid.NewGuid().ToString("N"));
+        private readonly TempDir _dir = new("rr-ensure");
 
         public EnsureRig(Func<SeenRequest, (int, string)> respond, string? serverUrl = null, HttpTransport? transport = null)
         {
-            Directory.CreateDirectory(_dir);
-            Config = RappyRuns.Core.Config.ConfigStore.Open(_dir);
+            Config = RappyRuns.Core.Config.ConfigStore.Open(_dir.Path);
             Config.ServerUrl = serverUrl ?? "https://s.example";
             Handler = new FakeHandler(respond);
             var api = new ApiClient(transport ?? new HttpTransport(Handler), new RappyRuns.Host.ConfigAuthSettings(Config));
@@ -168,13 +167,7 @@ public class AuthServiceTests
 
         public void Dispose()
         {
-            try
-            {
-                Directory.Delete(_dir, true);
-            }
-            catch (IOException)
-            {
-            }
+            _dir.Dispose();
         }
     }
 

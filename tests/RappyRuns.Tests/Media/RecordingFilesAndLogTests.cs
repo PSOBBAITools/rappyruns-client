@@ -13,20 +13,12 @@ namespace RappyRuns.Tests.Media;
 [Collection("recording-log")]
 public class RecordingFilesAndLogTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "rr-media-files-" + Guid.NewGuid().ToString("N"));
-
-    public RecordingFilesAndLogTests() => Directory.CreateDirectory(_dir);
+    private readonly TempDir _dir = new("rr-media-files");
 
     public void Dispose()
     {
         RecordingLog.PathOverride = TestLog.Path;
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (IOException)
-        {
-        }
+        _dir.Dispose();
     }
 
     [Fact]
@@ -52,12 +44,12 @@ public class RecordingFilesAndLogTests : IDisposable
     [Fact]
     public void DeduplicatePathCountsLikeExplorer()
     {
-        var path = Path.Combine(_dir, "a b.mp4");
+        var path = Path.Combine(_dir.Path, "a b.mp4");
         Assert.Equal(path, RecordingFiles.DeduplicatePath(path));
         File.WriteAllText(path, "");
-        Assert.Equal(Path.Combine(_dir, "a b (2).mp4"), RecordingFiles.DeduplicatePath(path));
-        File.WriteAllText(Path.Combine(_dir, "a b (2).mp4"), "");
-        Assert.Equal(Path.Combine(_dir, "a b (3).mp4"), RecordingFiles.DeduplicatePath(path));
+        Assert.Equal(Path.Combine(_dir.Path, "a b (2).mp4"), RecordingFiles.DeduplicatePath(path));
+        File.WriteAllText(Path.Combine(_dir.Path, "a b (2).mp4"), "");
+        Assert.Equal(Path.Combine(_dir.Path, "a b (3).mp4"), RecordingFiles.DeduplicatePath(path));
     }
 
     [Fact]
@@ -69,7 +61,7 @@ public class RecordingFilesAndLogTests : IDisposable
         Assert.Equal(RecordDirChoice.Migrate, RecordingFiles.DefaultRecordDirChoice(true, false));
 
         Assert.Equal(@"D:\clips\", RecordingFiles.ResolveRecordDir(@"  D:\clips  "));
-        var home = Path.Combine(_dir, "home");
+        var home = Path.Combine(_dir.Path, "home");
         Assert.Equal(Path.Combine(home, "Videos", "RappyRuns") + "\\", RecordingFiles.ResolveRecordDir("", home));
         Directory.CreateDirectory(Path.Combine(home, "Videos", "EphineaTA"));
         File.WriteAllText(Path.Combine(home, "Videos", "EphineaTA", "x.mp4"), "");
@@ -81,17 +73,17 @@ public class RecordingFilesAndLogTests : IDisposable
     public void FfmpegPathResolution()
     {
         Assert.Equal(@"C:\x\ffmpeg.exe", RecordingFiles.ResolveFfmpegPath(@" C:\x\ffmpeg.exe "));
-        Assert.Equal("ffmpeg.exe", RecordingFiles.ResolveFfmpegPath("", _dir));
-        Directory.CreateDirectory(Path.Combine(_dir, "ffmpeg"));
-        File.WriteAllText(Path.Combine(_dir, "ffmpeg", "ffmpeg.exe"), "");
-        Assert.Equal(Path.Combine(_dir, "ffmpeg", "ffmpeg.exe"), RecordingFiles.ResolveFfmpegPath(null, _dir));
+        Assert.Equal("ffmpeg.exe", RecordingFiles.ResolveFfmpegPath("", _dir.Path));
+        Directory.CreateDirectory(Path.Combine(_dir.Path, "ffmpeg"));
+        File.WriteAllText(Path.Combine(_dir.Path, "ffmpeg", "ffmpeg.exe"), "");
+        Assert.Equal(Path.Combine(_dir.Path, "ffmpeg", "ffmpeg.exe"), RecordingFiles.ResolveFfmpegPath(null, _dir.Path));
         Assert.Equal(@"C:\v\a.mp4.stderr.txt", RecordingFiles.StderrFileFor(@"C:\v\a.mp4"));
     }
 
     [Fact]
     public void LogLinesRotationAndTail()
     {
-        var log = Path.Combine(_dir, "ephinea-ta-recording.log");
+        var log = Path.Combine(_dir.Path, "ephinea-ta-recording.log");
         RecordingLog.PathOverride = log;
         RecordingLog.Write("capture check: no PSOBB window");
         RecordingLog.Write("ffmpeg stderr (x):\nline two");
@@ -107,15 +99,15 @@ public class RecordingFilesAndLogTests : IDisposable
         Assert.True(File.Exists(Path.ChangeExtension(log, ".old")));
         Assert.Matches(@"^\d\d-\d\d \d\d:\d\d:\d\d after rotation\r\n$", File.ReadAllText(log));
 
-        Assert.Null(RecordingLog.FileTail(Path.Combine(_dir, "missing.log"), 10));
-        File.WriteAllText(Path.Combine(_dir, "empty.txt"), "");
-        Assert.Null(RecordingLog.FileTail(Path.Combine(_dir, "empty.txt"), 10));
+        Assert.Null(RecordingLog.FileTail(Path.Combine(_dir.Path, "missing.log"), 10));
+        File.WriteAllText(Path.Combine(_dir.Path, "empty.txt"), "");
+        Assert.Null(RecordingLog.FileTail(Path.Combine(_dir.Path, "empty.txt"), 10));
     }
 
     [Fact]
     public void DiagnosticsReportShape()
     {
-        var log = Path.Combine(_dir, "ephinea-ta-recording.log");
+        var log = Path.Combine(_dir.Path, "ephinea-ta-recording.log");
         RecordingLog.PathOverride = log;
         var machine = new MachineInfo(8L << 30, 8, "Windows NT", "Windows 11: 10.0 (build 26200) ");
         var hw = new HwEncoderStatus { Encoder = "h264_amf", State = HwProbeState.Done };

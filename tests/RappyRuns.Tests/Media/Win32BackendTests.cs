@@ -11,25 +11,18 @@ namespace RappyRuns.Tests.Media;
 [Collection("recording-log")]
 public class Win32BackendTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "rr-media-win-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = new("rr-media-win");
 
     public Win32BackendTests()
     {
-        Directory.CreateDirectory(_dir);
         // Keep stderr transcripts out of the machine's real recording log.
-        RecordingLog.PathOverride = Path.Combine(_dir, "recording.log");
+        RecordingLog.PathOverride = Path.Combine(_dir.Path, "recording.log");
     }
 
     public void Dispose()
     {
         RecordingLog.PathOverride = TestLog.Path;
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (IOException)
-        {
-        }
+        _dir.Dispose();
     }
 
     private static Win32FfmpegBackend Backend() => new(() => 0, () => true, null);
@@ -37,7 +30,7 @@ public class Win32BackendTests : IDisposable
     [Fact]
     public void SpawnFailureKeepsTheWindowsErrorShape()
     {
-        var result = Backend().StartRemux(Path.Combine(_dir, "no-such-ffmpeg.exe"), ["-i", "x", Path.Combine(_dir, "out.mp4")]);
+        var result = Backend().StartRemux(Path.Combine(_dir.Path, "no-such-ffmpeg.exe"), ["-i", "x", Path.Combine(_dir.Path, "out.mp4")]);
         Assert.Null(result.Handle);
         Assert.Matches(@"^could not start .*no-such-ffmpeg\.exe \(Windows error 2\)$", result.Error);
     }
@@ -46,7 +39,7 @@ public class Win32BackendTests : IDisposable
     public void ExitCodesAliveAndStderrFile()
     {
         var backend = Backend();
-        var output = Path.Combine(_dir, "o.mp4");
+        var output = Path.Combine(_dir.Path, "o.mp4");
         // cmd /c "echo boom 1>&2 & exit 3": stderr goes to <output>.stderr.txt.
         var result = backend.StartRemux(Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\cmd.exe"),
             ["/c", "echo boom 1>&2 & exit 3", output]);
@@ -79,7 +72,7 @@ public class Win32BackendTests : IDisposable
     {
         var backend = Backend();
         var result = backend.StartRemux(Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\cmd.exe"),
-            ["/c", "ping -n 30 127.0.0.1 >nul", Path.Combine(_dir, "k.mp4")]);
+            ["/c", "ping -n 30 127.0.0.1 >nul", Path.Combine(_dir.Path, "k.mp4")]);
         var handle = result.Handle!;
         Assert.True(backend.IsAlive(handle));
         backend.Kill(handle);
@@ -93,19 +86,19 @@ public class Win32BackendTests : IDisposable
     public void FileListingsSplitTmpFromKept()
     {
         foreach (var name in new[] { "rec-tmp-1.mp4", "rec-tmp-2.mp4", "kept (2).mp4", "Kept.MP4", "notes.txt", "x.mp4x" })
-            File.WriteAllText(Path.Combine(_dir, name), "12345");
+            File.WriteAllText(Path.Combine(_dir.Path, name), "12345");
         var backend = Backend();
-        Assert.Equal(["rec-tmp-1.mp4", "rec-tmp-2.mp4"], backend.ListStaleFiles(_dir).Select(p => Path.GetFileName(p)!).Order().ToArray());
-        var kept = backend.ListRecordings(_dir);
+        Assert.Equal(["rec-tmp-1.mp4", "rec-tmp-2.mp4"], backend.ListStaleFiles(_dir.Path).Select(p => Path.GetFileName(p)!).Order().ToArray());
+        var kept = backend.ListRecordings(_dir.Path);
         Assert.Equal(["Kept.MP4", "kept (2).mp4"], kept.Select(f => Path.GetFileName(f.Path)).Order(StringComparer.Ordinal).ToArray());
         Assert.All(kept, f => Assert.Equal(5, f.SizeBytes));
         Assert.All(kept, f => Assert.True(f.WriteDate > Lisp.EncodeUniversalTime(new DateTime(2020, 1, 1))));
-        Assert.Empty(backend.ListStaleFiles(Path.Combine(_dir, "missing")));
-        backend.RenameFile(Path.Combine(_dir, "rec-tmp-1.mp4"), Path.Combine(_dir, "rec-tmp-2.mp4"));
-        Assert.False(File.Exists(Path.Combine(_dir, "rec-tmp-1.mp4")));
-        backend.DeleteFile(Path.Combine(_dir, "rec-tmp-2.mp4"));
-        backend.DeleteFile(Path.Combine(_dir, "rec-tmp-2.mp4"));
-        Assert.False(File.Exists(Path.Combine(_dir, "rec-tmp-2.mp4")));
+        Assert.Empty(backend.ListStaleFiles(Path.Combine(_dir.Path, "missing")));
+        backend.RenameFile(Path.Combine(_dir.Path, "rec-tmp-1.mp4"), Path.Combine(_dir.Path, "rec-tmp-2.mp4"));
+        Assert.False(File.Exists(Path.Combine(_dir.Path, "rec-tmp-1.mp4")));
+        backend.DeleteFile(Path.Combine(_dir.Path, "rec-tmp-2.mp4"));
+        backend.DeleteFile(Path.Combine(_dir.Path, "rec-tmp-2.mp4"));
+        Assert.False(File.Exists(Path.Combine(_dir.Path, "rec-tmp-2.mp4")));
     }
 
     [Fact]

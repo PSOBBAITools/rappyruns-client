@@ -81,16 +81,10 @@ public sealed class AddonInstaller
         if (IsDanglingLink(addonDir)) return new PinShareStatus(PinShareStatusKind.BrokenLink, addonDir);
         try
         {
-            var bundled = BundledFile(AddonFile);
-            if (bundled is not null && !IsReparsePoint(addonDir))
+            if (BundledFile(AddonFile) is not null && !IsReparsePoint(addonDir))
             {
-                var wanted = File.ReadAllBytes(bundled);
-                if (!(File.Exists(installed) && wanted.AsSpan().SequenceEqual(File.ReadAllBytes(installed))))
-                {
-                    Directory.CreateDirectory(addonDir);
-                    File.WriteAllBytes(installed, wanted);
+                if (InstallFile(AddonFile, addonDir, renameAside: false))
                     _log?.Invoke($"pin share: addon installed at {installed}");
-                }
                 InstallInputDll(addonDir);
             }
             Directory.CreateDirectory(Path.Combine(addonDir, "exchange"));
@@ -115,46 +109,69 @@ public sealed class AddonInstaller
     /// </summary>
     public void InstallInputDll(string addonDir)
     {
-        var bundled = BundledFile(InputDllFile);
         var installed = Path.Combine(addonDir, InputDllFile);
         foreach (var old in OldInputDlls(addonDir))
         {
             try { File.Delete(old); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
-        if (bundled is null) return;
         try
         {
-            var wanted = File.ReadAllBytes(bundled);
-            if (File.Exists(installed) && wanted.AsSpan().SequenceEqual(File.ReadAllBytes(installed))) return;
-            try
-            {
-                File.WriteAllBytes(installed, wanted);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // Presumably in use by the game: move it aside and write anew.
-                // If that write fails too, the cause was not the lock
-                // (antivirus, permissions) - put the working copy back rather
-                // than leave an aside file the next install would delete.
-                var aside = Path.Combine(addonDir, $"{InputDllFile}.old-{_universalTime()}");
-                File.Move(installed, aside);
-                try
-                {
-                    File.WriteAllBytes(installed, wanted);
-                }
-                catch (Exception)
-                {
-                    try { File.Delete(installed); } catch (Exception d) when (d is IOException or UnauthorizedAccessException) { }
-                    File.Move(aside, installed);
-                    throw;
-                }
-            }
-            _log?.Invoke($"pin share: input dll installed at {installed}");
+            if (InstallFile(InputDllFile, addonDir, renameAside: true))
+                _log?.Invoke($"pin share: input dll installed at {installed}");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
             _log?.Invoke($"pin share: input dll not installed: {e.Message}");
         }
+    }
+
+    /// <summary>
+    /// Copies the shipped <paramref name="name"/> into <paramref name="addonDir"/>
+    /// unless the installed copy already has the same bytes. True when it
+    /// wrote; false when already current or nothing is shipped under that
+    /// name. The addon file creates the folder first. With
+    /// <paramref name="renameAside"/>, a write that fails (presumably the game
+    /// holds the file loaded) moves the old copy aside to a fresh
+    /// <c>&lt;name&gt;.old-&lt;universal time&gt;</c> and writes anew; if that write
+    /// fails too, the cause was not the lock (antivirus, permissions), so the
+    /// working copy is put back rather than leave an aside file the next
+    /// install would delete. Only the DLL uses <paramref name="renameAside"/>:
+    /// <see cref="OldInputDlls"/> is what cleans those aside copies up.
+    /// Throws on failure; each caller handles it.
+    /// </summary>
+    private bool InstallFile(string name, string addonDir, bool renameAside)
+    {
+        var bundled = BundledFile(name);
+        if (bundled is null) return false;
+        var installed = Path.Combine(addonDir, name);
+        var wanted = File.ReadAllBytes(bundled);
+        if (File.Exists(installed) && wanted.AsSpan().SequenceEqual(File.ReadAllBytes(installed))) return false;
+        if (!renameAside)
+        {
+            Directory.CreateDirectory(addonDir);
+            File.WriteAllBytes(installed, wanted);
+            return true;
+        }
+        try
+        {
+            File.WriteAllBytes(installed, wanted);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            var aside = Path.Combine(addonDir, $"{name}.old-{_universalTime()}");
+            File.Move(installed, aside);
+            try
+            {
+                File.WriteAllBytes(installed, wanted);
+            }
+            catch (Exception)
+            {
+                try { File.Delete(installed); } catch (Exception d) when (d is IOException or UnauthorizedAccessException) { }
+                File.Move(aside, installed);
+                throw;
+            }
+        }
+        return true;
     }
 
     /// <summary>Copies of pinshare-input.dll moved aside by earlier updates.</summary>
