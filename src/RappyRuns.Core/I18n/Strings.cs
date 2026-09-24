@@ -4,7 +4,7 @@ namespace RappyRuns.Core.I18n;
 
 /// <summary>
 /// The UI string table (strings.json, generated from client/src/i18n.lisp by
-/// desktop/tools/export-i18n.lisp) and the <c>tr</c> lookup. The same table is
+/// desktop/tools/export-i18n.lisp, plus strings.extra.json) and the <c>tr</c> lookup. The same table is
 /// sent to the web UI at startup.
 /// </summary>
 public sealed class Strings
@@ -47,11 +47,24 @@ public sealed class Strings
         return new Strings(entries);
     }
 
+    /// <summary>
+    /// strings.json (generated from i18n.lisp) merged with strings.extra.json
+    /// (keys only the C# client and its web UI use, docs/ipc.md). The generated
+    /// table wins on a clash, so a regenerated strings.json never loses a key.
+    /// </summary>
     private static Strings LoadEmbedded()
     {
-        using var stream = typeof(Strings).Assembly.GetManifestResourceStream("RappyRuns.Core.I18n.strings.json")
-            ?? throw new InvalidOperationException("strings.json is not embedded");
+        var table = Parse(ReadResource("RappyRuns.Core.I18n.strings.json"));
+        foreach (var (key, entry) in Parse(ReadResource("RappyRuns.Core.I18n.strings.extra.json"))._entries)
+            table._entries.TryAdd(key, entry);
+        return table;
+    }
+
+    private static string ReadResource(string name)
+    {
+        using var stream = typeof(Strings).Assembly.GetManifestResourceStream(name)
+            ?? throw new InvalidOperationException($"{name} is not embedded");
         using var reader = new StreamReader(stream);
-        return Parse(reader.ReadToEnd());
+        return reader.ReadToEnd();
     }
 }

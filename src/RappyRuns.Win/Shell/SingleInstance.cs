@@ -73,6 +73,20 @@ public sealed class SingleInstance : IDisposable
     }
 
     /// <summary>
+    /// Release the process claim taken by <see cref="ClaimForProcess"/>. Only
+    /// for the self-update hand-over (UpdateLauncher.ApplyAndRestart): the
+    /// new exe must not find this process still "running" and exit. Call
+    /// <see cref="ClaimForProcess"/> again if the hand-over fails and this
+    /// process carries on.
+    /// </summary>
+    public static void ReleaseProcessClaim()
+    {
+        var claim = ProcessClaim;
+        ProcessClaim = null;
+        claim?.Dispose();
+    }
+
+    /// <summary>
     /// Ask the running instance to show its window: FindWindowW(class) then
     /// PostMessageW(0x8002) (<c>signal-existing-instance</c>,
     /// tray-win32.lisp:585). Best-effort - the other instance may still be

@@ -21,8 +21,12 @@ public static class RecordingLog
 
     private static readonly object Gate = new();
 
-    /// <summary>Test hook: redirect the log (null = the real %TEMP% path).</summary>
-    internal static string? PathOverride { get; set; }
+    /// <summary>
+    /// Redirect the log (null = the real %TEMP% path): tests, and the app's
+    /// isolated dev mode (RAPPYRUNS_CONFIG_DIR) so a side-by-side dev client
+    /// never writes into the installed client's log.
+    /// </summary>
+    public static string? PathOverride { get; set; }
 
     /// <summary>
     /// <c>recording-log-path</c>: resolved from Windows at CALL time. v0.41.0

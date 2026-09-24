@@ -64,6 +64,37 @@ public class UpdaterTests : IDisposable
     public void DecisionSame() =>
         Assert.Equal(UpdateDecision.UpToDate, UpdatePolicy.StartupDecision(ReleaseInfo.Parse(ReleaseSample), "0.6.0", true));
 
+    [Fact(DisplayName = "startup decision skips the tag the update helper rolled back")]
+    public void DecisionRejected()
+    {
+        var release = ReleaseInfo.Parse(ReleaseSample);
+        Assert.Equal(UpdateDecision.Rejected, UpdatePolicy.StartupDecision(release, "0.5.0", true, "v0.6.0"));
+        Assert.Equal(UpdateDecision.Apply, UpdatePolicy.StartupDecision(release, "0.5.0", true, "v0.5.9"));
+        // Not newer wins over a stale rejection (updater.lisp order).
+        Assert.Equal(UpdateDecision.UpToDate, UpdatePolicy.StartupDecision(release, "0.6.0", true, "v0.6.0"));
+    }
+
+    [Fact(DisplayName = "rejected-update-tag reads a fresh file and ignores one older than 3 days")]
+    public void RejectedTagFile()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "rr-rejected-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            Assert.Null(UpdateFiles.RejectedTag(dir));
+            var path = Path.Combine(dir, UpdateFiles.RejectedFileName);
+            File.WriteAllText(path, "﻿ v1.0.0 \r\nignored\n", new UTF8Encoding(false));
+            Assert.Equal("v1.0.0", UpdateFiles.RejectedTag(dir));
+            Assert.Null(UpdateFiles.RejectedTag(dir, DateTime.UtcNow.AddDays(3.1)));
+            File.WriteAllText(path, "  \n");
+            Assert.Null(UpdateFiles.RejectedTag(dir));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
     [Fact(DisplayName = "startup decision never updates a dev build")]
     public void DecisionDev() =>
         Assert.Equal(UpdateDecision.UpToDate, UpdatePolicy.StartupDecision(ReleaseInfo.Parse(ReleaseSample), null, true));

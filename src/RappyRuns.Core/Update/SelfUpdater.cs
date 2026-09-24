@@ -63,11 +63,13 @@ public sealed class SelfUpdater(HttpTransport transport, Func<string?> configure
     /// <see cref="UpdatePolicy.StartupDecision"/>. Only <see cref="UpdateDecision.Apply"/>
     /// should download; the release is returned for it.
     /// </summary>
+    /// <param name="rejectedTag">The tag the update helper rolled back recently (<see cref="UpdateFiles.RejectedTag"/>), or null.</param>
+    /// <param name="cancellationToken">Cancels the fetch.</param>
     public async Task<(UpdateDecision Decision, ReleaseInfo? Release)> StartupCheckAsync(
-        CancellationToken cancellationToken = default)
+        string? rejectedTag = null, CancellationToken cancellationToken = default)
     {
         var release = await FetchLatestReleaseAsync(cancellationToken).ConfigureAwait(false);
-        return (UpdatePolicy.StartupDecision(release, currentVersion, InstallDirWritable()), release);
+        return (UpdatePolicy.StartupDecision(release, currentVersion, InstallDirWritable(), rejectedTag), release);
     }
 
     /// <summary>

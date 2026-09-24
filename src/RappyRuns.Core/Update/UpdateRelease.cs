@@ -94,6 +94,13 @@ public enum UpdateDecision
     /// <summary>Newer, but the install folder refuses writes → offer the manual download page.</summary>
     NotWritable,
 
+    /// <summary>
+    /// Newer, but it is the release the update helper had to roll back on this
+    /// PC within the last few days (updater.lisp <c>:rejected</c>): not retried
+    /// automatically; the version line says so.
+    /// </summary>
+    Rejected,
+
     /// <summary>Download and hand over before any window shows.</summary>
     Apply,
 }
@@ -103,13 +110,16 @@ public static class UpdatePolicy
 {
     /// <summary>
     /// <c>startup-update-decision</c>: null release → CheckFailed; not newer (or dev
-    /// build, <paramref name="currentVersion"/> null) → UpToDate; not writable →
+    /// build, <paramref name="currentVersion"/> null) → UpToDate; the tag the update
+    /// helper rolled back (<paramref name="rejectedTag"/>) → Rejected; not writable →
     /// NotWritable; otherwise Apply.
     /// </summary>
-    public static UpdateDecision StartupDecision(ReleaseInfo? release, string? currentVersion, bool writable)
+    public static UpdateDecision StartupDecision(ReleaseInfo? release, string? currentVersion, bool writable,
+        string? rejectedTag = null)
     {
         if (release is null) return UpdateDecision.CheckFailed;
         if (!ClientVersion.UpdateAvailable(currentVersion, release.Tag)) return UpdateDecision.UpToDate;
+        if (rejectedTag is not null && rejectedTag == release.Tag) return UpdateDecision.Rejected;
         return writable ? UpdateDecision.Apply : UpdateDecision.NotWritable;
     }
 }

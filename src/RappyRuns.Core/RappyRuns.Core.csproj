@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="I18n\strings.json" LogicalName="RappyRuns.Core.I18n.strings.json" />
+    <EmbeddedResource Include="I18n\strings.extra.json" LogicalName="RappyRuns.Core.I18n.strings.extra.json" />
   </ItemGroup>
 
 </Project>

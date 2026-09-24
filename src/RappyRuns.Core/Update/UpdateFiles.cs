@@ -28,6 +28,37 @@ public static class UpdateFiles
     /// <summary>The extraction folder, %TEMP%\rappyruns-update-stage.</summary>
     public static string StageDir(string? tempDir = null) => Path.Combine(tempDir ?? TempDir(), UpdateConstants.StageDirName);
 
+    /// <summary>+rejected-update-name+: where the bridge update helper records a rolled-back tag (config folder).</summary>
+    public const string RejectedFileName = "update-rejected.txt";
+
+    /// <summary>+rejected-update-days+: how long a rolled-back release is skipped by the automatic pass.</summary>
+    public const int RejectedDays = 3;
+
+    /// <summary>
+    /// <c>rejected-update-tag</c> (updater.lisp:323): the release tag written to
+    /// <c>&lt;configDir&gt;\update-rejected.txt</c> by the update helper that had to
+    /// roll it back, when the file is younger than <see cref="RejectedDays"/> days;
+    /// else null. The first line, trimmed of spaces, tabs, line ends and a BOM.
+    /// Never throws.
+    /// </summary>
+    public static string? RejectedTag(string configDir, DateTime? utcNow = null)
+    {
+        try
+        {
+            var path = Path.Combine(configDir, RejectedFileName);
+            var info = new FileInfo(path);
+            if (!info.Exists) return null;
+            if ((utcNow ?? DateTime.UtcNow) - info.LastWriteTimeUtc >= TimeSpan.FromDays(RejectedDays)) return null;
+            using var reader = new StreamReader(path, System.Text.Encoding.UTF8);
+            var tag = reader.ReadLine()?.Trim(' ', '\t', '\r', '\n', '﻿');
+            return string.IsNullOrEmpty(tag) ? null : tag;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// <c>valid-update-zip-p</c>: a cheap corruption check — the byte size the API
     /// promised (skipped when <paramref name="expectedSize"/> is null) and the PK
