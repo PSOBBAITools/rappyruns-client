@@ -95,15 +95,31 @@ embedded quotes doubled), so paths with spaces survive."
               (write-char char out))
     (write-char #\' out)))
 
+(defparameter +started-marker-name+ "rappyruns-client-started.txt"
+  "File in %TEMP% a freshly started client writes \"<pid> <version>\" to
+once its window is up (WRITE-STARTED-MARKER here; the C# client writes
+the same file). The update helper waits for it before keeping a new
+build - desktop/docs/PLAN.md decision 1.")
+
+(defparameter +started-marker-timeout-seconds+ 120
+  "How long the update helper waits for the new client's started marker
+before it rolls back to the .old exe. Generous: a cold first start
+(antivirus scan of a new 50MB exe, WebView2 first-run setup) is slow.")
+
 (defun updater-script-text (&key pid exe-path target-exe-path install-dir
-                                 zip-path stage-dir log-path)
+                                 zip-path stage-dir log-path marker-path
+                                 (start-timeout +started-marker-timeout-seconds+))
   "The helper script that performs the actual swap, as a string (pure,
 so the tests can check its shape). It stages the zip and verifies the
 new exe BEFORE touching the install, so a bad download can never break
 the existing client; any later failure rolls the .old exe back.
 TARGET-EXE-PATH is where the new exe lands (+CLIENT-EXE-NAME+ in the
 install dir): when the running exe still carries the pre-rename name,
-the update doubles as the rename migration."
+the update doubles as the rename migration.
+MARKER-PATH is the started marker: the new exe must write its PID there
+within START-TIMEOUT seconds, or the helper stops it and restores the
+.old exe. This guards the switch to the C# client, whose failure to
+start (say, no WebView2 runtime) would otherwise strand the user."
   (format nil "$ErrorActionPreference = 'Stop'~%~
 Start-Transcript -Path ~a -Force | Out-Null~%~
 $exe = ~a~%~
@@ -111,8 +127,10 @@ $target = ~a~%~
 $installDir = ~a~%~
 $zip = ~a~%~
 $stage = ~a~%~
+$marker = ~a~%~
 $old = \"$exe.old\"~%~
 $stillRunning = $false~%~
+$dropNew = $false~%~
 try {~%~
     # The client launched us right before quitting; wait it out.~%~
     $proc = Get-Process -Id ~d -ErrorAction SilentlyContinue~%~
@@ -146,11 +164,36 @@ try {~%~
             Copy-Item (Join-Path $newFfmpeg '*') (Join-Path $installDir 'ffmpeg') -Recurse -Force~%~
         } catch { Write-Output \"ffmpeg update skipped: $_\" }~%~
     }~%~
-    Start-Process -FilePath $target -WorkingDirectory $installDir~%~
+    Remove-Item -Force $marker -ErrorAction SilentlyContinue~%~
+    $new = Start-Process -FilePath $target -WorkingDirectory $installDir -PassThru~%~
+    # Keep the new build only once it reports its window is up.~%~
+    $deadline = (Get-Date).AddSeconds(~d)~%~
+    $started = $false~%~
+    while ((Get-Date) -lt $deadline) {~%~
+        if (Test-Path $marker) {~%~
+            $markerPid = ((Get-Content -Raw $marker).Trim() -split ' ')[0]~%~
+            if ($markerPid -eq [string]$new.Id) { $started = $true; break }~%~
+        }~%~
+        if ($new.HasExited) { break }~%~
+        Start-Sleep -Milliseconds 500~%~
+    }~%~
+    if (-not $started) {~%~
+        Stop-Process -Id $new.Id -Force -ErrorAction SilentlyContinue~%~
+        Wait-Process -Id $new.Id -Timeout 10 -ErrorAction SilentlyContinue~%~
+        $dropNew = $true~%~
+        throw \"the new client did not start\"~%~
+    }~%~
     Remove-Item -Force $zip -ErrorAction SilentlyContinue~%~
     Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue~%~
 } catch {~%~
     Write-Output \"update failed: $_\"~%~
+    # A new build that never came up is removed so the .old one returns.~%~
+    # The stopped process may hold its image a moment longer; retry.~%~
+    if ($dropNew -and (Test-Path $old)) {~%~
+        for ($i = 0; $i -lt 10 -and (Test-Path $target); $i++) {~%~
+            try { Remove-Item -Force $target -ErrorAction Stop } catch { Start-Sleep -Seconds 1 }~%~
+        }~%~
+    }~%~
     if ((Test-Path $old) -and -not (Test-Path $exe)) {~%~
         # When the old exe carried a different name, drop the half-installed new-name exe too.~%~
         if ($target -ne $exe) { Remove-Item -Force $target -ErrorAction SilentlyContinue }~%~
@@ -168,7 +211,9 @@ try {~%~
           (ps-quote install-dir)
           (ps-quote zip-path)
           (ps-quote stage-dir)
-          pid))
+          (ps-quote marker-path)
+          pid
+          start-timeout))
 
 ;;; ------------------------------------------------------------------
 ;;; LispWorks side: HTTP, filesystem and the actual handover.
@@ -205,6 +250,20 @@ build).")
   (uiop:ensure-directory-pathname
    (or (uiop:getenv "TEMP") (uiop:getenv "TMP")
        (namestring (user-homedir-pathname)))))
+
+#+lispworks
+(defun started-marker-path ()
+  (merge-pathnames +started-marker-name+ (windows-temp-dir)))
+
+#+lispworks
+(defun write-started-marker ()
+  "Tell a waiting update helper this build came up (see
+UPDATER-SCRIPT-TEXT). Written on every start; failures are ignored."
+  (ignore-errors
+    (with-open-file (out (started-marker-path) :direction :output
+                                               :if-exists :supersede
+                                               :external-format :utf-8)
+      (format out "~d ~a~%" (%get-current-process-id) (client-version)))))
 
 #+lispworks
 (defun update-zip-path ()
@@ -301,7 +360,8 @@ process to die, swaps the exe and restarts the new build."
                 :stage-dir (namestring
                             (merge-pathnames "rappyruns-update-stage/" temp))
                 :log-path (namestring
-                           (merge-pathnames "rappyruns-update.log" temp)))))
+                           (merge-pathnames "rappyruns-update.log" temp))
+                :marker-path (namestring (started-marker-path)))))
     (with-open-file (out script-path :direction :output :if-exists :supersede
                                      :external-format :utf-8)
       ;; BOM first: PowerShell 5.1 reads a BOM-less .ps1 as ANSI (cp932

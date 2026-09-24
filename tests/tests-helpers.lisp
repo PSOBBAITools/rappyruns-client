@@ -521,7 +521,9 @@
                  :install-dir "C:\\Program Files\\Rappy Runs\\"
                  :zip-path "C:\\Temp\\RappyRunsClient-update.zip"
                  :stage-dir "C:\\Temp\\rappyruns-update-stage\\"
-                 :log-path "C:\\Temp\\it's a log.txt")))
+                 :log-path "C:\\Temp\\it's a log.txt"
+                 :marker-path "C:\\Temp\\rappyruns-client-started.txt"
+                 :start-timeout 120)))
     (check "script waits for the old process"
            (and (search "Wait-Process -Id 4242" script)
                 (search "Get-Process -Id 4242" script)))
@@ -555,7 +557,22 @@
     (check "embedded quotes in paths are doubled"
            (search "'C:\\Temp\\it''s a log.txt'" script))
     (check "the running exe is never deleted, only moved"
-           (not (search "Remove-Item -Force $exe" script)))))
+           (not (search "Remove-Item -Force $exe" script)))
+    (check "script clears the started marker before launching"
+           (let ((clear (search "Remove-Item -Force $marker" script))
+                 (launch (search "Start-Process -FilePath $target" script)))
+             (and clear launch (< clear launch))))
+    (check "script waits for the new client's own PID in the marker"
+           (and (search "$markerPid -eq [string]$new.Id" script)
+                (search "AddSeconds(120)" script)))
+    (check "a new client that never starts is stopped and rolled back"
+           (let ((stop (search "Stop-Process -Id $new.Id" script))
+                 (drop (search "try { Remove-Item -Force $target -ErrorAction Stop }" script))
+                 (rollback (search "Move-Item $old $exe" script)))
+             (and stop drop rollback (< drop rollback))))
+    (check "the zip is only removed after the new client started"
+           (< (search "throw \"the new client did not start\"" script)
+              (search "Remove-Item -Force $zip" script)))))
 
 ;;; ------------------------------------------------------------------
 ;;; Config migration (dropped keys are scrubbed; everything else
