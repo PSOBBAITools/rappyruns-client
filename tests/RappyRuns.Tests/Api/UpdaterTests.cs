@@ -23,13 +23,11 @@ public class UpdaterTests : IDisposable
             "browser_download_url": "https://github.com/x/y/releases/download/v0.6.0/RappyRunsClient.zip"}]}
         """;
 
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "rr-update-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = new("rr-update");
 
-    public UpdaterTests() => Directory.CreateDirectory(_dir);
+    public void Dispose() => _dir.Dispose();
 
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
-
-    private string P(params string[] parts) => Path.Combine([_dir, .. parts]);
+    private string P(params string[] parts) => Path.Combine([_dir.Path, .. parts]);
 
     // --- constants -----------------------------------------------------------------
 
@@ -77,22 +75,15 @@ public class UpdaterTests : IDisposable
     [Fact(DisplayName = "rejected-update-tag reads a fresh file and ignores one older than 3 days")]
     public void RejectedTagFile()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "rr-rejected-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        try
-        {
-            Assert.Null(UpdateFiles.RejectedTag(dir));
-            var path = Path.Combine(dir, UpdateFiles.RejectedFileName);
-            File.WriteAllText(path, "﻿ v1.0.0 \r\nignored\n", new UTF8Encoding(false));
-            Assert.Equal("v1.0.0", UpdateFiles.RejectedTag(dir));
-            Assert.Null(UpdateFiles.RejectedTag(dir, DateTime.UtcNow.AddDays(3.1)));
-            File.WriteAllText(path, "  \n");
-            Assert.Null(UpdateFiles.RejectedTag(dir));
-        }
-        finally
-        {
-            Directory.Delete(dir, true);
-        }
+        using var temp = new TempDir("rr-rejected");
+        var dir = temp.Path;
+        Assert.Null(UpdateFiles.RejectedTag(dir));
+        var path = Path.Combine(dir, UpdateFiles.RejectedFileName);
+        File.WriteAllText(path, "﻿ v1.0.0 \r\nignored\n", new UTF8Encoding(false));
+        Assert.Equal("v1.0.0", UpdateFiles.RejectedTag(dir));
+        Assert.Null(UpdateFiles.RejectedTag(dir, DateTime.UtcNow.AddDays(3.1)));
+        File.WriteAllText(path, "  \n");
+        Assert.Null(UpdateFiles.RejectedTag(dir));
     }
 
     [Fact(DisplayName = "startup decision never updates a dev build")]
@@ -150,7 +141,7 @@ public class UpdaterTests : IDisposable
     public async Task FetchLatest()
     {
         var handler = FakeHandler.Always(200, ReleaseSample);
-        var updater = new SelfUpdater(new HttpTransport(handler), () => "", "0.5.0", _dir);
+        var updater = new SelfUpdater(new HttpTransport(handler), () => "", "0.5.0", _dir.Path);
         var release = await updater.FetchLatestReleaseAsync();
         Assert.Equal("v0.6.0", release!.Tag);
         var r = handler.Requests[0];
@@ -160,10 +151,10 @@ public class UpdaterTests : IDisposable
         Assert.Null(r.Authorization);
         Assert.True(updater.IsNewer(release));
 
-        var limited = new SelfUpdater(new HttpTransport(FakeHandler.Always(403, ReleaseSample)), () => "o/r", "0.5.0", _dir);
+        var limited = new SelfUpdater(new HttpTransport(FakeHandler.Always(403, ReleaseSample)), () => "o/r", "0.5.0", _dir.Path);
         Assert.Null(await limited.FetchLatestReleaseAsync());
         var offline = new SelfUpdater(new HttpTransport(new ThrowingHandler(() => new HttpRequestException("down"))),
-            () => null, "0.5.0", _dir);
+            () => null, "0.5.0", _dir.Path);
         Assert.Null(await offline.FetchLatestReleaseAsync());
         var (decision, _) = await offline.StartupCheckAsync();
         Assert.Equal(UpdateDecision.CheckFailed, decision);
@@ -174,7 +165,7 @@ public class UpdaterTests : IDisposable
     {
         var repo = "";
         var handler = FakeHandler.Always(404);
-        var updater = new SelfUpdater(new HttpTransport(handler), () => repo, "0.5.0", _dir);
+        var updater = new SelfUpdater(new HttpTransport(handler), () => repo, "0.5.0", _dir.Path);
         repo = "owner/test-repo";
         await updater.FetchLatestReleaseAsync();
         Assert.Equal("https://api.github.com/repos/owner/test-repo/releases/latest", handler.Requests[0].Url);
@@ -184,7 +175,7 @@ public class UpdaterTests : IDisposable
     [Fact(DisplayName = "startup check: apply only when newer and writable")]
     public async Task StartupCheck()
     {
-        var updater = new SelfUpdater(new HttpTransport(FakeHandler.Always(200, ReleaseSample)), () => null, "0.5.0", _dir);
+        var updater = new SelfUpdater(new HttpTransport(FakeHandler.Always(200, ReleaseSample)), () => null, "0.5.0", _dir.Path);
         var (decision, release) = await updater.StartupCheckAsync();
         Assert.Equal(UpdateDecision.Apply, decision);
         Assert.NotNull(release);
@@ -218,18 +209,18 @@ public class UpdaterTests : IDisposable
     {
         var zip = ZipBytes(("RappyRunsClient.exe", "new"));
         var target = P("dl.zip");
-        var ok = new SelfUpdater(new HttpTransport(new BytesHandler(200, zip)), () => null, "0.5.0", _dir);
+        var ok = new SelfUpdater(new HttpTransport(new BytesHandler(200, zip)), () => null, "0.5.0", _dir.Path);
         Assert.Equal(target, await ok.DownloadAsync(new ReleaseInfo("v1.0.0", "https://x/a.zip", zip.Length), target));
         Assert.True(File.Exists(target));
 
         Assert.Null(await ok.DownloadAsync(new ReleaseInfo("v1.0.0", "https://x/a.zip", zip.Length + 1), target));
         Assert.False(File.Exists(target));
 
-        var html = new SelfUpdater(new HttpTransport(new BytesHandler(200, "<html>\n\n"u8.ToArray())), () => null, "0.5.0", _dir);
+        var html = new SelfUpdater(new HttpTransport(new BytesHandler(200, "<html>\n\n"u8.ToArray())), () => null, "0.5.0", _dir.Path);
         Assert.Null(await html.DownloadAsync(new ReleaseInfo("v1.0.0", "https://x/a.zip", null), target));
         Assert.False(File.Exists(target));
 
-        var notFound = new SelfUpdater(new HttpTransport(new BytesHandler(404, zip)), () => null, "0.5.0", _dir);
+        var notFound = new SelfUpdater(new HttpTransport(new BytesHandler(404, zip)), () => null, "0.5.0", _dir.Path);
         Assert.Null(await notFound.DownloadAsync(new ReleaseInfo("v1.0.0", "https://x/a.zip", null), target));
         Assert.False(File.Exists(target));
     }
@@ -268,7 +259,7 @@ public class UpdaterTests : IDisposable
     [Fact(DisplayName = "the install folder writability probe")]
     public void Writable()
     {
-        Assert.True(UpdateFiles.IsDirWritable(_dir));
+        Assert.True(UpdateFiles.IsDirWritable(_dir.Path));
         Assert.False(File.Exists(P(UpdateConstants.WriteProbeName)));
         Assert.False(UpdateFiles.IsDirWritable(P("no-such-dir")));
     }
@@ -281,8 +272,8 @@ public class UpdaterTests : IDisposable
         var original = Environment.GetEnvironmentVariable("TEMP");
         try
         {
-            Environment.SetEnvironmentVariable("TEMP", _dir);
-            Assert.Equal(Path.Combine(_dir, "RappyRunsClient-update.zip"), UpdateFiles.ZipPath());
+            Environment.SetEnvironmentVariable("TEMP", _dir.Path);
+            Assert.Equal(Path.Combine(_dir.Path, "RappyRunsClient-update.zip"), UpdateFiles.ZipPath());
         }
         finally
         {

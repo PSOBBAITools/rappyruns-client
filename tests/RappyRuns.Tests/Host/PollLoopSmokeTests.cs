@@ -21,19 +21,11 @@ namespace RappyRuns.Tests.Host;
 /// </summary>
 public sealed class PollLoopSmokeTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "rr-host-" + Guid.NewGuid().ToString("N"));
-
-    public PollLoopSmokeTests() => Directory.CreateDirectory(_dir);
+    private readonly TempDir _dir = new("rr-host");
 
     public void Dispose()
     {
-        try
-        {
-            Directory.Delete(_dir, true);
-        }
-        catch (IOException)
-        {
-        }
+        _dir.Dispose();
     }
 
     /// <summary>A PSOBB process whose memory the test swaps frame by frame.</summary>
@@ -113,7 +105,7 @@ public sealed class PollLoopSmokeTests : IDisposable
     private Rig Build(bool attached = true, bool record = true, bool manageRecordings = true, IRunSubmitter? submitter = null,
         Func<IAnonymousRegistrar, IAnonymousRegistrar>? registrar = null)
     {
-        var config = ConfigStore.Open(_dir);
+        var config = ConfigStore.Open(_dir.Path);
         config.ServerUrl = "https://s.example";
         var server = new FakeHandler(r => (r.Method, new Uri(r.Url).AbsolutePath) switch
         {
@@ -131,7 +123,7 @@ public sealed class PollLoopSmokeTests : IDisposable
         var recorder = new Recorder(backend, new RecorderEnvironment
         {
             Settings = () => new RecordingSettings { RecordEnabled = record, HwEncode = false },
-            RecordDir = () => _dir + Path.DirectorySeparatorChar,
+            RecordDir = () => _dir.Path + Path.DirectorySeparatorChar,
             FfmpegPath = () => "ffmpeg.exe",
             Timestamp = () => clock.Now,
             TicksPerSecond = clock.TicksPerSecond,
@@ -336,8 +328,8 @@ public sealed class PollLoopSmokeTests : IDisposable
     {
         var rig = Build(attached: false, manageRecordings: manage);
         rig.Config.Set(ConfigKeys.RecordMaxTotalGb, RappyRuns.Core.Sexp.SexpNode.Int(1));
-        rig.Backend.Stale = [Path.Combine(_dir, "stale.mkv")];
-        rig.Backend.Recordings = [new RecordingFile(Path.Combine(_dir, "big.mp4"), 2L * 1024 * 1024 * 1024, 100)];
+        rig.Backend.Stale = [Path.Combine(_dir.Path, "stale.mkv")];
+        rig.Backend.Recordings = [new RecordingFile(Path.Combine(_dir.Path, "big.mp4"), 2L * 1024 * 1024 * 1024, 100)];
         rig.Loop.Startup();
         rig.Loop.Iterate();
         Assert.Equal(manage ? 2 : 0, rig.Backend.Count("delete"));

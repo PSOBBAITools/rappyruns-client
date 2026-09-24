@@ -10,31 +10,6 @@ internal static class StoreTestSupport
     public static Plist P(string text) =>
         Plist.From(SexpReader.ReadOne(text)) ?? throw new ArgumentException($"not a plist: {text}");
 
-    /// <summary>A throwaway folder, deleted on dispose.</summary>
-    public sealed class TempDir : IDisposable
-    {
-        public TempDir()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "rr-store-test-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public string File(string name) => System.IO.Path.Combine(Path, name);
-
-        public void Dispose()
-        {
-            try
-            {
-                Directory.Delete(Path, recursive: true);
-            }
-            catch (IOException)
-            {
-            }
-        }
-    }
-
     /// <summary>with-test-store: a queue over a throwaway file holding <paramref name="runs"/> (newest first).</summary>
     public static RunQueue TestStore(TempDir dir, Func<long>? now = null, Func<string, bool>? fileExists = null, params string[] runs)
     {
