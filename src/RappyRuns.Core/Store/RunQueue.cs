@@ -296,6 +296,13 @@ public sealed class RunQueue
         for (var i = snapshot.Count - 1; i >= 0; i--)
         {
             var entry = snapshot[i];
+            // A held untrimmed recording (S07) the player deleted: give it up
+            // too, so the row stops offering a file that is gone.
+            if (RunEntries.AwaitsManualAttach(entry.Raw, at) && !(entry.VideoPath is { } held && _fileExists(held)))
+            {
+                Update(entry, (RunKeys.UploadGivenUp, SexpNode.T));
+                continue;
+            }
             if (!(RunEntries.AwaitsUpload(entry.Raw)
                   && (entry.Get(RunKeys.NextUploadAt) is var next && (next.IsNil || next.AsNumber is { } n && n <= at))))
                 continue;
@@ -308,8 +315,8 @@ public sealed class RunQueue
     /// <summary>
     /// video-path-retention-sets (store.lisp:510): recordings the local
     /// storage sweep must never take (<c>Protected</c>: still awaiting their
-    /// upload, automatic or - an untrimmed one, for 14 days - by hand) and those it reclaims first (<c>Uploaded</c>: the site holds
-    /// them). A file in neither list is an orphan. Order mirrors the Lisp
+    /// upload, automatic or - an untrimmed one, for 14 days - by hand) and
+    /// those it reclaims first (<c>Uploaded</c>: the site holds them). A file in neither list is an orphan. Order mirrors the Lisp
     /// push (oldest entry first).
     /// </summary>
     public (IReadOnlyList<string> Protected, IReadOnlyList<string> Uploaded) VideoPathRetentionSets()

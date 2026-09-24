@@ -245,6 +245,17 @@ public sealed class RunQueueTests : IDisposable
     }
 
     [Fact]
+    public void AHeldUntrimmedRecordingWhoseFileVanishedGivesUp()
+    {
+        var now = _now;
+        var q = TestStore(_dir, () => now, null,
+            $"(:status :submitted :server-id 1 :video-path \"C:/nowhere/gone.mp4\" :untrimmed t :finished-at {now - 60})");
+        Assert.Null(q.UploadCandidate(now));
+        Assert.True(q.Entries.Single().Is(RunKeys.UploadGivenUp));
+        Assert.False(RunEntries.IsActive(q.Entries.Single().Data, now));
+    }
+
+    [Fact]
     public void AnUntrimmedRecordingWithoutAFinishTimeIsNotHeld() =>
         Assert.False(RunEntries.IsActive(P("(:status :submitted :server-id 1 :video-path \"v.mp4\" :untrimmed t)"), 1000));
 

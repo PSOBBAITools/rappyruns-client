@@ -277,3 +277,4 @@ is overwritten by `desktop/tools/export-i18n.lisp`); the host merges both at loa
 | `runs-empty` | No runs yet - finished quests appear here. | まだ記録はありません。… |
 | `rooms-empty` | No rooms yet - play a quest and its rooms and enemies appear here. | まだ部屋はありません。… |
 | `run-open-page` | Open the run page | 記録ページを開く |
+| `video-untrimmed` | saved - check the end | 保存済み - 終わりを確認 |

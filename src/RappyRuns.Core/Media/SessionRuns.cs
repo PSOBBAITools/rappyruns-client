@@ -81,8 +81,10 @@ public static class SessionRuns
     /// <c>link-video-file!</c> (store.lisp:431) over a caller-supplied update:
     /// finds the entry and hands it with the updates to
     /// <paramref name="updateRun"/> (the store's <c>update-run!</c>), returning
-    /// its result, or null for an unknown run. This is what the recorder's
-    /// on-keep callback runs (main.lisp:390).
+    /// its result, or null for an unknown run. This mirrors the Lisp on-keep
+    /// (main.lisp:390); the C# host links through
+    /// <see cref="Store.RunQueue.LinkVideoFile"/>, which also records
+    /// <c>:untrimmed</c> (S07) - this helper does not.
     /// </summary>
     public static Plist? LinkVideoFile(IEnumerable<Plist> queue, Plist run, string videoPath,
         Func<Plist, IReadOnlyList<(string Key, SexpNode Value)>, Plist> updateRun)
