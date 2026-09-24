@@ -1,0 +1,712 @@
+{
+  "numbers": [
+    {
+      "in": "-123.456",
+      "text": "-123.456",
+      "int": null
+    },
+    {
+      "in": "0.000",
+      "text": "0.0",
+      "int": "0"
+    },
+    {
+      "in": "1e3",
+      "text": "1000.0",
+      "int": "1000"
+    },
+    {
+      "in": "1.5",
+      "text": "1.5",
+      "int": null
+    },
+    {
+      "in": "60",
+      "text": "60.0",
+      "int": "60"
+    },
+    {
+      "in": "60.000",
+      "text": "60.0",
+      "int": "60"
+    },
+    {
+      "in": "60.5",
+      "text": "60.5",
+      "int": null
+    },
+    {
+      "in": "+7",
+      "text": "7.0",
+      "int": "7"
+    },
+    {
+      "in": "-0.0",
+      "text": "0.0",
+      "int": "0"
+    },
+    {
+      "in": "-0",
+      "text": "0.0",
+      "int": "0"
+    },
+    {
+      "in": ".5",
+      "text": "0.5",
+      "int": null
+    },
+    {
+      "in": "5.",
+      "text": "5.0",
+      "int": "5"
+    },
+    {
+      "in": "1E-2",
+      "text": "0.01",
+      "int": null
+    },
+    {
+      "in": "1e+2",
+      "text": "100.0",
+      "int": "100"
+    },
+    {
+      "in": "0.001",
+      "text": "0.001",
+      "int": null
+    },
+    {
+      "in": "0.0009999",
+      "text": "9.999e-4",
+      "int": null
+    },
+    {
+      "in": "9999999.999",
+      "text": "9999999.999",
+      "int": null
+    },
+    {
+      "in": "10000000",
+      "text": "1.0e7",
+      "int": "10000000"
+    },
+    {
+      "in": "1e7",
+      "text": "1.0e7",
+      "int": "10000000"
+    },
+    {
+      "in": "12345678.9",
+      "text": "1.23456789e7",
+      "int": null
+    },
+    {
+      "in": "1.5e-5",
+      "text": "1.5e-5",
+      "int": null
+    },
+    {
+      "in": "1e-30",
+      "text": "1.0e-30",
+      "int": null
+    },
+    {
+      "in": "1e30",
+      "text": "1.0e30",
+      "int": "1000000000000000019884624838656"
+    },
+    {
+      "in": "1e31",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "123456789012345678901234567890",
+      "text": "1.2345678901234568e29",
+      "int": "123456789012345677877719597056"
+    },
+    {
+      "in": "1234567890123456789012345678901",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "0.1",
+      "text": "0.1",
+      "int": null
+    },
+    {
+      "in": "0.2",
+      "text": "0.2",
+      "int": null
+    },
+    {
+      "in": "0.30000000000000004",
+      "text": "0.30000000000000004",
+      "int": null
+    },
+    {
+      "in": "3.14159265358979323846",
+      "text": "3.141592653589793",
+      "int": null
+    },
+    {
+      "in": "-2.25",
+      "text": "-2.25",
+      "int": null
+    },
+    {
+      "in": "100",
+      "text": "100.0",
+      "int": "100"
+    },
+    {
+      "in": "1e0000000000000000005",
+      "text": "100000.0",
+      "int": "100000"
+    },
+    {
+      "in": "nan",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "inf",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "-nan(ind)",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "-",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": ".",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "1.5x",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "1e",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "#.(quit)",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": " 1",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "1 ",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "1,5",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "--1",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "+-1",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "1e--2",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "0x10",
+      "text": null,
+      "int": null
+    },
+    {
+      "in": "１",
+      "text": "1.0",
+      "int": "1"
+    }
+  ],
+  "commands": [
+    {
+      "fields": [
+        "1",
+        "add",
+        "10203",
+        "1.500",
+        "0.000",
+        "-2.250",
+        "60",
+        "集合",
+        "3",
+        "7"
+      ],
+      "json": "{\"t\":\"add\",\"floor\":10203,\"ttl\":60,\"label\":\"集合\",\"x\":1.5,\"y\":0.0,\"z\":-2.25,\"max\":3,\"room\":7}"
+    },
+    {
+      "fields": [
+        "1",
+        "add",
+        "1",
+        "1.000",
+        "2.000",
+        "3.000",
+        "0"
+      ],
+      "json": "{\"t\":\"add\",\"floor\":1,\"ttl\":0,\"label\":\"\",\"x\":1.0,\"y\":2.0,\"z\":3.0}"
+    },
+    {
+      "fields": [
+        "1",
+        "add",
+        "1",
+        "1.000",
+        "2.000",
+        "3.000",
+        "0",
+        "lbl"
+      ],
+      "json": "{\"t\":\"add\",\"floor\":1,\"ttl\":0,\"label\":\"lbl\",\"x\":1.0,\"y\":2.0,\"z\":3.0}"
+    },
+    {
+      "fields": [
+        "1",
+        "add",
+        "1",
+        "1.000",
+        "2.000",
+        "3.000",
+        "0",
+        "",
+        ""
+      ],
+      "json": "{\"t\":\"add\",\"floor\":1,\"ttl\":0,\"label\":\"\",\"x\":1.0,\"y\":2.0,\"z\":3.0}"
+    },
+    {
+      "fields": [
+        "1",
+        "add",
+        "1",
+        "1.000",
+        "2.000",
+        "3.000",
+        "0",
+        "",
+        "x",
+        "5"
+      ],
+      "json": "{\"t\":\"add\",\"floor\":1,\"ttl\":0,\"label\":\"\",\"x\":1.0,\"y\":2.0,\"z\":3.0,\"room\":5}"
+    },
+    {
+      "fields": [
+        "1",
+        "add",
+        "1",
+        "1.000",
+        "2.000",
+        "3.000",
+        "0.5"
+      ],
+      "json": null
+    },
+    {
+      "fields": [
+        "1",
+        "add",
+        "1.5",
+        "1.000",
+        "2.000",
+        "3.000",
+        "0"
+      ],
+      "json": null
+    },
+    {
+      "fields": [
+        "1",
+        "add",
+        "1",
+        "nan",
+        "2.000",
+        "3.000",
+        "0",
+        "",
+        "3"
+      ],
+      "json": null
+    },
+    {
+      "fields": [
+        "1",
+        "add",
+        "1",
+        "1",
+        "2",
+        "3"
+      ],
+      "json": null
+    },
+    {
+      "fields": [
+        "1",
+        "move",
+        "4",
+        "1.000",
+        "2.000",
+        "3.000"
+      ],
+      "json": "{\"t\":\"move\",\"id\":4,\"x\":1.0,\"y\":2.0,\"z\":3.0}"
+    },
+    {
+      "fields": [
+        "1",
+        "move",
+        "4",
+        "1.000",
+        "2.000"
+      ],
+      "json": null
+    },
+    {
+      "fields": [
+        "1",
+        "move",
+        "x",
+        "1.000",
+        "2.000",
+        "3.000"
+      ],
+      "json": null
+    },
+    {
+      "fields": [
+        "1",
+        "arrow_add",
+        "5",
+        "1.000",
+        "2.000",
+        "3.000",
+        "4.000",
+        "5.000",
+        "6.000",
+        "30",
+        "3",
+        "2.500",
+        "3.500",
+        "9.000",
+        "12"
+      ],
+      "json": "{\"t\":\"arrow_add\",\"floor\":5,\"ttl\":30,\"max\":3,\"x1\":1.0,\"y1\":2.0,\"z1\":3.0,\"x2\":4.0,\"y2\":5.0,\"z2\":6.0,\"xm\":2.5,\"ym\":3.5,\"zm\":9.0,\"room\":12}"
+    },
+    {
+      "fields": [
+        "1",
+        "arrow_add",
+        "5",
+        "1.000",
+        "2.000",
+        "3.000",
+        "4.000",
+        "5.000",
+        "6.000",
+        "30",
+        "3"
+      ],
+      "json": "{\"t\":\"arrow_add\",\"floor\":5,\"ttl\":30,\"max\":3,\"x1\":1.0,\"y1\":2.0,\"z1\":3.0,\"x2\":4.0,\"y2\":5.0,\"z2\":6.0}"
+    },
+    {
+      "fields": [
+        "1",
+        "arrow_add",
+        "5",
+        "1.000",
+        "2.000",
+        "3.000",
+        "4.000",
+        "5.000",
+        "6.000",
+        "30",
+        "3",
+        "2.500",
+        "3.500"
+      ],
+      "json": "{\"t\":\"arrow_add\",\"floor\":5,\"ttl\":30,\"max\":3,\"x1\":1.0,\"y1\":2.0,\"z1\":3.0,\"x2\":4.0,\"y2\":5.0,\"z2\":6.0}"
+    },
+    {
+      "fields": [
+        "1",
+        "arrow_add",
+        "5",
+        "1.000",
+        "2.000",
+        "3.000",
+        "4.000",
+        "5.000",
+        "6.000",
+        "30",
+        "3",
+        "2.500",
+        "bad",
+        "9.000"
+      ],
+      "json": null
+    },
+    {
+      "fields": [
+        "1",
+        "arrow_add",
+        "5",
+        "1.000",
+        "2.000",
+        "3.000",
+        "4.000",
+        "5.000",
+        "6.000",
+        "30",
+        "3",
+        "2.500",
+        "3.500",
+        "9.000"
+      ],
+      "json": "{\"t\":\"arrow_add\",\"floor\":5,\"ttl\":30,\"max\":3,\"x1\":1.0,\"y1\":2.0,\"z1\":3.0,\"x2\":4.0,\"y2\":5.0,\"z2\":6.0,\"xm\":2.5,\"ym\":3.5,\"zm\":9.0}"
+    },
+    {
+      "fields": [
+        "1",
+        "arrow_add",
+        "5",
+        "1.000",
+        "2.000",
+        "3.000",
+        "4.000",
+        "5.000",
+        "6.000",
+        "30"
+      ],
+      "json": null
+    },
+    {
+      "fields": [
+        "1",
+        "arrow_move",
+        "8",
+        "1.000",
+        "2.000",
+        "3.000",
+        "4.000",
+        "5.000",
+        "6.000"
+      ],
+      "json": "{\"t\":\"arrow_move\",\"id\":8,\"x1\":1.0,\"y1\":2.0,\"z1\":3.0,\"x2\":4.0,\"y2\":5.0,\"z2\":6.0}"
+    },
+    {
+      "fields": [
+        "1",
+        "arrow_move",
+        "8",
+        "1.000",
+        "2.000",
+        "3.000",
+        "4.000",
+        "5.000",
+        "6.000",
+        "7.000",
+        "8.000",
+        "9.000"
+      ],
+      "json": "{\"t\":\"arrow_move\",\"id\":8,\"x1\":1.0,\"y1\":2.0,\"z1\":3.0,\"x2\":4.0,\"y2\":5.0,\"z2\":6.0,\"xm\":7.0,\"ym\":8.0,\"zm\":9.0}"
+    },
+    {
+      "fields": [
+        "1",
+        "arrow_move",
+        "8",
+        "1.000",
+        "2.000",
+        "3.000",
+        "4.000",
+        "5.000",
+        "6.000",
+        "7.000"
+      ],
+      "json": "{\"t\":\"arrow_move\",\"id\":8,\"x1\":1.0,\"y1\":2.0,\"z1\":3.0,\"x2\":4.0,\"y2\":5.0,\"z2\":6.0}"
+    },
+    {
+      "fields": [
+        "1",
+        "remove",
+        "5"
+      ],
+      "json": "{\"t\":\"remove\",\"id\":5}"
+    },
+    {
+      "fields": [
+        "1",
+        "remove"
+      ],
+      "json": null
+    },
+    {
+      "fields": [
+        "1",
+        "remove",
+        "-2"
+      ],
+      "json": "{\"t\":\"remove\",\"id\":-2}"
+    },
+    {
+      "fields": [
+        "1",
+        "arrow_remove",
+        "4"
+      ],
+      "json": "{\"t\":\"arrow_remove\",\"id\":4}"
+    },
+    {
+      "fields": [
+        "1",
+        "remove",
+        "5.5"
+      ],
+      "json": null
+    },
+    {
+      "fields": [
+        "1",
+        "clear_mine"
+      ],
+      "json": "{\"t\":\"clear_mine\"}"
+    },
+    {
+      "fields": [
+        "1",
+        "clear_all"
+      ],
+      "json": "{\"t\":\"clear_all\"}"
+    },
+    {
+      "fields": [
+        "1",
+        "clear_all",
+        "extra"
+      ],
+      "json": "{\"t\":\"clear_all\"}"
+    },
+    {
+      "fields": [
+        "1",
+        "teleport",
+        "1"
+      ],
+      "json": null
+    },
+    {
+      "fields": [
+        "1",
+        "name",
+        "x"
+      ],
+      "json": null
+    },
+    {
+      "fields": [
+        "1",
+        "color",
+        "FF0000"
+      ],
+      "json": null
+    }
+  ],
+  "renders": [
+    {
+      "channel": "secret",
+      "session": "abcd1234",
+      "lastSeq": 10,
+      "status": "connected",
+      "message": "",
+      "state": "{\"t\":\"state\",\"pins\":[{\"id\":3,\"owner\":\"Tea\\tpot\",\"floor\":10203,\"x\":1.5,\"y\":0,\"z\":-2.25,\"label\":\"集合\",\"no\":4,\"ownerNo\":2,\"room\":7,\"roomNo\":1,\"color\":\"ff8c00\",\"remaining\":42},{\"id\":4,\"owner\":\"Old\",\"floor\":1,\"x\":1,\"y\":2,\"z\":3,\"label\":\"\",\"no\":5,\"ownerNo\":1,\"room\":null,\"roomNo\":null,\"color\":\"\",\"remaining\":-1},{\"id\":\"bad\",\"floor\":1,\"x\":1,\"y\":2,\"z\":3}],\"arrows\":[{\"id\":9,\"owner\":\"Kettle\",\"floor\":5,\"room\":12,\"x1\":1,\"y1\":2,\"z1\":3,\"x2\":4,\"y2\":5,\"z2\":6,\"xm\":2.5,\"ym\":3.5,\"zm\":9,\"color\":\"66e0ff\",\"remaining\":30}],\"members\":[\"Teapot\",\"Kettle\"]}",
+      "set": null,
+      "time": 1700000000,
+      "text": "session\tabcd1234\ntime\t1700000000\nack\t10\nstatus\tconnected\t\nchannel\tsecret\nmember\tTeapot\nmember\tKettle\npin\t3\tTeapot\t10203\t1.5\t0\t-2.25\t42\t集合\t4\t2\tff8c00\t1\t7\npin\t4\tOld\t1\t1\t2\t3\t-1\t\t5\t1\t\t\t\narrow\t9\tKettle\t5\t1\t2\t3\t4\t5\t6\t30\t66e0ff\t2.5\t3.5\t9\t12\nend\n"
+    },
+    {
+      "channel": "se\tcret",
+      "session": "00000000",
+      "lastSeq": 0,
+      "status": "connecting",
+      "message": "wss://x",
+      "state": "{\"t\":\"state\",\"pins\":[{\"id\":1.0,\"floor\":1,\"x\":1,\"y\":2,\"z\":3},{\"id\":2,\"floor\":1.5,\"x\":1,\"y\":2,\"z\":3},{\"id\":3,\"floor\":1,\"x\":\"1\",\"y\":2,\"z\":3},{\"id\":5,\"owner\":7,\"floor\":1,\"x\":1.0,\"y\":1e2,\"z\":-0.0,\"label\":12.5,\"no\":true,\"ownerNo\":false,\"color\":{},\"roomNo\":[],\"room\":1e-5,\"remaining\":12345678.5},{\"id\":6,\"floor\":2,\"x\":0.001,\"y\":0.0001,\"z\":123456789.25},\"junk\",7],\"arrows\":[{\"id\":10,\"owner\":\"A\",\"floor\":5,\"x1\":1,\"y1\":2,\"z1\":3,\"x2\":4,\"y2\":5,\"z2\":6,\"color\":\"\",\"remaining\":3},{\"id\":11,\"owner\":\"B\",\"floor\":5,\"x1\":1,\"y1\":2,\"z1\":3,\"x2\":4,\"y2\":5,\"z2\":6,\"xm\":1.25,\"remaining\":3},{\"id\":12,\"floor\":5,\"x1\":1,\"y1\":2,\"z1\":3,\"x2\":4,\"y2\":5,\"z2\":6,\"xm\":null,\"ym\":1,\"zm\":2,\"room\":3}],\"members\":[\"A\",5,null,\"B\\u0001C\"]}",
+      "set": null,
+      "time": 1700000000,
+      "text": "session\t00000000\ntime\t1700000000\nack\t0\nstatus\tconnecting\twss://x\nchannel\tsecret\nmember\tA\nmember\tBC\npin\t5\t\t1\t1.0\t100.0\t-0.0\t1.23456785e7\t12.5\t\t\t\t\t1.0e-5\npin\t6\t\t2\t0.001\t1.0e-4\t1.2345678925e8\t\t\t\t\t\t\t\narrow\t10\tA\t5\t1\t2\t3\t4\t5\t6\t3\t\narrow\t11\tB\t5\t1\t2\t3\t4\t5\t6\t3\t\t1.25\t\t\t\narrow\t12\t\t5\t1\t2\t3\t4\t5\t6\t\t\nend\n"
+    },
+    {
+      "channel": "",
+      "session": "cafe0001",
+      "lastSeq": 99,
+      "status": "local",
+      "message": "",
+      "state": "{\"t\":\"state\"}",
+      "set": "{\"id\":7,\"name\":\"TTF route\",\"mine\":1,\"items\":{\"pins\":[{\"area\":10101,\"room\":3,\"x\":1,\"y\":2.5,\"z\":-3,\"label\":\"start\",\"color\":\"ff8c00\"},{\"area\":10101,\"room\":3,\"x\":4,\"y\":0,\"z\":0},{\"area\":10102,\"x\":5,\"y\":0,\"z\":0}],\"arrows\":[{\"area\":10101,\"room\":4,\"x1\":0,\"y1\":0,\"z1\":0,\"x2\":10,\"y2\":0,\"z2\":10,\"xm\":5,\"ym\":0,\"zm\":6}]}}",
+      "time": 1700000000,
+      "text": "session\tcafe0001\ntime\t1700000000\nack\t99\nstatus\tlocal\t\nchannel\t\npin\t-1\tTTF route\t10101\t1\t2.5\t-3\t-1\tstart\t\t1\tff8c00\t\t3\t1\npin\t-2\tTTF route\t10101\t4\t0\t0\t-1\t\t\t2\t\t\t3\t1\npin\t-3\tTTF route\t10102\t5\t0\t0\t-1\t\t\t3\t\t\t\t1\narrow\t-4\tTTF route\t10101\t0\t0\t0\t10\t0\t10\t-1\t\t5\t0\t6\t4\t1\npinset\tTTF route\nend\n"
+    },
+    {
+      "channel": "p",
+      "session": "cafe0002",
+      "lastSeq": 1,
+      "status": "error",
+      "message": "disconnected\tfrom\nserver",
+      "state": "{\"t\":\"state\",\"pins\":[],\"arrows\":[],\"members\":[]}",
+      "set": "{\"name\":\"Edge\\tcases and a long name\",\"items\":{\"pins\":[{\"area\":null,\"floor\":2,\"x\":0,\"y\":0,\"z\":0},{\"area\":false,\"floor\":3,\"x\":0,\"y\":0,\"z\":0},{\"floor\":4,\"x\":0,\"y\":0,\"z\":0,\"id\":99,\"owner\":\"x\",\"remaining\":5,\"locked\":0,\"no\":3,\"ownerNo\":8},\"skip\",{\"area\":5,\"x\":1},{\"area\":6,\"x\":1.5,\"y\":-1.5,\"z\":1e-4,\"label\":3,\"color\":null,\"room\":2.5}],\"arrows\":[{\"area\":1,\"x1\":0,\"y1\":0,\"z1\":0,\"x2\":1,\"y2\":1,\"z2\":1},{\"area\":1,\"x1\":0,\"y1\":0,\"z1\":0,\"x2\":1,\"y2\":1,\"z2\":1,\"xm\":0.5}]}}",
+      "time": 1700000000,
+      "text": "session\tcafe0002\ntime\t1700000000\nack\t1\nstatus\terror\tdisconnectedfromserver\nchannel\tp\npin\t-2\tEdgecases and a long\t3\t0\t0\t0\t-1\t\t\t2\t\t\t\t1\npin\t-3\tEdgecases and a long\t4\t0\t0\t0\t-1\t\t\t3\t\t\t\t1\npin\t-5\tEdgecases and a long\t6\t1.5\t-1.5\t1.0e-4\t-1\t3\t\t5\t\t\t2.5\t1\narrow\t-6\tEdgecases and a long\t1\t0\t0\t0\t1\t1\t1\t-1\t\narrow\t-7\tEdgecases and a long\t1\t0\t0\t0\t1\t1\t1\t-1\t\t0.5\t\t\t\t1\npinset\tEdgecases and a long name\nend\n"
+    },
+    {
+      "channel": "p",
+      "session": "cafe0003",
+      "lastSeq": 1,
+      "status": "connected",
+      "message": "",
+      "state": "{\"t\":\"state\",\"pins\":5}",
+      "set": "{\"name\":7,\"items\":{\"pins\":{},\"arrows\":[{\"area\":1,\"x1\":0,\"y1\":0,\"z1\":0,\"x2\":1,\"y2\":1,\"z2\":1,\"xm\":2,\"ym\":2,\"zm\":2,\"room\":1}]}}",
+      "time": 1700000000,
+      "text": "session\tcafe0003\ntime\t1700000000\nack\t1\nstatus\tconnected\t\nchannel\tp\narrow\t-1\t\t1\t0\t0\t0\t1\t1\t1\t-1\t\t2\t2\t2\t1\t1\npinset\t\nend\n"
+    },
+    {
+      "channel": "p",
+      "session": "cafe0004",
+      "lastSeq": 1,
+      "status": "connected",
+      "message": "",
+      "state": "{\"t\":\"state\"}",
+      "set": "{\"name\":\"no items\"}",
+      "time": 1700000000,
+      "text": "session\tcafe0004\ntime\t1700000000\nack\t1\nstatus\tconnected\t\nchannel\tp\npinset\tno items\nend\n"
+    }
+  ]
+}
