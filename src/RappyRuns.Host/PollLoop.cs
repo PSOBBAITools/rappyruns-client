@@ -54,6 +54,9 @@ public sealed class PollLoopServices
     /// <summary>The verified game's exe for the Pin Share relay (null on detach).</summary>
     public Action<string?> SetGameExe { get; init; } = _ => { };
 
+    /// <summary>The recording settings in effect (the recorder's own source; gates the gdigrab probe).</summary>
+    public Func<RecordingSettings>? RecordingSettings { get; init; }
+
     /// <summary>gdigrab window-capture probe at the 4 Hz slot (window title).</summary>
     public Action<string?> MaybeStartGdigrabProbe { get; init; } = _ => { };
 
@@ -254,7 +257,7 @@ public sealed class PollLoop : IFrameHooks
             Guard("upload", MaybeStartUpload);
             Guard("retention", MaybeSweepRecordings);
             // Keep the gdigrab verdict fresh while idle; never during a quest or capture.
-            if (RecordingSettingsFor(_s.Config).RecordingEnabled && !Busy)
+            if ((_s.RecordingSettings?.Invoke() ?? RecordingSettingsFor(_s.Config)).RecordingEnabled && !Busy)
                 Guard("gdigrab probe", () => _s.MaybeStartGdigrabProbe(reader.WindowTitle));
             var snapshot = result.Snapshot ?? (result.InReadGrace ? _s.Frames.PreviousSnapshot : null);
             Guard("status", () => _s.Tick(new PollTick(true, snapshot, _s.Frames.ReadFailing, null)));

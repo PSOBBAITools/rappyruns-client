@@ -114,16 +114,17 @@ public sealed class ClientHost : IDisposable
         // Recording.
         HwProbe = new HwEncoderProbe(_hw, FfmpegPath);
         Gdigrab = new GdigrabProbe(PsobbConnector.FindPsobbWindow, FfmpegPath, () => config.GetBool(ConfigKeys.WgcDisable));
+        RecordingSettings RecordingSettings()
+        {
+            var settings = PollLoop.RecordingSettingsFor(config);
+            // Fixed pipe names: a second instance must never record.
+            return options.MultiInstance ? settings with { RecordEnabled = false } : settings;
+        }
         Recorder = new Recorder(
             new Win32FfmpegBackend(PsobbConnector.FindPsobbWindow, () => config.GetBool(ConfigKeys.WgcDisable), Gdigrab),
             new RecorderEnvironment
             {
-                Settings = () =>
-                {
-                    var settings = PollLoop.RecordingSettingsFor(config);
-                    // Fixed pipe names: a second instance must never record.
-                    return options.MultiInstance ? settings with { RecordEnabled = false } : settings;
-                },
+                Settings = RecordingSettings,
                 RecordDir = RecordDir,
                 FfmpegPath = FfmpegPath,
                 Hw = _hw,
@@ -204,6 +205,7 @@ public sealed class ClientHost : IDisposable
             PinSets = PinSets,
             TriggerLog = TriggerLog,
             SetGameExe = exe => PinShare.GameExe = exe,
+            RecordingSettings = RecordingSettings,
             MaybeStartGdigrabProbe = Gdigrab.MaybeStart,
             Deferred = Updater.Deferred,
             ApplyDeferredUpdate = ready => ApplyUpdateRestart(ready.ZipPath, ready.Tag),
