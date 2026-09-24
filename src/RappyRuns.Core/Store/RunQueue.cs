@@ -178,7 +178,8 @@ public sealed class RunQueue
     /// submitted/duplicate/rejected - the megabytes of frames live on the
     /// server then (spec core §22 #22). Replaces the entry with the same id,
     /// trims, saves and returns the copy. When the entry already left the
-    /// list the copy is still returned, as in Lisp, but nothing is stored.
+    /// list the copy is still returned, as in Lisp, but nothing is stored,
+    /// saved or announced (no <see cref="Changed"/>).
     /// </summary>
     public RunEntry Update(RunEntry entry, IEnumerable<KeyValuePair<string, SexpNode>> updates) =>
         Change(entry, current => Apply(current, updates));
@@ -193,11 +194,11 @@ public sealed class RunQueue
             var current = _runs.Find(e => e.Id == entry.Id) ?? entry;
             updated = new RunEntry(entry.Id, change(current.Raw));
             var index = _runs.FindIndex(e => e.Id == entry.Id);
-            if (index >= 0)
-            {
-                _runs[index] = updated;
-                _runs = RunEntries.TrimFinished(_runs, e => e.Raw, MaxFinishedRuns, _now());
-            }
+            // Gone (cleared or trimmed meanwhile): nothing changed, so no save
+            // and no Changed (S40).
+            if (index < 0) return updated;
+            _runs[index] = updated;
+            _runs = RunEntries.TrimFinished(_runs, e => e.Raw, MaxFinishedRuns, _now());
         }
         Save();
         OnChanged();

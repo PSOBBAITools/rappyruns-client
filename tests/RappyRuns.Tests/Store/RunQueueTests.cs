@@ -80,6 +80,22 @@ public sealed class RunQueueTests : IDisposable
     }
 
     [Fact]
+    public void UpdatingAnEntryThatLeftTheListSavesAndAnnouncesNothing()
+    {
+        var q = Store("(:status :submitted :server-id 1)");
+        var entry = q.Entries.Single();
+        q.Clear();
+        File.Delete(q.Path);
+        var changes = 0;
+        q.Changed += (_, _) => changes++;
+        var copy = q.Update(entry, (RunKeys.Held, SexpNode.T));
+        Assert.True(copy.Is(RunKeys.Held), "the copy is still returned, as in Lisp");
+        Assert.Empty(q.Entries);
+        Assert.Equal(0, changes);
+        Assert.False(File.Exists(q.Path), "nothing is saved");
+    }
+
+    [Fact]
     public void EntriesWithoutAServerDraftCannotUploadYet() =>
         Assert.Null(Store($"(:status :queued :video-path {V})").UploadCandidate(_now));
 
