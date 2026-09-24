@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <UseWindowsForms>true</UseWindowsForms>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
@@ -17,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\RappyRuns.Core\RappyRuns.Core.csproj" />
+    <ProjectReference Include="..\..\src\RappyRuns.Win\RappyRuns.Win.csproj" />
   </ItemGroup>
 
   <!-- Expected outputs exported from the Lisp client (desktop/tools/*.lisp). -->
