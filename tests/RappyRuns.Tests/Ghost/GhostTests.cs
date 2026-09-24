@@ -300,10 +300,15 @@ public class GhostTests
         var gate = new TaskCompletionSource<string?>();
         var old = session.MaybeStartFetch(4660, "q", () => Load(), _ => gate.Task);
         session.Reset(); // the game exited
-        Assert.Null(session.MaybeStartFetch(4660, "q", () => Load(enabled: false), _ => Task.FromResult<string?>(null)));
+        var relaunched = new TaskCompletionSource<string?>();
+        var fresh = session.MaybeStartFetch(4660, "q", () => Load(), _ => relaunched.Task);
+        Assert.NotNull(fresh);
         gate.SetResult(GhostPayload);
         await old!;
         Assert.Null(session.Ghost);
+        relaunched.SetResult(GhostPayload); // the new game's own reply still lands
+        await fresh;
+        Assert.Equal(123456, session.Ghost?.TimeMs);
     }
 
     [Fact(DisplayName = "Reset (the game exited) drops the ghost, the race and a fetch still in flight (S37)")]

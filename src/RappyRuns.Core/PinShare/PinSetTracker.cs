@@ -30,7 +30,7 @@ public sealed class PinSetTracker
     private PinSet? _current;
     private IReadOnlyList<string>? _questSlugs;
     private long? _fetchPtr;
-    private long _load; // S36: bumped per quest load, Refetch and Reset
+    private long _load = 1; // S36: bumped per quest load, Refetch and Reset; 0 = none
 
     /// <param name="resolveSlugs">Every category slug matching the quest, primary first (Lisp <c>find-quest-defs</c> → <c>quest-def-slug</c>).</param>
     /// <param name="fetchAllowed">
@@ -107,6 +107,7 @@ public sealed class PinSetTracker
             if (snapshot.QuestName is null || snapshot.QuestPtr == _fetchPtr) return (null, 0);
             _fetchPtr = snapshot.QuestPtr;
             _current = null;
+            _questSlugs = null; // the previous quest's, until this load's resolve
             load = ++_load;
         }
         var slugs = _resolveSlugs(snapshot);
@@ -170,6 +171,8 @@ public sealed class PinSetTracker
     // Callers hold _lock.
     private void ForgetLoad()
     {
+        // Once per unload, not every lobby frame.
+        if (_fetchPtr is null && _current is null && _questSlugs is null) return;
         _load++;
         _fetchPtr = null;
         _questSlugs = null;

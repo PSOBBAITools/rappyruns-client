@@ -91,7 +91,7 @@ public sealed class GhostSession
     // S36: bumped on every new load and every forget, under _gate. A fetch
     // lands only while it is unchanged: the pointer alone cannot tell a later
     // quest loaded at the same address (or a relaunched game) from its own.
-    private long _load;
+    private long _load = 1;
 
     /// <summary>The ghost fetched for the currently loaded quest, or null.</summary>
     public GhostReference? Ghost
@@ -125,7 +125,11 @@ public sealed class GhostSession
     /// allocation address must still refetch (the target or PB may have changed).
     /// </summary>
     /// <param name="describeLoad">Called only on a fresh identified load; builds what the gate needs.</param>
-    public GhostFetchRequest? FetchWanted(long? questPtr, string? questName, Func<GhostLoadInfo> describeLoad)
+    public GhostFetchRequest? FetchWanted(long? questPtr, string? questName, Func<GhostLoadInfo> describeLoad) =>
+        Wanted(questPtr, questName, describeLoad).Request;
+
+    // FetchWanted plus the load id it adopted, taken in the same locked step.
+    private (GhostFetchRequest? Request, long Load) Wanted(long? questPtr, string? questName, Func<GhostLoadInfo> describeLoad)
     {
         if (questPtr is not { } ptr || ptr <= 0)
         {
@@ -133,19 +137,20 @@ public sealed class GhostSession
             // reference can never race the next quest. (Completed runs are
             // annotated while the quest is still loaded.)
             ForgetLoad();
-            return null;
+            return (null, 0);
         }
-        if (questName is null || ptr == Volatile.Read(ref _fetchPtr)) return null;
+        if (questName is null || ptr == Volatile.Read(ref _fetchPtr)) return (null, 0);
+        long load;
         lock (_gate)
         {
             Volatile.Write(ref _fetchPtr, ptr);
-            _load++;
+            load = ++_load;
             Ghost = null;
         }
         var info = describeLoad();
-        if (info.Slugs.Count == 0 || !info.GhostRaceEnabled || !info.HasSubmissionToken) return null;
-        return new GhostFetchRequest(info.Slugs, info.Difficulty, Math.Max(1, info.PartyMembers),
-            AccountMode: info.AccountMode);
+        if (info.Slugs.Count == 0 || !info.GhostRaceEnabled || !info.HasSubmissionToken) return (null, 0);
+        return (new GhostFetchRequest(info.Slugs, info.Difficulty, Math.Max(1, info.PartyMembers),
+            AccountMode: info.AccountMode), load);
     }
 
     /// <summary>
@@ -160,10 +165,8 @@ public sealed class GhostSession
     public Task? MaybeStartFetch(long? questPtr, string? questName, Func<GhostLoadInfo> describeLoad,
         Func<GhostFetchRequest, Task<string?>> fetch)
     {
-        var request = FetchWanted(questPtr, questName, describeLoad);
+        var (request, load) = Wanted(questPtr, questName, describeLoad);
         if (request is null) return null;
-        long load;
-        lock (_gate) load = _load;
         return Task.Run(async () =>
         {
             GhostReference? ghost;
@@ -233,6 +236,8 @@ public sealed class GhostSession
     {
         lock (_gate)
         {
+            // Once per unload, not every lobby frame.
+            if (Volatile.Read(ref _fetchPtr) == 0 && Ghost is null) return;
             Volatile.Write(ref _fetchPtr, 0);
             _load++;
             Ghost = null;
