@@ -9,7 +9,7 @@ namespace RappyRuns.Tests;
 public sealed class TempDir : IDisposable
 {
     /// <param name="prefix">Names the folder after its test class, so a leftover is traceable.</param>
-    public TempDir(string prefix = "rr-test")
+    public TempDir(string prefix)
     {
         Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), prefix + "-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path);

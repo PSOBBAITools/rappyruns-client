@@ -177,9 +177,10 @@ public class TriggerLogTests
     public void RotatesWhileWriting()
     {
         using var temp = new TempDir("eta-test-trigger-rotate");
-        var path = temp.File("trigger-log.txt");
+        // A folder that does not exist yet: the log creates it.
+        var path = temp.File("sub", "trigger-log.txt");
         using var log = new TriggerLog(path, new ManualGameClock(), maxBytes: 200);
-        Assert.Equal(temp.File("trigger-log.old.txt"), log.OldPath);
+        Assert.Equal(temp.File("sub", "trigger-log.old.txt"), log.OldPath);
         log.Start(); // 112 bytes
         log.Start(); // 224 bytes: past the limit, but only checked before the next write
         Assert.False(File.Exists(log.OldPath));

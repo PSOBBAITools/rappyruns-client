@@ -12,7 +12,7 @@ namespace RappyRuns.Tests.Store;
 /// </summary>
 public sealed class RunQueueTests : IDisposable
 {
-    private readonly TempDir _dir = new();
+    private readonly TempDir _dir = new("rr-store-test");
     private readonly string _video;
     private readonly long _now = UniversalTime.Now();
 

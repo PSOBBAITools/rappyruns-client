@@ -27,7 +27,7 @@ public class UpdaterTests : IDisposable
 
     public void Dispose() => _dir.Dispose();
 
-    private string P(params string[] parts) => Path.Combine([_dir.Path, .. parts]);
+    private string P(params string[] parts) => _dir.File(parts);
 
     // --- constants -----------------------------------------------------------------
 

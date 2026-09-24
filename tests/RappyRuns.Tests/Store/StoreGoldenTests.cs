@@ -19,7 +19,7 @@ public class StoreGoldenTests
     [Fact]
     public void ALispWrittenQueueReSavesByteIdentically()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDir("rr-store-test");
         var path = dir.File("queue.sexp");
         File.Copy(GoldenPath("queue-lisp.sexp"), path);
         var queue = new RunQueue(path);
@@ -38,7 +38,7 @@ public class StoreGoldenTests
     [Fact]
     public void ALispWrittenConfigReSavesByteIdentically()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDir("rr-store-test");
         var path = Path.Combine(dir.Path, "config.sexp");
         File.Copy(GoldenPath("config-lisp.sexp"), path);
         var config = ConfigStore.Open(dir.Path);
@@ -78,7 +78,7 @@ public class StoreGoldenTests
     [Fact]
     public void TheCSharpWrittenConfigIsTheOneLispVerified()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDir("rr-store-test");
         var config = BuildCSharpConfig(dir.Path);
         config.Save();
         Assert.Equal(File.ReadAllText(GoldenPath("config-csharp.sexp")), File.ReadAllText(config.FilePath));
