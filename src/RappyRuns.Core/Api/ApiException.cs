@@ -49,6 +49,13 @@ public sealed class ApiException : Exception
     /// <summary>The HTTP status that made the call fail, when there was one.</summary>
     public int? Status { get; init; }
 
+    /// <summary>
+    /// An upload failed after its request body started going out (at least
+    /// one chunk written): the connection was up, so the failure is the
+    /// upload's own - a reset mid-body, a send or reply timeout (S17).
+    /// </summary>
+    public bool BodyStarted { get; init; }
+
     /// <summary>"Invalid or revoked API token" (401 on an authenticated endpoint).</summary>
     public static ApiException InvalidToken() => new("Invalid or revoked API token") { Status = 401 };
 }

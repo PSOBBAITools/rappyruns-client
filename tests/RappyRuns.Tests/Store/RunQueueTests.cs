@@ -1,4 +1,5 @@
 using RappyRuns.Core.Config;
+using RappyRuns.Core.I18n;
 using RappyRuns.Core.Sexp;
 using RappyRuns.Core.Store;
 using static RappyRuns.Tests.Store.StoreTestSupport;
@@ -191,7 +192,72 @@ public sealed class RunQueueTests : IDisposable
         Assert.True(linked?.VideoPath?.Contains("run.mp4") == true, "link-video-file! matches by natural key after updates");
         Assert.True(linked?.ServerId == 7, "linked entry still carries its server id");
         Assert.True(q.LinkVideoFile(TestRun(slug: "ep1-other"), "C:/v/x.mp4") is null, "link-video-file! returns NIL for unknown runs");
+        Assert.False(linked!.Is(RunKeys.Untrimmed));
     }
+
+    [Fact]
+    public void AnUntrimmedRecordingIsLinkedButNeverAutoUploaded()
+    {
+        var now = _now;
+        var q = TestStore(_dir, () => now, null);
+        // Finished a day ago: inside the 14-day hold.
+        var run = P($"(:quest-slug \"ep1-test-quest\" :time-ms 599123 :finished-at {now - 86400})");
+        var entry = q.Enqueue(run);
+        q.Update(entry, (RunKeys.Status, SexpNode.Kw(RunStatus.Submitted)), (RunKeys.ServerId, SexpNode.Int(7)));
+        var linked = q.LinkVideoFile(run, _video, untrimmed: true);
+        Assert.Equal(_video, linked?.VideoPath);
+        Assert.True(linked!.Is(RunKeys.Untrimmed));
+        Assert.Null(q.UploadCandidate(now));
+        Assert.True(RunEntries.IsActive(linked.Data, now));
+        Assert.Contains(_video, q.VideoPathRetentionSets().Protected);
+        Assert.Equal("draft - use Upload to YouTube", RunDisplay.RunStatusLabel(linked.Data, Language.En, hasSubmissionToken: true));
+        Assert.Equal("saved - check the end", RunDisplay.RunVideoLabel(linked.Data, Language.En, null));
+        // Kept across a restart while held.
+        var reloaded = new RunQueue(q.Path, () => now, null);
+        reloaded.Load();
+        Assert.True(reloaded.Entries.Single().Is(RunKeys.Untrimmed));
+        // A clean file linked later clears the mark and the entry uploads again.
+        var relinked = q.LinkVideoFile(run, _video);
+        Assert.False(relinked!.Is(RunKeys.Untrimmed));
+        Assert.Equal(7, q.UploadCandidate(now)?.ServerId);
+    }
+
+    [Fact]
+    public void AnUntrimmedRecordingIsReleasedFourteenDaysAfterTheRun()
+    {
+        var now = _now;
+        var q = TestStore(_dir, () => now, null);
+        var finished = now - RunEntries.UntrimmedKeepSeconds + 60;
+        var run = P($"(:quest-slug \"ep1-test-quest\" :time-ms 599123 :finished-at {finished})");
+        var entry = q.Enqueue(run);
+        q.Update(entry, (RunKeys.Status, SexpNode.Kw(RunStatus.Submitted)), (RunKeys.ServerId, SexpNode.Int(7)));
+        var linked = q.LinkVideoFile(run, _video, untrimmed: true)!;
+        Assert.True(RunEntries.IsActive(linked.Data, now));
+        Assert.Contains(_video, q.VideoPathRetentionSets().Protected);
+        now += 60; // exactly 14 days after the run
+        Assert.False(RunEntries.IsActive(linked.Data, now));
+        Assert.DoesNotContain(_video, q.VideoPathRetentionSets().Protected);
+        Assert.Null(q.UploadCandidate(now));
+        q.Save();
+        var reloaded = new RunQueue(q.Path, () => now, null);
+        reloaded.Load();
+        Assert.Empty(reloaded.Entries);
+    }
+
+    [Fact]
+    public void AHeldUntrimmedRecordingWhoseFileVanishedGivesUp()
+    {
+        var now = _now;
+        var q = TestStore(_dir, () => now, null,
+            $"(:status :submitted :server-id 1 :video-path \"C:/nowhere/gone.mp4\" :untrimmed t :finished-at {now - 60})");
+        Assert.Null(q.UploadCandidate(now));
+        Assert.True(q.Entries.Single().Is(RunKeys.UploadGivenUp));
+        Assert.False(RunEntries.IsActive(q.Entries.Single().Data, now));
+    }
+
+    [Fact]
+    public void AnUntrimmedRecordingWithoutAFinishTimeIsNotHeld() =>
+        Assert.False(RunEntries.IsActive(P("(:status :submitted :server-id 1 :video-path \"v.mp4\" :untrimmed t)"), 1000));
 
     [Fact]
     public void ActiveEntriesSurviveTrimmingAttachedOnesDoNot()

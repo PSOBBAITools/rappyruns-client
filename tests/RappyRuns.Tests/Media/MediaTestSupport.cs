@@ -154,7 +154,7 @@ internal static class MediaFixtures
                 Sleep = _ => { },
             })
             {
-                OnKeep = onKeep,
+                OnKeep = onKeep is null ? null : (path, run, _) => onKeep(path, run),
             };
         }
 

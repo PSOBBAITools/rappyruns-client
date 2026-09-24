@@ -89,7 +89,7 @@
 `finalize-capture` (:1194): `backend-close-capture`→ keep なら `begin-remux`、でなければ tmp 削除 + `reset-recorder`。
 `begin-remux` (:1206): **duration はここで計算** (stopping 中に届いた run も含めるため)。`build-remux-args(tmp, final, duration-ms = session-video-duration-ms(run-end-ms))` で起動。起動失敗なら即 `save-recording(remuxed=nil)`。成功なら deadline = now+180s、state=:remuxing。
 `finish-remux` (:1234): exit code 0 なら ok。ok でなければ final-path (部分出力) を削除。→ `save-recording(remuxed=ok)`。
-`save-recording` (:1246): remuxed なら tmp 削除、でなければ tmp を final-path へ rename (上書き)。**remuxed でない場合**: `last-error = "remux failed; recording kept whole - its tail is untrimmed"` + トレイ通知 `:notify-untrimmed-*`。その後 `on-keep(final-path, pending-run)` (例外は握りつぶす)。rename 失敗時は `last-error = "could not save recording: ~a"`。最後に必ず `reset-recorder`。
+`save-recording` (:1246): remuxed なら tmp 削除、でなければ tmp を final-path へ rename (上書き)。**remuxed でない場合**: `last-error = "remux failed; recording kept whole - its tail is untrimmed"` + トレイ通知 `:notify-untrimmed-*`。その後 `on-keep(final-path, pending-run)` (例外は握りつぶす)。C# は on-keep に untrimmed フラグも渡し、エントリに `:untrimmed t` を付けて自動アップロードの対象から外す (S07。Lisp はデスクトップが写りうる末尾ごと自動アップロードしていた)。ファイルはローカルに残してリンクする (Video 列は `video-untrimmed` "saved - check the end")。録画から 14 日間 (サーバーのドラフト寿命) は active のまま一覧と queue.sexp に残り、保持スイープからも守られる。その後は通常のスイープの対象。プレイヤーは終わりを確認してからサイトで手動添付する。rename 失敗時は `last-error = "could not save recording: ~a"`。最後に必ず `reset-recorder`。
 `reset-recorder` (:1179): capture 系フィールド全消去、state=:idle (`last-error` は消さない)。
 
 `best-session-run` (:567): aborted でない run の中で `time-ms` 最大。完走が 1 件もなければ aborted を含めた最大。
@@ -323,10 +323,10 @@ duration_ms = run_end_ms + 2000   (run_end_ms が null なら null)
 - 応答: 200/201 → JSON `duplicate` 真なら `:duplicate` 他は `:attached`; 400/403/404/409/411/413 → `:rejected`; 401 → エラー "Invalid or revoked API token"; その他 → エラー。
   - attached/duplicate: `:video-attached t :video-uploaded t :held (status=="held") :approved (status=="approved")`。**ローカルファイルは削除しない** (保持スイープに任せる。即削除は壊れたアップロードを復旧不能にした)。
   - rejected: `error == "pending-limit"` → `next-upload-at = now + 3600s`; それ以外 → `upload-given-up t :upload-error <message|code|"rejected">`。
-  - 通信例外 → `next-upload-at = now + 300s`, `:upload-error`。
+  - 通信例外 → `next-upload-at = now + 300s`, `:upload-error`。C# はボディ送信開始後の失敗と 5xx だけを数え、300 秒から倍々 (上限 6 時間) で待ち、12 回連続で `upload-given-up` (core §9.5)。
   - どの結果でも続けて診断送信: `POST /api/runs/<id>/diagnostics` JSON `{"log": <report>, "client_version": <ver>}` (失敗は無視)。
 - **held**: サーバーはクライアントからの動画を `held` (非公開) で受ける。公開はブラウザで本人が行う (issue 105)。クライアントは表示ラベル `:status-video-held` ("video uploaded - publish it in the browser") のみ。自動公開はサーバー側ユーザーフラグ `auto_publish` (GUI チェック → `POST /api/me/auto-publish {"enabled":0|1}`、ON 時は確認ダイアログ、失敗時チェックを戻す。`/api/me` の `auto_publish` で再同期)。
-- 既知リスク (S17): 本番 WinHTTP がボディ未読 close を RST で受けると応答が読めず 300 秒毎に再送し続ける。
+- 既知リスク (S17): 本番 WinHTTP がボディ未読 close を RST で受けると応答が読めず 300 秒毎に再送し続ける。C# はこの種の失敗を数え、指数バックオフで約 1 日半 (12 回) 後に諦める。サーバー停止 (接続失敗) では諦めない。
 
 **手動 YouTube フロー** (`upload-video-callback` gui.lisp:713):
 - 対象: 選択行 (動画パスがあるもの)。未選択なら最新の「動画パスあり かつ (未 attached または ホスト動画が差し替え可能 = `video-uploaded` かつ `video-url` なし)」。

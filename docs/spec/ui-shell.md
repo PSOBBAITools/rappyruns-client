@@ -126,7 +126,7 @@ C# への対応づけの目安:
 | 4 | `:col-video` | 10 | `run-video-label` (`store.lisp:265`) |
 | 5 | `:col-status` | 40 | `run-status-label` (`store.lisp` 220 行付近) |
 
-`run-video-label` の判定順: `:video-uploaded` → `:video-uploaded` / `:video-attached` → `:video-attached` / アップロード中 → `:video-uploading <%>` / `:upload-given-up` → `:video-upload-failed` / `:video-path` がある → `:video-saved` / それ以外は空。
+`run-video-label` の判定順: `:video-uploaded` → `:video-uploaded` / `:video-attached` → `:video-attached` / アップロード中 → `:video-uploading <%>` / `:upload-given-up` → `:video-upload-failed` / `:untrimmed` → `video-untrimmed` (C# 追加、S07) / `:video-path` がある → `:video-saved` / それ以外は空。
 
 `run-status-label` の分岐:
 - 動画が付いている場合: 中断ラン → `:status-aborted-video-attached`、held → `:status-video-held`、承認済み → `:status-video-approved`、それ以外 → `:status-video-attached`
@@ -950,5 +950,6 @@ end
 | `video-retention-note` | gui | Top-10 videos are kept; others are deleted after 90 days (see the site's Client page). | 上位10位の動画は保持され、それ以外は90日で削除されます (詳細はサイトの Client ページ)。 |
 | `video-saved` | store | saved | 保存済み |
 | `video-upload-failed` | store | upload failed | アップロード失敗 |
+| `video-untrimmed` | store (C#) | saved - check the end | 保存済み - 終わりを確認 |
 | `video-uploaded` | store | uploaded | アップロード済み |
 | `video-uploading` | store | uploading ~d% | アップロード中 ~d% |

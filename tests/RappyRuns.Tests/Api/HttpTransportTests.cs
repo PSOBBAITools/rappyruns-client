@@ -79,6 +79,37 @@ public class HttpTransportTests : IDisposable
         Assert.Equal("POST /api/runs/1/video-file -> 502: bad gateway", ex.Message);
     }
 
+    /// <summary>Reads (or not) the request body, then drops the connection (or fails to connect).</summary>
+    private sealed class DroppingHandler(bool readBody, HttpRequestError error = HttpRequestError.Unknown) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (readBody) await request.Content!.CopyToAsync(Stream.Null, cancellationToken);
+            throw new HttpRequestException(error, "connection reset");
+        }
+    }
+
+    [Fact(DisplayName = "a connect failure after a stale connection took the first chunk is still a connect failure")]
+    public async Task ConnectFailureAfterFirstChunkIsNotBodyStarted()
+    {
+        using var transport = new HttpTransport(new DroppingHandler(true, HttpRequestError.ConnectionError));
+        var ex = await Assert.ThrowsAsync<ApiException>(() =>
+            transport.UploadFileAsync("POST", "https://x/v", WriteFile("v.mp4", 10), "video/mp4"));
+        Assert.Equal(TransportFailure.ConnectFailed, ex.Failure);
+        Assert.False(ex.BodyStarted);
+    }
+
+    [Theory(DisplayName = "an upload failure says whether the body had started (S17)")]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UploadFailureMarksBodyStarted(bool readBody)
+    {
+        using var transport = new HttpTransport(new DroppingHandler(readBody));
+        var ex = await Assert.ThrowsAsync<ApiException>(() =>
+            transport.UploadFileAsync("POST", "https://x/v", WriteFile("v.mp4", 10), "video/mp4"));
+        Assert.Equal(readBody, ex.BodyStarted);
+    }
+
     [Fact(DisplayName = "download writes the file only on 200, with progress")]
     public async Task Download()
     {

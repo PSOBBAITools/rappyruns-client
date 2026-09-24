@@ -32,6 +32,8 @@ internal sealed class RunsMethods(ClientHost host)
         r.RegisterSync("runs.retry", _ =>
         {
             // The poll loop owns submission; works unlinked too (anonymous guest).
+            // A manual retry also restarts any video upload's failure streak (S17).
+            host.Queue.ResetUploadFailures();
             host.Poll.RequestRetry();
             return null;
         });

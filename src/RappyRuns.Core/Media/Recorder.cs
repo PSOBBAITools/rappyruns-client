@@ -129,11 +129,14 @@ public sealed class Recorder
     public string? LastError => _lastError;
 
     /// <summary>
-    /// <c>on-keep</c>: called with (final path, best run) after a kept file is
-    /// in place. main.lisp wires it to <c>link-video-file!</c> + a list refresh
-    /// (<see cref="SessionRuns.LinkVideoFile"/>). Exceptions are swallowed.
+    /// <c>on-keep</c>: called with (final path, best run, untrimmed) after a
+    /// kept file is in place. main.lisp wires it to <c>link-video-file!</c> + a
+    /// list refresh (<see cref="Store.RunQueue.LinkVideoFile"/>). Untrimmed (the
+    /// remux failed, so the tail past the run may show the desktop) is a C#
+    /// addition (S07): the entry is marked so it is never auto-uploaded.
+    /// Exceptions are swallowed.
     /// </summary>
-    public Action<string, Plist>? OnKeep { get; set; }
+    public Action<string, Plist, bool>? OnKeep { get; set; }
 
     /// <summary>
     /// <c>*audio-target-pid*</c>: the attached PSOBB process (set on attach,
@@ -392,8 +395,9 @@ public sealed class Recorder
     /// <summary>
     /// <c>save-recording</c> (recording.lisp:1246): the remux wrote the final
     /// file (delete the tmp), or the fragmented tmp is renamed onto it - then
-    /// untrimmed, which is ballooned because on-keep hands it straight to the
-    /// uploader.
+    /// untrimmed, which is ballooned. The Lisp on-keep handed that file
+    /// straight to the uploader; here on-keep is told it is untrimmed, and the
+    /// entry stays out of the auto-upload (S07).
     /// </summary>
     private void SaveRecording(bool remuxed)
     {
@@ -412,7 +416,7 @@ public sealed class Recorder
             {
                 var path = FinalPath!;
                 var run = _pendingRun!;
-                Try(() => onKeep(path, run));
+                Try(() => onKeep(path, run, !remuxed));
             }
         }
         catch (Exception e)

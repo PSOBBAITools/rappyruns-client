@@ -103,6 +103,7 @@ public static class StatusMsgs
         if (entry.Is(RunKeys.VideoAttached)) return Msg.Of("video-attached");
         if (uploadPercent is { } percent) return Msg.Of("video-uploading", percent);
         if (entry.Is(RunKeys.UploadGivenUp)) return Msg.Of("video-upload-failed");
+        if (entry.Is(RunKeys.Untrimmed)) return Msg.Of("video-untrimmed");
         if (entry.Is(RunKeys.VideoPath)) return Msg.Of("video-saved");
         return null;
     }

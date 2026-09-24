@@ -38,6 +38,12 @@ public static class RunKeys
     public const string NextUploadAt = "NEXT-UPLOAD-AT";
     public const string UploadGivenUp = "UPLOAD-GIVEN-UP";
     public const string UploadError = "UPLOAD-ERROR";
+
+    /// <summary>Consecutive counted upload failures (C# addition, S17; the Lisp client ignores it).</summary>
+    public const string UploadFailures = "UPLOAD-FAILURES";
+
+    /// <summary>The recording kept its untrimmed tail (remux failed): never auto-uploaded (C# addition, S07).</summary>
+    public const string Untrimmed = "UNTRIMMED";
 }
 
 /// <summary>The <c>:status</c> keyword names.</summary>
@@ -118,18 +124,53 @@ public static class RunEntries
     /// <summary>
     /// entry-active-p (store.lisp:25): unfinished business that must survive
     /// trimming and restarts - entries awaiting (re)submission, and entries
-    /// whose saved video still needs attaching to their server draft. Aborted
-    /// and unranked runs never upload, and a permanently rejected upload is as
-    /// finished as a rejected run, so none of those keep an entry active.
+    /// whose saved video still needs attaching to their server draft, by the
+    /// automatic upload (<see cref="AwaitsUpload"/>) or by hand
+    /// (<see cref="AwaitsManualAttach"/>, which is why it takes a clock).
     /// </summary>
-    public static bool IsActive(Plist entry) =>
-        IsUnsent(entry)
-        || (Is(entry, RunKeys.VideoPath)
-            && Is(entry, RunKeys.ServerId)
-            && !Is(entry, RunKeys.Aborted)
-            && !Is(entry, RunKeys.Unranked)
-            && !Is(entry, RunKeys.VideoAttached)
-            && !Is(entry, RunKeys.UploadGivenUp));
+    /// <param name="now">Universal time; null reads the wall clock.</param>
+    public static bool IsActive(Plist entry, long? now = null) =>
+        IsUnsent(entry) || AwaitsUpload(entry) || AwaitsManualAttach(entry, now);
+
+    /// <summary>
+    /// How long an untrimmed recording (S07) stays listed and protected for
+    /// the player to check and attach by hand: 14 days after the run, the
+    /// lifetime the server gives a draft.
+    /// </summary>
+    public const long UntrimmedKeepSeconds = 14L * 24 * 3600;
+
+    /// <summary>
+    /// The saved recording is still due for the automatic upload: it has a
+    /// file and a server draft, and nothing rules it out. Aborted and unranked
+    /// runs never upload, a permanently rejected upload is as finished as a
+    /// rejected run, and an untrimmed recording (C#, S07) is left for the
+    /// player to check and attach by hand (<see cref="AwaitsManualAttach"/>).
+    /// </summary>
+    public static bool AwaitsUpload(Plist entry) => HasPendingVideo(entry) && !Is(entry, RunKeys.Untrimmed);
+
+    /// <summary>
+    /// An untrimmed recording (C#, S07) waiting for the player to check its
+    /// tail and attach it by hand: never auto-uploaded, but kept active - it
+    /// stays in the runs list and queue.sexp and its file is protected from
+    /// the retention sweep - for <see cref="UntrimmedKeepSeconds"/> after the
+    /// run finished. After that the draft is gone from the server anyway and
+    /// the normal sweep may take the file. No <c>:finished-at</c>, no hold.
+    /// </summary>
+    /// <param name="now">Universal time; null reads the wall clock.</param>
+    public static bool AwaitsManualAttach(Plist entry, long? now = null) =>
+        HasPendingVideo(entry)
+        && Is(entry, RunKeys.Untrimmed)
+        && Get(entry, RunKeys.FinishedAt).AsLong is { } finished
+        && (now ?? UniversalTime.Now()) - finished < UntrimmedKeepSeconds;
+
+    /// <summary>A recording on disk for a server draft that has no video yet and still wants one.</summary>
+    private static bool HasPendingVideo(Plist entry) =>
+        Is(entry, RunKeys.VideoPath)
+        && Is(entry, RunKeys.ServerId)
+        && !Is(entry, RunKeys.Aborted)
+        && !Is(entry, RunKeys.Unranked)
+        && !Is(entry, RunKeys.VideoAttached)
+        && !Is(entry, RunKeys.UploadGivenUp);
 
     /// <summary>
     /// entry-unsent-p (store.lisp:303): :queued or :failed - runs that exist
@@ -142,13 +183,15 @@ public static class RunEntries
     /// first; keep every active entry and only the newest
     /// <paramref name="limit"/> finished ones, preserving order.
     /// </summary>
-    public static List<T> TrimFinished<T>(IEnumerable<T> runs, Func<T, Plist> plistOf, int limit)
+    /// <param name="now">Universal time for <see cref="IsActive"/>; null reads the wall clock.</param>
+    public static List<T> TrimFinished<T>(IEnumerable<T> runs, Func<T, Plist> plistOf, int limit, long? now = null)
     {
+        var at = now ?? UniversalTime.Now();
         var finished = 0;
         var kept = new List<T>();
         foreach (var run in runs)
         {
-            if (!IsActive(plistOf(run)) && ++finished > limit) continue;
+            if (!IsActive(plistOf(run), at) && ++finished > limit) continue;
             kept.Add(run);
         }
         return kept;

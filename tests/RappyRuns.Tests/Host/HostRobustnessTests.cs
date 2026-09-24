@@ -18,6 +18,19 @@ public sealed class HostRobustnessTests : IDisposable
         _dir.Dispose();
     }
 
+    [Fact(DisplayName = "only the upload's own failures count toward giving it up (S17)")]
+    public void UploadFailureCounting()
+    {
+        Assert.True(QueueNetwork.CountsAgainstUpload(new ApiException("POST ... -> 502: x") { Status = 502 }));
+        Assert.True(QueueNetwork.CountsAgainstUpload(new ApiException("reset", TransportFailure.Other) { BodyStarted = true }));
+        Assert.True(QueueNetwork.CountsAgainstUpload(new ApiException("timed out", TransportFailure.Timeout) { BodyStarted = true }));
+        Assert.False(QueueNetwork.CountsAgainstUpload(ApiException.InvalidToken()));
+        Assert.False(QueueNetwork.CountsAgainstUpload(new ApiException("dns", TransportFailure.AddressNotFound)));
+        Assert.False(QueueNetwork.CountsAgainstUpload(new ApiException("refused", TransportFailure.ConnectFailed)));
+        Assert.False(QueueNetwork.CountsAgainstUpload(new ApiException("file too large to upload (5 bytes)")));
+        Assert.False(QueueNetwork.CountsAgainstUpload(new IOException("locked")));
+    }
+
     [Theory(DisplayName = "a malformed or missing quest-triggers.sexp is logged, never fatal")]
     [InlineData("((:slug \"a\" :episode 1", true)]         // unterminated list (SexpException)
     [InlineData("(:slug \"a\")", false)]                     // a plist, not a list of plists
