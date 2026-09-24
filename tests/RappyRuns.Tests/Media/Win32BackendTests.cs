@@ -55,9 +55,22 @@ public class Win32BackendTests : IDisposable
         while (backend.IsAlive(handle) && DateTime.UtcNow < deadline) Thread.Sleep(20);
         Assert.False(backend.IsAlive(handle));
         Assert.False(backend.Succeeded(handle));
-        Assert.Contains("boom", File.ReadAllText(RecordingFiles.StderrFileFor(output)));
+        // Share everything: a process another test spawns at the same moment
+        // can inherit the stderr handle for a moment (bInheritHandles), and a
+        // plain ReadAllText would then refuse to open the file.
+        using (var stream = new FileStream(RecordingFiles.StderrFileFor(output), FileMode.Open, FileAccess.Read,
+                   FileShare.ReadWrite | FileShare.Delete))
+        using (var reader = new StreamReader(stream))
+            Assert.Contains("boom", reader.ReadToEnd());
         backend.Close(handle);
         backend.Close(handle); // idempotent
+        // Deletion can likewise wait for such an inherited handle to close.
+        var gone = DateTime.UtcNow.AddSeconds(5);
+        while (File.Exists(RecordingFiles.StderrFileFor(output)) && DateTime.UtcNow < gone)
+        {
+            Thread.Sleep(50);
+            backend.Close(handle);
+        }
         Assert.False(File.Exists(RecordingFiles.StderrFileFor(output)));
     }
 
