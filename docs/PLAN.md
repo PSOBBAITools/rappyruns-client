@@ -1,0 +1,86 @@
+# Rappy Runs Desktop (C#) 移行計画
+
+2026-09-24 作成。LispWorks クライアント (`client/`, v0.60.0) を C# + WebView2 の HTML UI に
+書き換える。**M1 = 現行クライアントと機能パリティ**。gamepad 統合 (`~/src/psobb-gamepad-manager`) は M1 後の機能追加。
+
+仕様書 (移植の正本。Lisp を読み直さずに実装できる粒度):
+
+| 文書 | 範囲 |
+|---|---|
+| [spec/core.md](spec/core.md) | 起動・単一インスタンス・設定/キュー・sexp・HTTP/API・認証・メモリ・検出・テレメトリ・アップデータ・i18n・テスト |
+| [spec/media.md](spec/media.md) | 録画 (WGC/ddagrab/gdigrab・WASAPI・ffmpeg・末尾トリム)・アップロード・オーバーレイ・ゴースト |
+| [spec/ui-shell.md](spec/ui-shell.md) | 画面/操作一覧・トレイ/通知・自動起動・Pin Share (中継・アドオン・入力 DLL) |
+
+## 技術構成
+
+- **.NET 10 (LTS)**、`PublishSingleFile` + `SelfContained` + `IncludeNativeLibrariesForSelfExtract`。
+  旧アップデータは zip ルートの exe・`data\*`・`ffmpeg\*` しかコピーしないため (core §10.7)、
+  exe 以外の追加物 (UI の静的ファイル等) は `data\` 配下に置くか exe に埋め込む。
+- **ホスト**: WinForms の最小ウィンドウ + WebView2。UI とは JSON メッセージ (`PostWebMessageAsJson` / `WebMessageReceived`) で通信。
+  WebView2 Runtime 不在時はネイティブのダイアログで案内 (起動失敗はロールバックされないため必須)。
+- **フロント**: TypeScript + Vite + Svelte。ビルド成果物は exe に埋め込み、仮想ホスト名で配信。
+- **Win32/WinRT**: CsWin32 (P/Invoke 生成)、WGC は `Windows.Graphics.Capture` を直接。WASAPI はプロセスループバックを直接 COM で。
+- **オーバーレイ**: M1 は現行と同じレイヤードウィンドウ (カラーキー + `WDA_EXCLUDEFROMCAPTURE`) を移植。表現力の強化は M1 後。
+- **ビルド/リリース**: GitHub Actions でビルド→zip。`pinshare-input.dll` (C++) も Actions の MSVC でビルド。
+
+## ディレクトリ
+
+```
+desktop/
+  RappyRuns.sln
+  src/RappyRuns.Core/      純粋ロジック (sexp, 検出, API, キュー, ゴースト計算, i18n)。Win32 非依存
+  src/RappyRuns.Win/       Win32/WinRT (メモリ, 録画, 音声, オーバーレイ, トレイ, Pin Share 入出力)
+  src/RappyRuns.App/       ホスト exe (WebView2, IPC, 起動シーケンス)
+  ui/                      Svelte フロント
+  tests/RappyRuns.Tests/   xUnit。golden/ に Lisp 由来の期待値
+  native/pinshare-input/   client/ から移設 (M1 切り替え時)
+  docs/
+```
+
+## パリティの担保
+
+1. **ゴールデンテスト**: `client/tests` (約 770 チェック) の純粋部分を SBCL で実行し、入力と出力を JSON に書き出すスクリプトを
+   `client/tests/export-golden.lisp` として足す。C# 側は同じ JSON を流して一致を確認。対象: 検出状態機械、PB/テレパイプ判定、
+   NPC 判定、sexp 読み書き、run/telemetry JSON、バージョン比較、ゴースト投影・部屋照合、末尾トリム計算、Pin Share の in/out.txt。
+2. **数値の罠**: CL の `round` は偶数丸め (= C# 既定)、`floor` は負の無限大方向、single-float は double に広げない (core リスク 7)。
+3. **実機チェックリスト**: 仕様書の回帰リスク表 (core 50 件 / media 25 件 / ui-shell 24 件) をフェーズごとの受け入れ項目にする。
+
+## フェーズ
+
+| # | 内容 | 完了条件 |
+|---|---|---|
+| P0 | 雛形: sln、WebView2 ホスト、IPC、i18n の JSON 化 (機械変換)、Actions でのビルドと zip | 空の画面が単一 exe で出る。旧アップデータの展開手順 (zip ルート exe) で起動できる |
+| P1 | Core: sexp、config/queue 読み書き (sexp 互換で書き戻す)、HTTP/API、認証/ペアリング/ゲスト、クエスト定義、ゴールデンテスト基盤 | ゴールデン一致。実 config.sexp を読み書きして Lisp 版が読み戻せる |
+| P2 | ゲーム接続: ウィンドウ探索、Authenticode、メモリ、検出、テレメトリ、trigger-log、送信キュー | 実ゲームでラン検出→送信 (録画なし) |
+| P3 | シェルと UI: 単一インスタンス (旧版と同じミューテックス/クラス名)、トレイ/通知、自動起動、メイン画面 (状態・ラン一覧・設定・Rooms・ルール登録)、アップデータ | 現行 GUI の全操作が新 UI で可能 |
+| P4 | 録画: 取り込み方式の選択、WGC/ddagrab/gdigrab、WASAPI、ffmpeg、停止/リマックス/トリム、アップロード、保管と削除 | 窓/フルスクリーン/2 GPU で実走録画。色と音ズレが一致 |
+| P5 | オーバーレイとゴースト | 実走でゴースト表示、Z 順維持、録画に写らない |
+| P6 | Pin Share: 中継、アドオン/DLL の導入、ピンセット、機能ゲート | 限定ユーザー環境で送受信 |
+| P7 | ドッグフード: テスト用リポジトリにリリースし、テスターは `:UPDATE-REPO` で取得 (core §10.7) | 開発者 + 限定ユーザーで数日実走 |
+| P8 | 切り替え: 本リポジトリに `v1.0.0` を非プレリリースで公開 → 旧版が起動時に自動で入れ替え | 本番ユーザーの更新を確認 |
+
+P1〜P2 と P3 の UI 部分は並行可能 (IPC の型を先に固める)。
+
+## 切り替え時の安全策
+
+- 旧版は起動時に**全ユーザーへ無人で** C# 版を入れる。新 exe は起動さえすれば成功扱いで、自動ロールバックはない。
+- 対策: **ブリッジ版 (Lisp v0.61.x)** を先に出し、アップデータに「新 exe が N 秒以内に起動完了の印を書かなければ `.old` に戻す」を足す。
+  切り替えまでに十分な期間を置き、稼働中クライアントの大半をブリッジ版にしてから `v1.0.0` を出す。
+- config.sexp は M1 の間は sexp 互換で書き戻す (Lisp 版に戻しても設定とトークンが残る)。queue.sexp は取り込み後に `.migrated` へ。
+- 自動起動のレジストリ値が旧 exe 名を指している場合は正規パスで書き直す。
+
+## 決定事項 (2026-09-24)
+
+1. **ブリッジ版を出す。** Lisp v0.61.x のアップデータに「新 exe が起動完了の印を N 秒以内に書かなければ `.old` へ戻して旧 exe を再起動」を足す。
+   C# 側は起動シーケンスの最後 (WebView2 初期化成功後) に印を書く。P7 と並行で出し、`v1.0.0` 公開までに期間を空ける。
+2. **パリティより良い挙動を優先してよい** (簡単に直せる場合、または旧挙動に合わせるほうが大変な場合)。直した点はパリティのゴールデンから外し、
+   この表に理由を残す:
+
+   | 旧挙動 (core §22 #46/#47) | C# 版の挙動 |
+   |---|---|
+   | メモリ読み取りが 1 フレーム失敗しただけでスナップショット NIL → 走行中のトラッカーを中断して武装解除 | プロセスが生きている間の読み取り失敗は猶予 (連続 1 秒程度) を置き、回復すればそのまま計測を続ける。猶予を超えたら中断 |
+   | ゲーム終了時の 15 秒超の中断ランは黙って捨てる (戻り値の取りこぼし) | ロビー帰還・リロードと同じく中断ランとして送信キューに入れる (サーバー側で非公開、動画はアップロードしない) |
+
+3. **DPI は M1 では現行の見た目に合わせる。** ただしプロセス全体を DPI 非対応にすると WebView2 の UI がにじむため、
+   プロセスは PerMonitorV2、**オーバーレイのスレッドだけ** `SetThreadDpiAwarenessContext(UNAWARE)` で現行と同じ座標・文字サイズにする。
+   オーバーレイを高 DPI に対応させるのは M1 後の表現力強化と一緒に行う。
