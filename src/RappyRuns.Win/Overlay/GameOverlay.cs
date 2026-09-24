@@ -102,6 +102,7 @@ public sealed class GameOverlay : IDisposable
     private (bool Full, int W, int H)? _loggedShape;
     private int _shapeChanges;
     private long? _shapeLoggedAt;
+    private volatile bool _createFailureLogged;
     private bool? _loggedTopmost;
     private bool _inputEnabled;
     private DragState? _drag;
@@ -235,7 +236,16 @@ public sealed class GameOverlay : IDisposable
                 ClassName, ClassName, WS_POPUP,
                 0, 0, OverlayLayout.Width, OverlayLayout.GhostHeight,
                 0, 0, GetModuleHandle(null), 0);
-            if (hwnd == 0) return;
+            if (hwnd == 0)
+            {
+                // Show() respawns the thread every 4 Hz update: say it once.
+                if (!_createFailureLogged)
+                {
+                    _createFailureLogged = true;
+                    _log?.Invoke("overlay: window creation failed - the overlay cannot show");
+                }
+                return;
+            }
             Overlays[hwnd] = this;
             Volatile.Write(ref _hwnd, hwnd);
 
@@ -246,10 +256,8 @@ public sealed class GameOverlay : IDisposable
             _placement = null;
             _topmostAt = null;
             _loggedState = null;
-            _loggedShape = null;
-            _shapeChanges = 0;
             _shapeLoggedAt = null;
-            _loggedTopmost = null;
+            ResetShowLog();
             _log?.Invoke("overlay: window created");
             // Drag state must not survive a thread restart: the fresh window
             // starts WS_EX_TRANSPARENT, so a stale drag could never receive its
@@ -480,8 +488,10 @@ public sealed class GameOverlay : IDisposable
         if (_visible && _placement is { } p)
         {
             // The show line carries the placement: nothing held back is still news.
+            // The show line starts the 5 s mode/size interval too.
             _loggedShape = (_full, p.W, p.H);
             _shapeChanges = 0;
+            _shapeLoggedAt = Stopwatch.GetTimestamp();
             _log?.Invoke($"overlay: {state} at {FormatPlacement()}, game hwnd {_gameHwnd:X}");
         }
         else
@@ -509,13 +519,22 @@ public sealed class GameOverlay : IDisposable
             _shapeChanges++;
         }
         if (_shapeChanges == 0) return;
-        var now = Stopwatch.GetTimestamp();
-        if (_shapeLoggedAt is { } at && Stopwatch.GetElapsedTime(at, now).TotalMilliseconds < ShapeLogIntervalMs) return;
+        if (_shapeLoggedAt is { } at && Stopwatch.GetElapsedTime(at).TotalMilliseconds < ShapeLogIntervalMs) return;
+        WriteShapeLine();
+    }
+
+    /// <summary>The coalesced mode/size line: the current placement, plus how many earlier changes it stands for.</summary>
+    private void WriteShapeLine()
+    {
         var held = _shapeChanges - 1;
         _shapeChanges = 0;
-        _shapeLoggedAt = now;
-        _log?.Invoke($"overlay: placement now {FormatPlacement()}" +
-                     (held > 0 ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $" (+{held} changes)") : ""));
+        _shapeLoggedAt = Stopwatch.GetTimestamp();
+        _log?.Invoke($"overlay: placement now {FormatPlacement()}" + held switch
+        {
+            <= 0 => "",
+            1 => " (+1 change)",
+            _ => FormattableString.Invariant($" (+{held} changes)"),
+        });
     }
 
     /// <summary>"X,Y WxH (panel|full client area)" of the current placement, for the log.</summary>
@@ -589,6 +608,9 @@ public sealed class GameOverlay : IDisposable
         if (_inputEnabled) Swallow(() => ApplyInput(hwnd, false));
         if (_visible)
         {
+            // A mode/size change still held by the 5 s coalescing goes out
+            // before the hide line, or the last placement on record is stale.
+            if (_shapeChanges > 0) WriteShapeLine();
             ShowWindow(hwnd, SW_HIDE);
             _visible = false;
         }
@@ -598,7 +620,12 @@ public sealed class GameOverlay : IDisposable
         // Whatever put the game in front of us may have taken the topmost band
         // with it, so the next show re-asserts at once.
         _topmostAt = null;
-        // The next show logs its placement and topmost result afresh.
+        ResetShowLog();
+    }
+
+    /// <summary>The next show logs its placement and topmost result afresh (thread start and every hide).</summary>
+    private void ResetShowLog()
+    {
         _loggedShape = null;
         _shapeChanges = 0;
         _loggedTopmost = null;
