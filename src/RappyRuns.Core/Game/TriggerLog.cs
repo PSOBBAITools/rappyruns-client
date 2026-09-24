@@ -9,11 +9,17 @@ namespace RappyRuns.Core.Game;
 /// of one loaded quest is appended to trigger-log.txt. The path and the line
 /// format are a <b>contract</b> (spec core §16.1): moderators follow
 /// instructions (quest-triggers.sexp comments) that name this file and read
-/// these lines. UTF-8, append-only, no rotation. The UI thread (toggle) and the
-/// poll thread (diffs) both write, so every file access holds a lock.
+/// these lines. UTF-8, append-only. The Lisp never rotated it (469 MB seen on a
+/// dev machine; the toggle survives restarts), so past <see cref="MaxBytes"/>
+/// the file moves aside to <see cref="OldPath"/> and a fresh one starts. The UI
+/// thread (toggle) and the poll thread (diffs) both write, so every file access
+/// holds a lock.
 /// </summary>
-public sealed class TriggerLog(string path, IGameClock clock) : IDisposable
+public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = TriggerLog.MaxBytes) : IDisposable
 {
+    /// <summary>Rotation threshold. 8 MiB is hours of dense register traffic, far more than one segment needs.</summary>
+    public const long MaxBytes = 8L * 1024 * 1024;
+
     private readonly Lock _gate = new();
     private StreamWriter? _stream;
 
@@ -27,16 +33,57 @@ public sealed class TriggerLog(string path, IGameClock clock) : IDisposable
 
     public string Path { get; } = path;
 
-    // trigger-log.lisp:34: opened on first use, kept open until closed.
+    /// <summary>The rotated generation: trigger-log.txt becomes trigger-log.old.txt (one generation, replaced).</summary>
+    public string OldPath => System.IO.Path.ChangeExtension(Path, ".old.txt");
+
+    // trigger-log.lisp:34: opened on first use, kept open until closed. A file
+    // an earlier session left oversized is rotated before it is reopened.
     private StreamWriter Stream()
     {
         if (_stream is null)
         {
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(Path))!);
+            var existing = new FileInfo(Path);
+            if (existing.Exists && existing.Length > maxBytes) MoveAside();
             var file = new FileStream(Path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
             _stream = new StreamWriter(file, new UTF8Encoding(false)) { NewLine = "\n", AutoFlush = false };
         }
         return _stream;
+    }
+
+    /// <summary>
+    /// After a flush: once the open file has grown past the limit, close it,
+    /// move it aside and start the fresh file with a line saying where the
+    /// earlier lines went, so a moderator reading it mid-segment is not left
+    /// with a log that begins in the middle of nothing.
+    /// </summary>
+    private void RotateIfFull()
+    {
+        if (_stream is null || _stream.BaseStream.Length <= maxBytes) return;
+        _stream.Dispose();
+        _stream = null;
+        if (!MoveAside()) return;
+        var stream = Stream();
+        stream.Write($"=== trigger log rotated {TimeOfDay()}; earlier lines are in {System.IO.Path.GetFileName(OldPath)} ===\n");
+        stream.Flush();
+    }
+
+    /// <summary>
+    /// Rename the file to <see cref="OldPath"/>, replacing it. False when
+    /// Windows refuses (the old file is open without delete sharing, say):
+    /// the log then keeps appending to the big file rather than stop.
+    /// </summary>
+    private bool MoveAside()
+    {
+        try
+        {
+            File.Move(Path, OldPath, overwrite: true);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>trigger-log.lisp:60 time-of-day: local HH:MM:SS.</summary>
@@ -55,6 +102,7 @@ public sealed class TriggerLog(string path, IGameClock clock) : IDisposable
             stream.Write($"=== trigger logging started {TimeOfDay()} ===\n");
             stream.Write("Play the segment; each register / floor-switch change is listed below.\n");
             stream.Flush();
+            RotateIfFull();
         }
         return Path;
     }
@@ -92,7 +140,11 @@ public sealed class TriggerLog(string path, IGameClock clock) : IDisposable
         {
             var stream = Stream();
             foreach (var line in lines) stream.Write(line + "\n");
-            if (lines.Count > 0) stream.Flush();
+            if (lines.Count > 0)
+            {
+                stream.Flush();
+                RotateIfFull();
+            }
         }
         return lines.Count;
     }

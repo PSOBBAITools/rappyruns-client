@@ -178,6 +178,54 @@ public class TriggerLogTests
         ], TriggerLog.ChangeLines(prev, next, "10:11:12")!);
         Assert.Null(TriggerLog.ChangeLines(prev, next with { QuestPtr = 8 }, "x"));
     }
+
+    [Fact(DisplayName = "trigger log rotates past the limit while writing, keeping one old generation")]
+    public void RotatesWhileWriting()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"eta-test-trigger-rotate-{Guid.NewGuid():N}");
+        try
+        {
+            var path = Path.Combine(dir, "trigger-log.txt");
+            using var log = new TriggerLog(path, new ManualGameClock(), maxBytes: 200);
+            Assert.Equal(Path.Combine(dir, "trigger-log.old.txt"), log.OldPath);
+            log.Start(); // 110 bytes: under the limit
+            Assert.False(File.Exists(log.OldPath));
+            log.Start(); // 220 bytes: rotated
+            log.Close();
+            Assert.Equal(2, File.ReadAllText(log.OldPath).Split("=== trigger logging started").Length - 1);
+            Assert.Equal("=== trigger log rotated 12:00:00; earlier lines are in trigger-log.old.txt ===\n", File.ReadAllText(path));
+            // A second rotation replaces the old generation.
+            log.Start();
+            log.Start();
+            log.Close();
+            Assert.StartsWith("=== trigger log rotated", File.ReadAllText(log.OldPath));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact(DisplayName = "trigger log rotates an oversized file left by an earlier session when it opens")]
+    public void RotatesAtOpen()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"eta-test-trigger-rotate-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, "trigger-log.txt");
+            File.WriteAllText(path, new string('x', 300));
+            using var log = new TriggerLog(path, new ManualGameClock(), maxBytes: 200);
+            log.Start();
+            log.Close();
+            Assert.Equal(300, new FileInfo(log.OldPath).Length);
+            Assert.StartsWith("=== trigger logging started", File.ReadAllText(path));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }
 
 /// <summary>tests-quests.lisp run-quest-rule-tests.</summary>

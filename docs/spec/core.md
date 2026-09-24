@@ -138,7 +138,7 @@
 |---|---|---|---|---|
 | `%APPDATA%\ephinea-ta-client\config.sexp` | sexp plist 1 フォーム, UTF-8 (BOM なし) | client | client | §3.2。`APPDATA` 未設定時はホームディレクトリ |
 | `%APPDATA%\ephinea-ta-client\queue.sexp` | sexp list, UTF-8 | client | client | §3.3 |
-| `%APPDATA%\ephinea-ta-client\trigger-log.txt` | テキスト追記, UTF-8 | client | 人間 (モデレーター) | §16.1。ローテーションなし (開発機で 469MB 実在) |
+| `%APPDATA%\ephinea-ta-client\trigger-log.txt` | テキスト追記, UTF-8 | client | 人間 (モデレーター) | §16.1。8 MiB 超で `trigger-log.old.txt` へローテーション (C# で追加。Lisp はローテーションなしで開発機に 469MB 実在) |
 | `<exeDir>\login.txt` | `key=value` テキスト | ユーザー | client | §8.3 |
 | `<exeDir>\data\quest-triggers.sexp` | sexp | リリース zip | client | §5。開発時はソース dir |
 | `<exeDir>\data\pin-share\init.lua`, `pinshare-input.dll` | バイナリ/Lua | リリース zip | Pin Share (範囲外) | ゲームの `addons\Pin Share\` にコピーされる |
@@ -922,7 +922,7 @@ active トラッカーのうち経過 ≥ **15000ms** (`+abort-min-ms+`) のも�
   HH:MM:SS "<quest>" monster ID killed (<name|?>, unitxt U)
   ```
   `"<quest>"` は `~s` (ダブルクォート付き、`"` と `\` をエスケープ)。時刻はローカル時刻。レジスタは 0..255 を id 順、スイッチはバイト順・ビット順 (floor = i/32, switch = 8*(i%32)+bit)。
-- OFF で stream を閉じる。ローテーションなし (C# で追加するなら別名世代で)。
+- OFF で stream を閉じる。C# はローテーションを追加: 開くときと flush の後にファイルが 8 MiB (`TriggerLog.MaxBytes`) を超えていたら `trigger-log.old.txt` へ改名 (前の世代は上書き、1 世代のみ) して新しいファイルを始める。書き込み中に回した場合は新ファイルの先頭に `=== trigger log rotated HH:MM:SS; earlier lines are in trigger-log.old.txt ===` を書く。改名に失敗したら元のファイルへ追記を続ける。
 
 ### 16.2 撃破差分 (`newly-killed-monsters`)
 前フレームで hp>0、今フレームで hp==0 のモンスター (今フレームの順序)。
