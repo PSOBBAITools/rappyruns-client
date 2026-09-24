@@ -64,12 +64,12 @@ public sealed class RunQueueTests : IDisposable
         q.Changed += (_, _) => changes++;
         var candidate = q.UploadCandidate(_now);
         Assert.True(2 == candidate?.ServerId, "a vanished recording gives up and the scan moves on");
-        Assert.True(changes == 1, "the give-up raises Changed so the GUI can repaint");
+        Assert.Equal(1, changes); // the give-up raises Changed so the GUI can repaint
         Assert.True(q.Entries.Single(e => e.ServerId == 1).Is(RunKeys.UploadGivenUp), "the vanished entry is marked given up");
     }
 
     [Fact]
-    public void ACleanScanReportsNoGiveUp()
+    public void ACleanScanRaisesNoChange()
     {
         var q = Store($"(:status :submitted :server-id 1 :video-path {V})");
         var changes = 0;
