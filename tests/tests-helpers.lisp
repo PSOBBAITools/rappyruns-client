@@ -546,11 +546,12 @@
                         script)
                 (search "Copy-Item $newExe $target -Force" script)))
     (check "script rolls the .old exe back on failure"
-           (search "Move-Item $old $exe" script))
+           (search "Move-Item -Force $old $exe" script))
     (check "a failed differing-name update drops the half-installed new exe"
-           (let ((remove (search "Remove-Item -Force $target" script))
-                 (rollback (search "Move-Item $old $exe" script)))
-             (and remove rollback (< remove rollback))))
+           (let ((rollback (search "Move-Item -Force $old $exe" script))
+                 (remove (search "Remove-Item -Force $target" script)))
+             (and remove rollback (< rollback remove)
+                  (search "if ($restored -and $target -ne $exe)" script))))
     (check "script restarts the new exe"
            (search "Start-Process -FilePath $target" script))
     (check "a failed update restarts the old exe"
@@ -571,28 +572,36 @@
                  (launch (search "Start-Process -FilePath $target" script)))
              (and clear launch (< clear launch))))
     (check "script waits for the new client's own PID in the marker"
-           (and (search "$markerPid -eq [string]$new.Id" script)
+           (and (search "-eq [string]$id)" script)
+                (search "if (Test-Started $new.Id) { $started = $true; break }" script)
                 (search "AddSeconds(120)" script)))
     (check "an unreadable marker is retried, not fatal"
-           (search "try { $markerText = Get-Content -Raw $marker -ErrorAction Stop } catch { }" script))
+           (search "try { $text = Get-Content -Raw $marker -ErrorAction Stop } catch { return $false }" script))
+    (check "the marker is read once more when the new client exits"
+           (search "if ($new.HasExited) { $started = Test-Started $new.Id; break }" script))
+    (check "any failure after the swap rolls back"
+           (let ((swap (search "$swapped = $true" script))
+                 (copy (search "Copy-Item $newExe $target -Force" script)))
+             (and swap copy (< swap copy)
+                  (search "$restored = -not $swapped" script))))
     (check "only a still-running new client is killed"
-           (and (search "if (-not $new.HasExited) {" script)
+           (and (search "if ($new -and -not $new.HasExited) {" script)
                 (not (search "Stop-Process" script))))
     (check "a rollback restores the .old exe over the new one"
            (search "Move-Item -Force $old $exe -ErrorAction Stop; $restored = $true" script))
-    (check "a rollback puts the previous data folder back"
+    (check "a rollback puts the previous data folder back without deleting it first"
            (let ((backup (search "Copy-Item $data $dataBackup -Recurse -Force" script))
                  (merge (search "Copy-Item (Join-Path $newData '*') $data" script))
-                 (restore (search "Copy-Item $dataBackup $data -Recurse -Force" script)))
-             (and backup merge restore (< backup merge restore))))
-    (check "a rollback records the rejected tag"
+                 (restore (search "Copy-Item (Join-Path $dataBackup '*') $data -Recurse -Force" script)))
+             (and backup merge restore (< backup merge restore)
+                  (not (search "Remove-Item -Recurse -Force $data" script)))))
+    (check "only a completed rollback records the rejected tag"
            (and (search "$tag = 'v1.0.0'" script)
-                (search "[IO.File]::WriteAllText($rejected, $tag)" script)))
+                (search "if ($restored) { try { [IO.File]::WriteAllText($rejected, $tag) }" script)))
     (check "the failed build is never relaunched"
            (search "if ($restored -and (-not $stillRunning) -and (Test-Path $exe))" script))
-    (check "the zip is only removed after the new client started"
-           (< (search "throw \"the new client did not start\"" script)
-              (search "Remove-Item -Force $zip" script)))))
+    (check "the helper leaves the zip and stage to the client's startup cleanup"
+           (not (search "Remove-Item -Force $zip" script)))))
 
 ;;; ------------------------------------------------------------------
 ;;; Config migration (dropped keys are scrubbed; everything else
