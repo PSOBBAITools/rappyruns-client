@@ -1,71 +1,82 @@
 <script lang="ts">
+  // The main window (ui-shell §1): Runs / Rooms (moderators) / Settings.
+  // The window title, tray and close-to-tray are host-side.
   import { onMount } from 'svelte';
-  import { app, inHost, type AppSnapshot } from './lib/ipc';
-  import { translator } from './lib/i18n';
+  import { usingMock } from './lib/ipc.ts';
+  import { ruleForm, start, tr, ui, type Tab } from './lib/store.svelte.ts';
+  import RunsTab from './components/RunsTab.svelte';
+  import RoomsTab from './components/RoomsTab.svelte';
+  import SettingsTab from './components/SettingsTab.svelte';
+  import MessageDialog from './components/MessageDialog.svelte';
+  import RuleDialog from './components/RuleDialog.svelte';
 
-  // P0 shell: proves the host <-> UI round trip (hello, language switch)
-  // and the i18n table. The real screens arrive in P3 (spec ui-shell.md).
-  let snapshot = $state<AppSnapshot | null>(null);
-  let error = $state<string | null>(null);
-  let tab = $state<'runs' | 'settings'>('runs');
+  onMount(() => void start());
 
-  const tr = $derived(snapshot ? translator(snapshot.strings) : () => '');
+  const tabs = $derived<{ id: Tab; key: string }[]>([
+    { id: 'runs', key: 'tab-runs' },
+    ...(ui.host?.moderator ? [{ id: 'rooms' as Tab, key: 'tab-rooms' }] : []),
+    { id: 'settings', key: 'tab-settings' },
+  ]);
 
-  onMount(async () => {
-    if (!inHost) {
-      error = 'Open this page from RappyRunsClient.exe.';
-      return;
-    }
-    try {
-      snapshot = await app.hello();
-      document.documentElement.lang = snapshot.language;
-    } catch (e) {
-      error = String(e);
-    }
+  // Losing the moderator role while on Rooms: fall back to Runs (the tab is
+  // matched by name, never by index - ui-shell §1.4.1).
+  $effect(() => {
+    if (!tabs.some((t) => t.id === ui.tab)) ui.tab = 'runs';
   });
 
-  async function setLanguage(code: string) {
-    snapshot = await app.setLanguage(code);
-    document.documentElement.lang = snapshot.language;
+  function onTabKey(e: KeyboardEvent) {
+    const i = tabs.findIndex((t) => t.id === ui.tab);
+    let next = -1;
+    if (e.key === 'ArrowRight') next = (i + 1) % tabs.length;
+    else if (e.key === 'ArrowLeft') next = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = tabs.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    ui.tab = tabs[next].id;
+    (e.currentTarget as HTMLElement).querySelector<HTMLElement>(`#tab-${ui.tab}`)?.focus();
   }
 </script>
 
-{#if error}
-  <main class="message">{error}</main>
-{:else if snapshot}
+{#if ui.error}
+  <main class="message">{ui.error}</main>
+{:else if ui.ready && ui.host}
   <div class="shell">
-    <nav class="tabs" aria-label="Sections">
-      <button class:active={tab === 'runs'} onclick={() => (tab = 'runs')}>{tr('tab-runs')}</button>
-      <button class:active={tab === 'settings'} onclick={() => (tab = 'settings')}>{tr('tab-settings')}</button>
-    </nav>
+    <header>
+      <div class="tabs" role="tablist" tabindex="-1" onkeydown={onTabKey}>
+        {#each tabs as t (t.id)}
+          <button
+            id="tab-{t.id}"
+            role="tab"
+            aria-selected={ui.tab === t.id}
+            aria-controls="panel"
+            tabindex={ui.tab === t.id ? 0 : -1}
+            class:active={ui.tab === t.id}
+            onclick={() => (ui.tab = t.id)}>{tr(t.key)}</button
+          >
+        {/each}
+      </div>
+      {#if usingMock}<span class="mock" title="mock-host.ts">mock host</span>{/if}
+    </header>
 
-    <main>
-      {#if tab === 'runs'}
-        <p class="empty">Rappy Runs Client</p>
+    <div class="panel" id="panel" role="tabpanel" aria-labelledby="tab-{ui.tab}">
+      {#if ui.tab === 'runs'}
+        <RunsTab host={ui.host} />
+      {:else if ui.tab === 'rooms'}
+        <RoomsTab />
       {:else}
-        <section class="group">
-          <div class="row">
-            {#each snapshot.languages as lang (lang.code)}
-              <label>
-                <input
-                  type="radio"
-                  name="language"
-                  checked={snapshot.language === lang.code}
-                  onchange={() => setLanguage(lang.code)}
-                />
-                {lang.label}
-              </label>
-            {/each}
-          </div>
-        </section>
-        <section class="group">
-          <h2>{tr('group-updates')}</h2>
-          <p>{tr('version-status', snapshot.version, null)}</p>
-        </section>
+        <SettingsTab host={ui.host} />
       {/if}
-    </main>
+    </div>
   </div>
+
+  {#if ruleForm.data}
+    {#key ruleForm.data}
+      <RuleDialog data={ruleForm.data} />
+    {/key}
+  {/if}
 {/if}
+<MessageDialog />
 
 <style>
   .shell {
@@ -73,48 +84,50 @@
     grid-template-rows: auto 1fr;
     height: 100vh;
   }
+  header {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    padding: 0 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
   .tabs {
     display: flex;
-    gap: 2px;
-    padding: 8px 12px 0;
-    border-bottom: 1px solid var(--line);
-    background: var(--surface);
+    gap: 4px;
   }
   .tabs button {
     font: inherit;
-    padding: 8px 16px;
-    border: 1px solid transparent;
-    border-bottom: none;
-    border-radius: 6px 6px 0 0;
+    font-weight: 500;
+    padding: 10px 14px 8px;
+    border: none;
+    border-bottom: 2px solid transparent;
     background: none;
     color: var(--muted);
     cursor: pointer;
   }
+  .tabs button:hover {
+    color: var(--text);
+  }
   .tabs button.active {
     color: var(--text);
-    background: var(--bg);
-    border-color: var(--line);
-    margin-bottom: -1px;
+    border-bottom-color: var(--accent);
+    font-weight: 600;
   }
-  main {
-    overflow: auto;
-    padding: 16px 20px;
+  .mock {
+    margin: 0 0 9px auto;
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: 99px;
+    border: 1px dashed var(--busy);
+    color: var(--busy);
+  }
+  .panel {
+    min-height: 0;
+    overflow: hidden;
+    padding: 12px 16px 14px;
   }
   .message {
     padding: 24px;
-  }
-  .empty {
-    color: var(--muted);
-  }
-  .group {
-    margin-bottom: 20px;
-  }
-  .group h2 {
-    font-size: 1rem;
-    margin: 0 0 6px;
-  }
-  .row {
-    display: flex;
-    gap: 16px;
   }
 </style>
