@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Pure logic, no Win32: sexp, detection, API, queue, ghost math, i18n.
+       Everything here must be testable without the game or a window. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>RappyRuns.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="I18n\strings.json" LogicalName="RappyRuns.Core.I18n.strings.json" />
+  </ItemGroup>
+
+</Project>

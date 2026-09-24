@@ -49,7 +49,7 @@ desktop/
 
 | # | 内容 | 完了条件 |
 |---|---|---|
-| P0 | 雛形: sln、WebView2 ホスト、IPC、i18n の JSON 化 (機械変換)、Actions でのビルドと zip | 空の画面が単一 exe で出る。旧アップデータの展開手順 (zip ルート exe) で起動できる |
+| P0 ✅ | 雛形: sln、WebView2 ホスト、IPC、i18n の JSON 化 (機械変換)、Actions でのビルドと zip | 空の画面が単一 exe で出る。旧アップデータの展開手順 (zip ルート exe) で起動できる |
 | P1 | Core: sexp、config/queue 読み書き (sexp 互換で書き戻す)、HTTP/API、認証/ペアリング/ゲスト、クエスト定義、ゴールデンテスト基盤 | ゴールデン一致。実 config.sexp を読み書きして Lisp 版が読み戻せる |
 | P2 | ゲーム接続: ウィンドウ探索、Authenticode、メモリ、検出、テレメトリ、trigger-log、送信キュー | 実ゲームでラン検出→送信 (録画なし) |
 | P3 | シェルと UI: 単一インスタンス (旧版と同じミューテックス/クラス名)、トレイ/通知、自動起動、メイン画面 (状態・ラン一覧・設定・Rooms・ルール登録)、アップデータ | 現行 GUI の全操作が新 UI で可能 |
@@ -60,6 +60,22 @@ desktop/
 | P8 | 切り替え: 本リポジトリに `v1.0.0` を非プレリリースで公開 → 旧版が起動時に自動で入れ替え | 本番ユーザーの更新を確認 |
 
 P1〜P2 と P3 の UI 部分は並行可能 (IPC の型を先に固める)。
+
+### P0 で決めた契約 (2026-09-24)
+
+- **起動完了マーカー** (ブリッジ版アップデータ用): `%TEMP%\rappyruns-client-started.txt` に `<pid> <version>` の 1 行 (UTF-8)。
+  UI が host に `app.hello` を送った時点で 1 回書く。ブリッジ版はこのファイルを消してから新 exe を起動し、
+  新プロセスの PID が書かれるのを待つ。
+- **IPC**: `{kind:"request",id,method,params}` → `{kind:"response",id,ok,result|error}`、host からの通知は `{kind:"event",name,data}`。
+  C# `Host/IpcHost.cs` と TS `ui/src/lib/ipc.ts` が両端。メソッド名は `領域.動詞` (例 `app.hello`)。
+- **UI の配信**: Vite のビルドを exe に埋め込み、`https://app.rappyruns.internal/` を `WebResourceRequested` で返す。
+  それ以外への遷移はすべて既定ブラウザで開く。WebView2 のユーザーデータは `%LOCALAPPDATA%\ephinea-ta-client\WebView2`。
+- **i18n**: `strings.json` は `desktop/tools/export-i18n.lisp` で i18n.lisp から機械変換 (`{n}` / `{n?…}` / `{n#単数|複数}`)。
+  Lisp の `FORMAT` 出力をゴールデンにして C# と TS の両方で照合。英語の "categorys" は i18n.lisp 側で直した (`~:@p`)。
+- **バージョン**: `desktop/VERSION` がリリース版の正本。`package.ps1 -Version X.Y.Z` がこれと一致を検査して exe に焼き込む。
+  指定なしは dev ビルド (自己更新しない)。
+- **検証済み**: 旧 Lisp の `updater-script-text` が生成したスクリプトそのもので zip を適用し、新 exe が引数なしで起動して
+  マーカーを書くことを確認 (`data\` はマージ、旧 exe は `.old`)。
 
 ## 切り替え時の安全策
 

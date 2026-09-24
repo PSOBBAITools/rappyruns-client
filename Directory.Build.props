@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Company>Rappy Runs</Company>
+    <Product>Rappy Runs Client</Product>
+    <!-- PDBs inside the assemblies: the shipped exe must stand alone. -->
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+  <!-- The client version is baked in only by release builds
+       (package.ps1 -Version, or CI from the tag). Without it the build is a
+       dev build: ClientVersion.Current is null and it never self-updates,
+       like the Lisp client's *client-version* NIL. -->
+  <PropertyGroup Condition="'$(ClientVersion)' != ''">
+    <Version>$(ClientVersion)</Version>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(ClientVersion)' != ''">
+    <AssemblyMetadata Include="RappyRunsClientVersion" Value="$(ClientVersion)" />
+  </ItemGroup>
+</Project>

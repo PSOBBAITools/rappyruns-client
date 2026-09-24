@@ -1,0 +1,75 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>RappyRuns.App</RootNamespace>
+    <!-- The exe name is a contract: the Lisp self-updater installs
+         stage\RappyRunsClient.exe (spec core §10.1, §10.7). -->
+    <AssemblyName>RappyRunsClient</AssemblyName>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <!-- PerMonitorV2 so the WebView2 UI stays sharp; the overlay thread opts
+         out on its own (PLAN.md decision 3). -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationDefaultFont>Segoe UI, 9pt</ApplicationDefaultFont>
+
+    <!-- One self-contained exe: the old updater copies only the exe, data\*
+         and ffmpeg\*, so nothing else next to the exe survives an update
+         (spec core §10.7 #4). -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- No IntelliSense XML from packages next to the exe. -->
+    <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
+    <SatelliteResourceLanguages>en;ja</SatelliteResourceLanguages>
+
+    <UiDir>$(MSBuildThisFileDirectory)..\..\ui\</UiDir>
+    <UiDist>$(UiDir)dist\</UiDist>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RappyRuns.Core\RappyRuns.Core.csproj" />
+  </ItemGroup>
+
+  <!-- The WebView2 package references its WPF control for every .NET 5+ app,
+     which drags in WPF's WindowsBase and warns (MSB3277) in a WinForms-only
+     app that never loads it. -->
+  <Target Name="DropWebView2Wpf" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Remove="@(Reference)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
+  </Target>
+
+  <!-- The Svelte UI is built by npm and embedded into the exe (served from
+       https://app.rappyruns.internal/ by UiAssets). Set SkipUiBuild=true when
+       the dist folder is already fresh (CI builds it in its own step). -->
+  <ItemGroup>
+    <UiSource Include="$(UiDir)src\**\*;$(UiDir)index.html;$(UiDir)package.json;$(UiDir)vite.config.ts;$(UiDir)public\**\*" />
+  </ItemGroup>
+
+  <Target Name="NpmInstallUi" BeforeTargets="BuildUi" Condition="'$(SkipUiBuild)' != 'true' And !Exists('$(UiDir)node_modules')">
+    <Exec Command="npm ci" WorkingDirectory="$(UiDir)" />
+  </Target>
+
+  <Target Name="BuildUi" BeforeTargets="EmbedUi" Condition="'$(SkipUiBuild)' != 'true'"
+          Inputs="@(UiSource)" Outputs="$(UiDist)index.html">
+    <Exec Command="npm run build" WorkingDirectory="$(UiDir)" />
+  </Target>
+
+  <!-- Globbed inside a target so files produced by BuildUi are picked up. -->
+  <Target Name="EmbedUi" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(UiDist)index.html')" Text="ui/dist is missing - run 'npm run build' in desktop/ui (or build without SkipUiBuild)." />
+    <ItemGroup>
+      <UiDistFile Include="$(UiDist)**\*" />
+      <EmbeddedResource Include="@(UiDistFile)" LogicalName="ui/%(RecursiveDir)%(Filename)%(Extension)" WithCulture="false" />
+    </ItemGroup>
+  </Target>
+
+</Project>
