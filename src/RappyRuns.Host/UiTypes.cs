@@ -31,10 +31,22 @@ public interface IUiSink
 /// <summary>A UI -> host method: gets the request's <c>params</c>, returns the <c>result</c>.</summary>
 public delegate Task<object?> IpcHandler(JsonElement parameters);
 
+/// <summary>
+/// A UI -> host method whose response must stay in order with the events
+/// (<c>app.hello</c>: a runs list or state patch emitted before the snapshot
+/// was taken must not arrive after it). The handler calls
+/// <paramref name="reply"/> exactly once before it returns, typically while
+/// holding the lock its events are emitted under; the response joins the
+/// event queue at that moment.
+/// </summary>
+public delegate void IpcOrderedHandler(JsonElement parameters, Action<object?> reply);
+
 /// <summary>The method table the IPC transport dispatches into.</summary>
 public interface IIpcRegistry
 {
     void Register(string method, IpcHandler handler);
+
+    void RegisterOrdered(string method, IpcOrderedHandler handler);
 }
 
 /// <summary>

@@ -156,12 +156,18 @@ public sealed class DeferredUpdate
     /// <summary>
     /// After a verified download: true = idle, apply now; false = busy, parked
     /// (show <c>:update-after-run</c>) until <see cref="NoteActivity"/> hands it back.
+    /// Either way this download replaces any update parked earlier: applied
+    /// now, a stale parked one must not be handed back for a second hand-over.
     /// </summary>
     public bool OfferOrDefer(string zipPath, string tag)
     {
         lock (_lock)
         {
-            if (!_busy) return true;
+            if (!_busy)
+            {
+                _ready = null;
+                return true;
+            }
             _ready = new ReadyUpdate(zipPath, tag);
             return false;
         }

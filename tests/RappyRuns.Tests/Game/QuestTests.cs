@@ -359,6 +359,46 @@ public class RoomPickerTests
     [Fact(DisplayName = "room 3 has no clear switch")]
     public void Room3NoSwitch() => Assert.Null(Room(3).Switch);
 
+    [Fact(DisplayName = "RoomRows off the poll thread survives the logs being reset under it (PR #330 review)")]
+    public void RoomRowsConcurrentWithReset()
+    {
+        var clock = new ManualGameClock();
+        var logs = new RunLogs(clock);
+        var stop = new ManualResetEventSlim();
+        Exception? failure = null;
+        var reader = new Thread(() =>
+        {
+            try
+            {
+                while (!stop.IsSet) logs.RoomRows();
+            }
+            catch (Exception e)
+            {
+                failure = e;
+            }
+        });
+        reader.Start();
+        var deadline = DateTime.UtcNow.AddMilliseconds(300);
+        long ptr = 1;
+        while (DateTime.UtcNow < deadline && failure is null)
+        {
+            // Grow a switch log (one kill, many switches in the same room), then
+            // reset it with a fresh quest load.
+            var previous = RoomSnap(ptr, 1, 2, [M(7, 100, "Booma", 44)], FloorSwitchArray());
+            logs.UpdateRunLogs(Lobby, previous);
+            for (var s = 0; s < 16; s++)
+            {
+                var next = RoomSnap(ptr, 1, 2, [M(7, 0, "Booma", 44)], FloorSwitchArray([.. Enumerable.Range(0, s + 1).Select(i => (1, i))]));
+                logs.UpdateRunLogs(previous, next);
+                previous = next;
+            }
+            ptr++;
+        }
+        stop.Set();
+        reader.Join();
+        Assert.Null(failure);
+    }
+
     [Fact(DisplayName = "client-map-name in range")]
     public void MapNameInRange() => Assert.Equal("Forest 1", RunLogs.ClientMapName(1));
 

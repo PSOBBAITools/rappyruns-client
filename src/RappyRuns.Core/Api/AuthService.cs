@@ -166,7 +166,7 @@ public sealed class AuthService
     {
         _api = api;
         _settings = settings;
-        _machineName = machineName ?? SafeMachineName();
+        _machineName = machineName ?? Store.Submission.SafeMachineName();
         _delay = delay ?? Task.Delay;
     }
 
@@ -196,18 +196,6 @@ public sealed class AuthService
     // ensure-submission-token and anonymous-client-label live with the queue
     // (RunQueue.EnsureSubmissionTokenAsync, Submission.AnonymousClientLabel),
     // the only caller.
-
-    private static string? SafeMachineName()
-    {
-        try
-        {
-            return Environment.MachineName;
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
-    }
 
     /// <summary>
     /// <c>finish-pairing</c>: save a token that arrived over the pairing or password API

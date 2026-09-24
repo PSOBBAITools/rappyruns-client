@@ -64,8 +64,10 @@ public sealed class ClientHost : IDisposable
     private string? _lastTitle;
     private Func<Form?> _mainWindow = () => null;
     private Action<string> _setTitle = _ => { };
-    private int _helloCount;
+    private bool _helloDone; // under _runsLock
     private int _started;
+    private int _applyingUpdate;
+    private readonly TokenCheckGate _tokenChecks = new();
 
     public ClientHost(ConfigStore config, HostOptions options, HttpTransport transport, SelfUpdater updater,
         StartupUpdateNote startupNote = StartupUpdateNote.None)
@@ -80,7 +82,7 @@ public sealed class ClientHost : IDisposable
         _autostartEnabled = _autostart.IsEnabled();
 
         Api = new ApiClient(transport, new ConfigAuthSettings(config));
-        Auth = new AuthService(Api, new ConfigAuthSettings(config), SafeMachineName());
+        Auth = new AuthService(Api, new ConfigAuthSettings(config), Submission.SafeMachineName());
 
         // Game.
         Clock = SystemGameClock.Instance;
@@ -207,7 +209,7 @@ public sealed class ClientHost : IDisposable
             Toast = toast => Shell.Notify(toast.Title, toast.Text, NotifyKind.Info, toast.Url),
             Tick = OnTick,
             Log = RecordingLog.Write,
-            MachineName = SafeMachineName(),
+            MachineName = Submission.SafeMachineName(),
         };
         Poll = new PollLoop(_pollServices);
     }
@@ -320,11 +322,21 @@ public sealed class ClientHost : IDisposable
     /// <c>app.hello</c>: the page runs and talks to us. The first time, write
     /// the bridge updater's startup marker and only then sweep the .old exe a
     /// rollback would have needed (PLAN.md decision 1), and queue the report of
-    /// the pre-window update pass.
+    /// the pre-window update pass. The snapshot is replied (queued behind every
+    /// event already emitted) under the runs lock and the state lock, in the
+    /// same step as the lists start being published: no runs/rooms list or
+    /// state patch can fall between the snapshot and the response.
     /// </summary>
-    internal AppSnapshotDto Hello()
+    internal void Hello(Action<AppSnapshotDto> reply)
     {
-        if (Interlocked.Increment(ref _helloCount) == 1)
+        bool first;
+        lock (_runsLock)
+        {
+            first = !_helloDone;
+            _helloDone = true;
+            Snapshot(handshake: true, reply);
+        }
+        if (first)
         {
             // A developer copy never answers for the installed client's update.
             if (!Options.Isolated && !Options.MultiInstance)
@@ -343,35 +355,34 @@ public sealed class ClientHost : IDisposable
                 ReportStartupUpdate();
             });
         }
-        return Snapshot();
     }
 
     /// <summary>
-    /// The full <c>AppSnapshot</c>. <paramref name="handshake"/>: the UI adopts
-    /// the state from it (hello), so patches restart from here; a language
-    /// switch only takes the strings and keeps its patched state.
+    /// The full <c>AppSnapshot</c>, handed to <paramref name="deliver"/> (which
+    /// posts the IPC response) while the runs lock and the state lock are held,
+    /// so it leaves in order with the events. <paramref name="handshake"/>: the
+    /// UI adopts the state from it (hello), so patches restart from here; a
+    /// language switch only takes the strings and keeps its patched state.
     /// </summary>
-    internal AppSnapshotDto Snapshot(bool handshake = true)
+    internal void Snapshot(bool handshake, Action<AppSnapshotDto> deliver)
     {
         var language = Language;
-        List<RunRowDto> runs;
-        List<RoomRowDto> rooms;
         lock (_runsLock)
         {
-            runs = BuildRuns();
+            var runs = BuildRuns();
             _lastRunsJson = IpcJson.Serialize(runs);
-            rooms = BuildRooms();
+            var rooms = SafeBuildRooms() ?? [];
             _lastRoomsJson = IpcJson.Serialize(rooms);
+            Ui.Deliver(handshake, state => deliver(new AppSnapshotDto(
+                ClientVersion.Display,
+                Config.DebugMode,
+                language.Code(),
+                [.. Languages.All.Select(l => new LanguageDto(l.Code(), l.Label()))],
+                Strings.Default.TemplatesFor(language),
+                state,
+                runs,
+                rooms)));
         }
-        return new AppSnapshotDto(
-            ClientVersion.Display,
-            Config.DebugMode,
-            language.Code(),
-            [.. Languages.All.Select(l => new LanguageDto(l.Code(), l.Label()))],
-            Strings.Default.TemplatesFor(language),
-            handshake ? Ui.Snapshot() : Ui.Current(),
-            runs,
-            rooms);
     }
 
     // ---- settings ----
@@ -471,9 +482,14 @@ public sealed class ClientHost : IDisposable
     /// check-token (gui.lisp:1486): the token line, the Pin Share verdict, the
     /// moderator role and auto-publish mirror, the guest merge and the queue
     /// flush. <paramref name="onInvalid"/> runs on a definite 401 only.
+    /// Checks finish in any order: a result applies only while its check is
+    /// the latest and its token still the configured one (<see cref="TokenCheckGate"/>);
+    /// a superseded check applies nothing and returns null.
     /// </summary>
-    internal async Task<TokenCheckResult> CheckTokenAsync(Action? onInvalid = null)
+    internal async Task<TokenCheckResult?> CheckTokenAsync(Action? onInvalid = null)
     {
+        var ticket = _tokenChecks.Begin(Config.ApiToken);
+        bool Current() => ticket.IsCurrent(Config.ApiToken);
         if (Auth.IsUnlinked)
         {
             // Unlinked is a supported state, not an error (R20).
@@ -484,11 +500,17 @@ public sealed class ClientHost : IDisposable
         Ui.SetToken(Line.Busy(Msg.Of("token-checking")));
         var result = await Auth.CheckTokenAsync(user =>
         {
+            if (!Current()) return;
             // The rollout verdict first, before anything fallible.
             Permission.Set(user.PinShareAllowed);
             ApplyModerator(user.IsModerator);
             ApplyAutoPublish(user.AutoPublish);
         }, _shutdown.Token).ConfigureAwait(false);
+        if (!Current())
+        {
+            RecordingLog.Write($"token check: a superseded {result.Kind} result was ignored");
+            return null;
+        }
         switch (result.Kind)
         {
             case TokenCheckKind.Ok:
@@ -660,8 +682,18 @@ public sealed class ClientHost : IDisposable
     /// guard and carry on with a fresh poll loop. Runs on its own thread, so it
     /// may be called from the poll thread (a deferred update) or an IPC worker.
     /// </summary>
+    /// <remarks>
+    /// Single-flight: a manual check and a parked update handed back by the
+    /// poll loop can both arrive; a second hand-over while one runs would
+    /// start two new processes, and the loser's exit would leave no client.
+    /// </remarks>
     internal void ApplyUpdateRestart(string zip, string tag)
     {
+        if (Interlocked.CompareExchange(ref _applyingUpdate, 1, 0) != 0)
+        {
+            RecordingLog.Write($"update {tag}: a hand-over is already in progress; ignored");
+            return;
+        }
         SetVersionNote(Msg.Of("update-restarting", tag));
         var thread = new Thread(() =>
         {
@@ -669,7 +701,7 @@ public sealed class ClientHost : IDisposable
             var started = UpdateLauncher.ApplyAndRestart(zip, SingleInstance.ReleaseProcessClaim, RecordingLog.Write);
             if (started)
             {
-                Shell.Quit();
+                Shell.Quit(); // the flag stays set: this process is leaving
                 return;
             }
             if (!Options.MultiInstance) SingleInstance.ClaimForProcess();
@@ -678,6 +710,11 @@ public sealed class ClientHost : IDisposable
             if (Config.TriggerLog) Try("trigger log", () => TriggerLog.Start());
             Poll = new PollLoop(_pollServices);
             Poll.Start();
+            // Retry requests made while the old loop was stopping were dropped
+            // with it, and its cancelled pass left entries queued: one pass on
+            // the new loop (quiet when nothing is unsent).
+            Poll.RequestRetry();
+            Volatile.Write(ref _applyingUpdate, 0);
         })
         { Name = "eta-client-update-apply", IsBackground = true };
         thread.Start();
@@ -803,11 +840,13 @@ public sealed class ClientHost : IDisposable
     /// <summary>refresh-runs-list: send the list only when it changed (keeps selection, R2).</summary>
     internal void PublishRuns(bool force = false)
     {
-        if (_sink is null || Volatile.Read(ref _helloCount) == 0) return;
+        if (_sink is null) return;
         // Build, compare and emit under one lock: built outside, an older list
         // could be emitted after a newer one (Queue.Changed fires on any thread).
+        // The hello snapshot is replied under the same lock (see Hello).
         lock (_runsLock)
         {
+            if (!_helloDone) return;
             var rows = BuildRuns();
             var json = IpcJson.Serialize(rows);
             if (!force && json == _lastRunsJson) return;
@@ -835,18 +874,33 @@ public sealed class ClientHost : IDisposable
     /// <summary>refresh-rooms-list: rebuild only when rooms-list-signature moved.</summary>
     internal void PublishRooms()
     {
-        if (_sink is null || Volatile.Read(ref _helloCount) == 0) return;
+        if (_sink is null) return;
         var kills = RunLogs.Kills;
         var signature = (kills.Count, RunLogs.Switches.Count, kills.Count > 0 ? kills[^1].Id : (int?)null, Ui.Moderator);
         lock (_runsLock)
         {
-            if (_roomsSignature == signature) return;
+            if (!_helloDone || _roomsSignature == signature) return;
+            // A failed build leaves the signature alone, so the next tick retries.
+            if (SafeBuildRooms() is not { } rows) return;
             _roomsSignature = signature;
-            var rows = BuildRooms();
             var json = IpcJson.Serialize(rows);
             if (json == _lastRoomsJson) return;
             _lastRoomsJson = json;
             _sink.Emit("rooms", rows);
+        }
+    }
+
+    /// <summary><see cref="BuildRooms"/>, logged instead of thrown (its callers include the token check's onVerified); null on failure.</summary>
+    private List<RoomRowDto>? SafeBuildRooms()
+    {
+        try
+        {
+            return BuildRooms();
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            RecordingLog.Write("rooms list failed: " + e.Message);
+            return null;
         }
     }
 
@@ -895,18 +949,6 @@ public sealed class ClientHost : IDisposable
         PinShare.Dispose();
         Shell.Dispose();
         TriggerLog.Dispose();
-    }
-
-    private static string? SafeMachineName()
-    {
-        try
-        {
-            return Environment.MachineName;
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
     }
 
     internal static void Try(string what, Action action)

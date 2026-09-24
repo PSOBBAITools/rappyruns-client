@@ -579,4 +579,17 @@ public class UpdaterTests : IDisposable
         Assert.Null(d.NoteActivity(false, false));
         Assert.Null(d.Pending);
     }
+
+    [Fact(DisplayName = "a newer download replaces the parked one; applied at once, nothing stays parked (PR #330 review)")]
+    public void DeferReplacesParked()
+    {
+        var d = new DeferredUpdate();
+        d.NoteActivity(true, false);
+        Assert.False(d.OfferOrDefer("z1", "v1"));
+        Assert.False(d.OfferOrDefer("z2", "v2"));
+        Assert.Equal(new DeferredUpdate.ReadyUpdate("z2", "v2"), d.NoteActivity(false, false));
+        Assert.True(d.OfferOrDefer("z3", "v3"));
+        Assert.Null(d.Pending);
+        Assert.Null(d.NoteActivity(false, false));
+    }
 }

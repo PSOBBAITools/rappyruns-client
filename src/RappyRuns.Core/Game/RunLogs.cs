@@ -145,13 +145,13 @@ public sealed class RunLogs(IGameClock clock)
     /// nearest in time to the room's last kill. The Lisp walks the log newest
     /// first and keeps the first strictly-nearer one, so ties go to the newest.
     /// </summary>
-    private SwitchLogEntry? RoomClearSwitch(int? room, KillLogEntry? lastKill)
+    private static SwitchLogEntry? RoomClearSwitch(IReadOnlyList<SwitchLogEntry> switches, int? room, KillLogEntry? lastKill)
     {
         SwitchLogEntry? best = null;
         long bestDist = 0;
-        for (var i = _switches.Count - 1; i >= 0; i--)
+        for (var i = switches.Count - 1; i >= 0; i--)
         {
-            var sw = _switches[i];
+            var sw = switches[i];
             if (sw.Room != room) continue;
             var dist = lastKill is not null ? Math.Abs(sw.Time - lastKill.Time) : 0;
             if (best is null || dist < bestDist)
@@ -166,8 +166,12 @@ public sealed class RunLogs(IGameClock clock)
     /// <summary>trigger-log.lisp:213 run-rooms: kills grouped by (floor, room) in first-seen order.</summary>
     public List<RunRoom> RunRooms()
     {
+        // One read of each log: the UI calls this off the poll thread, which
+        // may swap in a longer (or, on a fresh load, empty) list meanwhile.
+        var kills = _kills;
+        var switches = _switches;
         var groups = new List<(int? Floor, int? Room, int? Map, List<KillLogEntry> Kills)>();
-        foreach (var kill in _kills)
+        foreach (var kill in kills)
         {
             var at = groups.FindIndex(g => g.Floor == kill.Floor && g.Room == kill.Room);
             if (at >= 0) groups[at].Kills.Add(kill);
@@ -176,7 +180,7 @@ public sealed class RunLogs(IGameClock clock)
         return groups.Select(g =>
         {
             var last = g.Kills[^1];
-            return new RunRoom(g.Floor, g.Room, g.Map, g.Kills, last, RoomClearSwitch(g.Room, last));
+            return new RunRoom(g.Floor, g.Room, g.Map, g.Kills, last, RoomClearSwitch(switches, g.Room, last));
         }).ToList();
     }
 

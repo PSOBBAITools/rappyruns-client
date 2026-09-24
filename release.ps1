@@ -19,6 +19,21 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
+# A gh call whose failure is an answer ("no such repo"). Under "Stop",
+# Windows PowerShell 5.1 turns the stderr of a native command whose stream is
+# redirected (2>$null) into a terminating NativeCommandError, so the exit code
+# would never be seen: run it under "Continue" and hand back output + exit code.
+function Invoke-GhQuiet {
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & gh @args 2>$null
+        [pscustomobject]@{ Output = $output; ExitCode = $LASTEXITCODE }
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+}
+
 $mainRepo = "PSOBBAITools/rappyruns-client"
 $dogfoodRepo = "PSOBBAITools/rappyruns-client-dogfood"
 $repo = if ($Dogfood) { $dogfoodRepo } else { $mainRepo }
@@ -30,9 +45,15 @@ if ($fileVersion -ne $bare) {
     throw "desktop/VERSION ($fileVersion) does not match the release tag ($Version); bump and commit desktop/VERSION first."
 }
 # The Lisp updater only installs a strictly newer X.Y.Z (spec core §10.7 #1).
-$latestLisp = (gh release view --repo $mainRepo --json tagName -q .tagName)
-if (-not $Dogfood -and [version]$bare -le [version]($latestLisp.TrimStart('v'))) {
-    throw "$Version is not newer than the current release $latestLisp."
+if (-not $Dogfood) {
+    $latest = Invoke-GhQuiet release view --repo $mainRepo --json tagName -q .tagName
+    $latestLisp = "$($latest.Output)".Trim()
+    if ($latest.ExitCode -ne 0 -or $latestLisp -notmatch '^v\d+\.\d+\.\d+$') {
+        throw "Could not read the latest release of $mainRepo (gh exit $($latest.ExitCode)): '$latestLisp'."
+    }
+    if ([version]$bare -le [version]($latestLisp.TrimStart('v'))) {
+        throw "$Version is not newer than the current release $latestLisp."
+    }
 }
 if (-not (Test-Path (Join-Path $PSScriptRoot "..\client\vendor\ffmpeg\ffmpeg.exe"))) {
     throw "client\vendor\ffmpeg\ffmpeg.exe is missing: a release must bundle ffmpeg (see client/README.md)."
@@ -44,8 +65,7 @@ $zip = Join-Path $PSScriptRoot "dist\RappyRunsClient.zip"
 if (-not (Test-Path $zip)) { throw "Missing $zip." }
 
 if ($Dogfood) {
-    gh repo view $dogfoodRepo --json name 2>$null | Out-Null
-    if ($LASTEXITCODE -ne 0) {
+    if ((Invoke-GhQuiet repo view $dogfoodRepo --json name).ExitCode -ne 0) {
         gh repo create $dogfoodRepo --public --add-readme --description "Test releases of the Rappy Runs C# client (not for general use)"
         if ($LASTEXITCODE -ne 0) { throw "could not create $dogfoodRepo" }
     }

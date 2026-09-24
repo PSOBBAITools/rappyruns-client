@@ -155,13 +155,36 @@ public sealed class UiState
     /// </summary>
     public JsonObject Snapshot()
     {
+        JsonObject? result = null;
+        Deliver(handshake: true, state => result = state);
+        return result!;
+    }
+
+    /// <summary>
+    /// The full state handed to <paramref name="deliver"/> while the patch
+    /// lock is held (<paramref name="handshake"/>: <see cref="Snapshot()"/>,
+    /// else <see cref="Current"/>). The host posts its IPC response from
+    /// there, so no patch can be emitted between the state it describes and
+    /// the response leaving: patches made before arrive before it, later ones after.
+    /// </summary>
+    public void Deliver(bool handshake, Action<JsonObject> deliver)
+    {
         lock (_lock)
         {
-            var state = BuildLocked();
-            _sent.Clear();
-            foreach (var (key, value) in state) _sent[key] = value?.ToJsonString() ?? "null";
-            _live = true;
-            return state;
+            JsonObject state;
+            if (handshake)
+            {
+                state = BuildLocked();
+                _sent.Clear();
+                foreach (var (key, value) in state) _sent[key] = value?.ToJsonString() ?? "null";
+                _live = true;
+            }
+            else
+            {
+                PublishLocked();
+                state = BuildLocked();
+            }
+            deliver(state);
         }
     }
 
@@ -171,11 +194,9 @@ public sealed class UiState
     /// </summary>
     public JsonObject Current()
     {
-        lock (_lock)
-        {
-            PublishLocked();
-            return BuildLocked();
-        }
+        JsonObject? result = null;
+        Deliver(handshake: false, state => result = state);
+        return result!;
     }
 
     /// <summary>Sends the changed keys, if any (the 4 Hz tick and every known change).</summary>

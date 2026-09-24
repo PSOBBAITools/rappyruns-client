@@ -18,7 +18,8 @@ namespace RappyRuns.App;
 /// </summary>
 internal static class StartupUpdate
 {
-    public static StartupUpdateNote Run(SelfUpdater updater, string configDir, Language language, bool multiInstance)
+    /// <remarks>The installed client only: a developer copy never gets here (Program.Main).</remarks>
+    public static StartupUpdateNote Run(SelfUpdater updater, string configDir, Language language)
     {
         (UpdateDecision Decision, ReleaseInfo? Release) check;
         try
@@ -57,7 +58,7 @@ internal static class StartupUpdate
                     RecordingLog.Write("startup update download failed: " + e.Message);
                 }
                 if (zip is not null) splash.SetText(Msg.Of("update-restarting", release.Tag).Render(language));
-                splash.Close();
+                splash.CloseWhenDone();
             };
             Application.Run(splash);
         }
@@ -69,20 +70,27 @@ internal static class StartupUpdate
         var started = UpdateLauncher.ApplyAndRestart(zip, SingleInstance.ReleaseProcessClaim, RecordingLog.Write);
         if (started) Environment.Exit(0);
         // Rolled back: carry on with this build.
-        if (!multiInstance) SingleInstance.ClaimForProcess();
+        SingleInstance.ClaimForProcess();
         return StartupUpdateNote.DownloadFailed;
     }
 
-    /// <summary>The small progress window (update-splash).</summary>
+    /// <summary>
+    /// The small progress window (update-splash). The user cannot close it:
+    /// the download it reports runs on regardless, so a close would report a
+    /// failure that did not happen and leave the download touching a disposed
+    /// form. Only <see cref="CloseWhenDone"/> (or Windows ending the session) closes it.
+    /// </summary>
     private sealed class Splash : Form
     {
         private readonly Label _label;
+        private bool _done;
 
         public Splash(string text)
         {
             Text = ClientHost.WindowTitle;
             Icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath!);
             FormBorderStyle = FormBorderStyle.FixedDialog;
+            ControlBox = false;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
@@ -96,8 +104,33 @@ internal static class StartupUpdate
         public void SetText(string text)
         {
             if (IsDisposed) return;
-            if (InvokeRequired) BeginInvoke(() => _label.Text = text);
-            else _label.Text = text;
+            try
+            {
+                if (InvokeRequired) BeginInvoke(() => { if (!IsDisposed) _label.Text = text; });
+                else _label.Text = text;
+            }
+            catch (Exception e) when (e is InvalidOperationException or ObjectDisposedException)
+            {
+                // Closed meanwhile (session ending): nothing to show.
+            }
+        }
+
+        /// <summary>The download finished (either way): close, unless already gone.</summary>
+        public void CloseWhenDone()
+        {
+            _done = true;
+            if (!IsDisposed) Close();
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            // Alt+F4 still reaches a form without a close box.
+            if (!_done && e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                return;
+            }
+            base.OnFormClosing(e);
         }
     }
 }

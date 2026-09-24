@@ -24,6 +24,7 @@ internal sealed class IpcHost : IIpcRegistry, IUiSink
     private readonly Control _uiThread;
     private readonly Func<string, bool> _trustedSource;
     private readonly Dictionary<string, IpcHandler> _handlers = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, IpcOrderedHandler> _ordered = new(StringComparer.Ordinal);
 
     public IpcHost(CoreWebView2 webView, Control uiThread, Func<string, bool> trustedSource)
     {
@@ -34,6 +35,33 @@ internal sealed class IpcHost : IIpcRegistry, IUiSink
     }
 
     public void Register(string method, IpcHandler handler) => _handlers.Add(method, handler);
+
+    /// <summary>
+    /// A handler with its own reply: the response is queued the moment it
+    /// replies, in order with <see cref="Emit"/> (one FIFO, see <see cref="Post"/>).
+    /// A handler that throws before replying answers with the error.
+    /// </summary>
+    public void RegisterOrdered(string method, IpcOrderedHandler handler) => _ordered.Add(method, handler);
+
+    private void DispatchOrdered(Request request, IpcOrderedHandler handler)
+    {
+        var replied = false;
+        try
+        {
+            handler(request.Params, result =>
+            {
+                if (replied) return;
+                replied = true;
+                Post(new { kind = "response", id = request.Id, ok = true, result });
+            });
+            if (!replied) throw new InvalidOperationException($"{request.Method} did not reply");
+        }
+        catch (Exception ex)
+        {
+            RecordingLog.Write($"ipc {request.Method} failed: {ex}");
+            if (!replied) Post(new { kind = "response", id = request.Id, ok = false, error = ex.Message });
+        }
+    }
 
     /// <summary>Pushes an event to the UI. Safe from any thread; dropped once the window is gone.</summary>
     public void Emit(string name, object? data) =>
@@ -56,6 +84,11 @@ internal sealed class IpcHost : IIpcRegistry, IUiSink
         }
         if (request is null || request.Kind != "request" || request.Method is null) return;
 
+        if (_ordered.TryGetValue(request.Method, out var ordered))
+        {
+            DispatchOrdered(request, ordered);
+            return;
+        }
         if (!_handlers.TryGetValue(request.Method, out var handler))
         {
             Post(new { kind = "response", id = request.Id, ok = false, error = $"unknown method {request.Method}" });
@@ -87,7 +120,11 @@ internal sealed class IpcHost : IIpcRegistry, IUiSink
             return;
         }
         if (_uiThread.IsDisposed) return;
-        if (_uiThread.InvokeRequired)
+        // Always through the message queue, even on the UI thread: responses
+        // and events then leave in the order they were posted (one FIFO). A
+        // direct post from the UI thread would overtake events other threads
+        // queued earlier (a stale runs list arriving after the hello snapshot).
+        if (_uiThread.IsHandleCreated)
         {
             try
             {
@@ -98,7 +135,7 @@ internal sealed class IpcHost : IIpcRegistry, IUiSink
                 // Window handle already destroyed while shutting down.
             }
         }
-        else
+        else if (!_uiThread.InvokeRequired)
         {
             PostOnUiThread(json);
         }

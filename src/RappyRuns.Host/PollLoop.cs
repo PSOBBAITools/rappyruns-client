@@ -120,7 +120,7 @@ public sealed class PollLoop : IFrameHooks
     private Thread? _thread;
     private readonly object _submitGate = new();
     private bool _submitPending;
-    private bool _submitToast;
+    private readonly HashSet<Guid> _toastWanted = []; // entry ids of runs completed this session, not yet submitted
     private Task? _submitWorker;
     private IProcessMemoryReader? _reader;
     private long? _lastGui;
@@ -173,7 +173,7 @@ public sealed class PollLoop : IFrameHooks
     /// The Retry button and a verified token (<c>*retry-requested*</c>): a
     /// submission pass on the worker, attached or not. Safe from any thread.
     /// </summary>
-    public void RequestRetry() => RequestSubmit(toast: false);
+    public void RequestRetry() => RequestSubmit();
 
     /// <summary>Waits until no submission pass runs or is pending (stop, tests). False on timeout.</summary>
     internal bool WaitForSubmissions(TimeSpan timeout)
@@ -369,26 +369,35 @@ public sealed class PollLoop : IFrameHooks
         var config = _s.Config;
         IReadOnlyList<Plist> kept = config.SubmitAborted ? runs : runs.Where(r => !r.Get("ABORTED").IsTruthy()).ToList();
         kept = _s.Ghost.AnnotateRuns(kept);
-        foreach (var run in kept)
+        var autoSubmit = config.AutoSubmit;
+        // Marked under the gate in the same step as the enqueue, so a pass
+        // already running cannot submit one of these before it is marked.
+        lock (_submitGate)
         {
-            if (_accountMode.LineFor(run, _s.Clock.UniversalTime) is { } line) _s.Log(line);
-            _s.Queue.Enqueue(RunEntries.ApplyTrackingMode(run, config.TrackingOnly, config.TrackingPrivate));
+            foreach (var run in kept)
+            {
+                if (_accountMode.LineFor(run, _s.Clock.UniversalTime) is { } line) _s.Log(line);
+                var entry = _s.Queue.Enqueue(RunEntries.ApplyTrackingMode(run, config.TrackingOnly, config.TrackingPrivate));
+                if (autoSubmit) _toastWanted.Add(entry.Id);
+            }
         }
-        if (kept.Count > 0 && config.AutoSubmit) RequestSubmit(toast: true);
+        if (kept.Count > 0 && autoSubmit) RequestSubmit();
     }
 
     /// <summary>
     /// Asks the submit worker for a pass, starting it when idle. Requests made
-    /// while a pass runs coalesce into one more pass; <paramref name="toast"/>
-    /// (a run just completed) makes that pass celebrate its results.
+    /// while a pass runs coalesce into one more pass. The celebration is per
+    /// entry, not per pass: a run completed this session (<see cref="_toastWanted"/>)
+    /// is celebrated by whichever pass submits it - a pass started for a Retry
+    /// may pick a fresh run up before the pass asked for it. Retried backlog is
+    /// never celebrated (Lisp: notify-standing-toasts after handle-completed-runs).
     /// </summary>
-    private void RequestSubmit(bool toast)
+    private void RequestSubmit()
     {
         lock (_submitGate)
         {
             if (_cancel.IsCancellationRequested) return;
             _submitPending = true;
-            _submitToast |= toast;
             _submitWorker ??= Task.Run(SubmitWorker);
         }
     }
@@ -398,7 +407,7 @@ public sealed class PollLoop : IFrameHooks
     {
         while (true)
         {
-            bool toast;
+            Guid[] wantedAtStart;
             lock (_submitGate)
             {
                 if (!_submitPending || _cancel.IsCancellationRequested)
@@ -406,15 +415,25 @@ public sealed class PollLoop : IFrameHooks
                     _submitWorker = null;
                     return;
                 }
-                toast = _submitToast;
                 _submitPending = false;
-                _submitToast = false;
+                wantedAtStart = [.. _toastWanted];
             }
             Guard("submit", () =>
             {
                 var results = Submit();
-                if (!toast || results is null || !_s.Config.RankToast) return;
-                foreach (var entry in results)
+                var toasts = new List<RunEntry>();
+                lock (_submitGate)
+                {
+                    // Every run this pass saw is settled: celebrated now or never.
+                    // One enqueued after the pass read the queue stays wanted.
+                    foreach (var entry in results ?? [])
+                    {
+                        if (_toastWanted.Remove(entry.Id)) toasts.Add(entry);
+                    }
+                    _toastWanted.ExceptWith(wantedAtStart);
+                }
+                if (!_s.Config.RankToast) return;
+                foreach (var entry in toasts)
                 {
                     if (RunDisplay.ToastFor(entry.Data, _s.Config.Language) is { } t)
                         Guard("toast", () => _s.Toast(t));

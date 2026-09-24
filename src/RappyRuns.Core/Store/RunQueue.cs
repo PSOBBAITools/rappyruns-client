@@ -291,7 +291,7 @@ public sealed class RunQueue
         try
         {
             var fresh = await registrar.RegisterAnonymousAsync(
-                Submission.AnonymousClientLabel(machineName ?? MachineName()), cancellationToken).ConfigureAwait(false);
+                Submission.AnonymousClientLabel(machineName ?? Submission.SafeMachineName()), cancellationToken).ConfigureAwait(false);
             config.AnonToken = fresh;
             config.Save();
             return fresh;
@@ -417,18 +417,6 @@ public sealed class RunQueue
         if (RunEntries.Status(copy) is RunStatus.Submitted or RunStatus.Duplicate or RunStatus.Rejected)
             copy.Remove(RunKeys.Telemetry);
         return copy;
-    }
-
-    private static string? MachineName()
-    {
-        try
-        {
-            return Environment.MachineName;
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
     }
 
     private void OnChanged() => Changed?.Invoke(this, EventArgs.Empty);

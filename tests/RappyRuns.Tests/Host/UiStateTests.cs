@@ -99,4 +99,39 @@ public class UiStateTests
         var other = new InvalidOperationException("boom");
         Assert.Equal(ErrorText.ServerStatus(Language.En, other), StatusMsgs.ServerError(other).Render(Language.En));
     }
+
+    [Fact(DisplayName = "a patch made while the hello snapshot is delivered leaves after it (PR #330 review)")]
+    public void DeliverHoldsPatchesBack()
+    {
+        var sink = new Sink();
+        var state = new UiState(() => Settings(), false, false);
+        state.Attach(sink);
+        Thread? writer = null;
+        state.Deliver(handshake: true, _ =>
+        {
+            // Another thread changes the state while the response is being posted.
+            writer = new Thread(() => state.SetToken(Line.Busy(Msg.Of("token-checking"))));
+            writer.Start();
+            Assert.False(writer.Join(TimeSpan.FromMilliseconds(100)), "the patch waited for the reply");
+            Assert.Empty(sink.Events);
+        });
+        Assert.True(writer!.Join(TimeSpan.FromSeconds(10)));
+        var patch = JsonNode.Parse(Assert.Single(sink.Events).Json)!.AsObject();
+        Assert.Equal(["token"], patch.Select(kv => kv.Key));
+    }
+
+    [Fact(DisplayName = "only the latest token check, for the token still configured, may apply its result (PR #330 review)")]
+    public void TokenCheckGateOrdersResults()
+    {
+        var gate = new TokenCheckGate();
+        var old = gate.Begin(" tok-1\n");
+        Assert.Equal("tok-1", old.Token);
+        Assert.True(old.IsCurrent("tok-1"));
+        Assert.False(old.IsCurrent("tok-2")); // the token changed under the check
+
+        var fresh = gate.Begin("tok-2");
+        Assert.False(old.IsCurrent("tok-1")); // a slow, older check finishing last
+        Assert.True(fresh.IsCurrent(" tok-2 "));
+        Assert.False(fresh.IsCurrent(""));   // unlinked meanwhile
+    }
 }

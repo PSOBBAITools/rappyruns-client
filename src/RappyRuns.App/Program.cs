@@ -57,8 +57,11 @@ internal static class Program
         var transport = new HttpTransport();
         var updater = new SelfUpdater(transport, () => config.ResolveUpdateRepo(), ClientVersion.Current, UpdateLauncher.InstallDir);
         var note = StartupUpdateNote.None;
-        if (config.AutoUpdate && ClientVersion.Current is not null)
-            note = StartupUpdate.Run(updater, config.Directory, config.Language, options.MultiInstance);
+        // A developer copy never runs the startup pass: it would write the
+        // installed client's startup marker and swap the exe it runs from
+        // (the same guard as the marker in ClientHost.Hello).
+        if (config.AutoUpdate && ClientVersion.Current is not null && !options.Isolated && !options.MultiInstance)
+            note = StartupUpdate.Run(updater, config.Directory, config.Language);
 
         var host = new ClientHost(config, options, transport, updater, note);
         Application.Run(new MainForm(host, config.StartupMinimized));

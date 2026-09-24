@@ -197,4 +197,20 @@ public static class Submission
         string.IsNullOrEmpty(machineName)
             ? "Desktop client [guest]"
             : string.Create(CultureInfo.InvariantCulture, $"Desktop client ({machineName}) [guest]");
+
+    /// <summary>
+    /// The computer name for token labels (Lisp <c>machine-instance</c>), or
+    /// null when Windows cannot say. The one copy every label builder uses.
+    /// </summary>
+    public static string? SafeMachineName()
+    {
+        try
+        {
+            return Environment.MachineName;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
 }

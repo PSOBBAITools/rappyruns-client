@@ -27,8 +27,10 @@ internal sealed class AppMethods(ClientHost host)
 {
     public void Register(IIpcRegistry r)
     {
-        r.RegisterSync("app.hello", _ => host.Hello());
-        r.RegisterSync("app.setLanguage", SetLanguage);
+        // Ordered: the snapshot must not be overtaken by (or overtake) the
+        // runs/rooms/state events emitted around it.
+        r.RegisterOrdered("app.hello", (_, reply) => host.Hello(reply));
+        r.RegisterOrdered("app.setLanguage", SetLanguage);
         r.RegisterSync("app.openExternal", p =>
         {
             if (P.Str(p, "url") is { } url && Urls.IsValidHttpUrl(url)) ClientHost.OpenExternal(url);
@@ -41,7 +43,7 @@ internal sealed class AppMethods(ClientHost host)
     /// No window rebuild (ui-shell §1.4.1); the runs list is re-sent because its
     /// status column is formatted by the store module in one language.
     /// </summary>
-    private object? SetLanguage(JsonElement p)
+    private void SetLanguage(JsonElement p, Action<object?> reply)
     {
         var language = Languages.FromCode(P.Str(p, "language"));
         if (language != host.Config.Language)
@@ -51,6 +53,6 @@ internal sealed class AppMethods(ClientHost host)
             host.Shell.OnLanguageChanged();
         }
         host.PublishRuns(force: true);
-        return host.Snapshot(handshake: false);
+        host.Snapshot(handshake: false, snapshot => reply(snapshot));
     }
 }

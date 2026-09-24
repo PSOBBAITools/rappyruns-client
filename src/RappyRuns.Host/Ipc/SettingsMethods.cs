@@ -63,8 +63,9 @@ internal sealed class SettingsMethods(ClientHost host)
         Config.ApiToken = Tokens.Normalize(P.Str(p, "apiToken"));
         host.SaveConfig();
         _ = host.CheckServerAsync();
+        // Null: a later save or pairing superseded this check; no dialog for it.
         var result = await host.CheckTokenAsync().ConfigureAwait(false);
-        return result.Kind switch
+        return result?.Kind switch
         {
             TokenCheckKind.Ok => Notice.Info("token-ok-dialog", result.User?.Username ?? ""),
             TokenCheckKind.Unauthorized => Notice.Fail("token-rejected-dialog"),

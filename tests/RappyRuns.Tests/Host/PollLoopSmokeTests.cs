@@ -94,9 +94,24 @@ public sealed class PollLoopSmokeTests : IDisposable
         }
     }
 
+    /// <summary>A guest registration that blocks until released (the pass is past its start, before it reads the queue).</summary>
+    private sealed class BlockingRegistrar(IAnonymousRegistrar inner) : IAnonymousRegistrar
+    {
+        public ManualResetEventSlim Entered { get; } = new();
+        public ManualResetEventSlim Release { get; } = new();
+
+        public async Task<string> RegisterAnonymousAsync(string label, CancellationToken cancellationToken)
+        {
+            Entered.Set();
+            await Task.Run(() => Release.Wait(cancellationToken), cancellationToken);
+            return await inner.RegisterAnonymousAsync(label, cancellationToken);
+        }
+    }
+
     private static readonly TimeSpan Drain = TimeSpan.FromSeconds(10);
 
-    private Rig Build(bool attached = true, bool record = true, bool manageRecordings = true, IRunSubmitter? submitter = null)
+    private Rig Build(bool attached = true, bool record = true, bool manageRecordings = true, IRunSubmitter? submitter = null,
+        Func<IAnonymousRegistrar, IAnonymousRegistrar>? registrar = null)
     {
         var config = ConfigStore.Open(_dir);
         config.ServerUrl = "https://s.example";
@@ -136,7 +151,7 @@ public sealed class PollLoopSmokeTests : IDisposable
             Catalog = catalog,
             Recorder = recorder,
             Queue = queue,
-            Registrar = network,
+            Registrar = registrar?.Invoke(network) ?? network,
             Submitter = submitter ?? network,
             Uploader = network,
             Ghost = new GhostSession(),
@@ -271,6 +286,29 @@ public sealed class PollLoopSmokeTests : IDisposable
         Assert.True(rig.Loop.WaitForSubmissions(Drain));
         Assert.Equal(RunStatus.Failed, Assert.Single(rig.Queue.Entries).Status);
         Assert.Empty(rig.Toasts);
+    }
+
+    [Fact(DisplayName = "a run completed while a Retry pass starts is celebrated by that pass; the backlog is not (PR #330 review)")]
+    public void ToastFollowsTheEntryNotThePass()
+    {
+        BlockingRegistrar? blocking = null;
+        var rig = Build(attached: false, registrar: inner => blocking = new BlockingRegistrar(inner));
+        rig.Queue.Enqueue(new RappyRuns.Core.Sexp.Plist()
+            .With("QUEST-SLUG", "ep1-towards-the-future")
+            .With("TIME-MS", 62_000L)); // backlog from an earlier session
+        rig.Loop.RequestRetry(); // a pass without celebration...
+        Assert.True(blocking!.Entered.Wait(Drain));
+
+        // ...and before it reads the queue, a run completes (its own request coalesces).
+        rig.Loop.HandleCompletedRuns([new RappyRuns.Core.Sexp.Plist()
+            .With("QUEST-SLUG", "ep1-towards-the-future")
+            .With("TIME-MS", 61_000L)]);
+        blocking.Release.Set();
+        Assert.True(rig.Loop.WaitForSubmissions(Drain));
+
+        Assert.All(rig.Queue.Entries, e => Assert.Equal(RunStatus.Submitted, e.Status));
+        Assert.Equal(2, rig.Server.Requests.Count(r => r.Url.EndsWith("/api/runs", StringComparison.Ordinal)));
+        Assert.Single(rig.Toasts); // the fresh run only
     }
 
     [Fact(DisplayName = "stop cancels a hanging submission pass instead of waiting for it")]
