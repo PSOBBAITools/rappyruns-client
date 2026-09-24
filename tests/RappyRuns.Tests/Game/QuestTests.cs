@@ -214,22 +214,51 @@ public class TriggerLogTests
             File.ReadAllText(path));
     }
 
-    [Fact(DisplayName = "a Lisp-era log rotated into a huge old file is deleted at startup; a normal old file stays (S42)")]
-    public void DeletesOversizedOld()
+    // 100 numbered lines of 10 bytes: "line 0000\n".."line 0099\n".
+    private static string Lines(int from, int count) =>
+        string.Concat(Enumerable.Range(from, count).Select(i => FormattableString.Invariant($"line {i:0000}\n")));
+
+    [Fact(DisplayName = "a huge Lisp-era log (live or old) is cut to its newest whole lines at startup; small files stay (S42)")]
+    public void CompactsOversized()
     {
         using var temp = new TempDir("eta-test-trigger-rotate");
         var path = temp.File("trigger-log.txt");
-        File.WriteAllText(path, new string('x', 1000)); // the Lisp client's unbounded log
-        using var log = new TriggerLog(path, new ManualGameClock(), maxBytes: 200);
-        Assert.Null(log.DeleteOversizedOld(limit: 500)); // no old file yet
-        log.Start(); // rotates the 1000 bytes aside
+        File.WriteAllText(path, Lines(0, 100)); // the Lisp client's unbounded log: 1000 bytes
+        using var log = new TriggerLog(path, new ManualGameClock(), maxBytes: 205);
+        File.WriteAllText(log.OldPath, Lines(500, 60)); // 600 bytes
+        var report = log.CompactOversized(limit: 500);
+        Assert.Equal(2, report.Count);
+        Assert.All(report, line => Assert.StartsWith("trigger log: cut ", line, StringComparison.Ordinal));
+        // The last 205 bytes start mid-line; the cut keeps whole lines only.
+        Assert.Equal(Lines(80, 20), File.ReadAllText(path));
+        Assert.Equal(Lines(540, 20), File.ReadAllText(log.OldPath));
+        Assert.False(File.Exists(path + ".tmp"));
+
+        Assert.Empty(log.CompactOversized(limit: 500)); // small now: nothing to do
+        log.Start(); // no rotation: the live log is under the limit again
         log.Close();
-        Assert.Equal(1000, log.DeleteOversizedOld(limit: 500));
-        Assert.False(File.Exists(log.OldPath));
-        Assert.StartsWith("=== trigger log rotated", File.ReadAllText(path)); // the live log is untouched
-        File.WriteAllText(log.OldPath, new string('y', 300));
-        Assert.Null(log.DeleteOversizedOld(limit: 500));
-        Assert.True(File.Exists(log.OldPath));
+        Assert.StartsWith(Lines(80, 20) + "=== trigger logging started", File.ReadAllText(path), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "an open live log is never cut, and a refused cut is reported (S42)")]
+    public void CompactSkipsOpenAndReportsRefusal()
+    {
+        using var temp = new TempDir("eta-test-trigger-rotate");
+        var path = temp.File("trigger-log.txt");
+        using var log = new TriggerLog(path, new ManualGameClock(), maxBytes: 100_000);
+        log.Start();
+        using (var grow = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
+            grow.Write(System.Text.Encoding.ASCII.GetBytes(Lines(0, 100)));
+        Assert.Empty(log.CompactOversized(limit: 500)); // the stream is open: hands off
+        log.Close();
+        File.WriteAllText(log.OldPath, Lines(0, 100));
+        // Held without delete sharing: the replace is refused.
+        using (new FileStream(log.OldPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var report = log.CompactOversized(limit: 500);
+            Assert.Contains(report, line => line.StartsWith("trigger log: could not cut trigger-log.old.txt", StringComparison.Ordinal));
+        }
+        Assert.False(File.Exists(log.OldPath + ".tmp"));
     }
 
     [Fact(DisplayName = "trigger log keeps appending when the rotation rename is refused, and retries after more growth")]

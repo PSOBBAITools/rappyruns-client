@@ -94,33 +94,61 @@ public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = Tr
         }
     }
 
-    /// <summary>An old generation past this is no rotation of ours (at most <see cref="MaxBytes"/> plus one write batch): the Lisp client's unbounded log, rotated once.</summary>
+    /// <summary>
+    /// A log file past this is left over from the Lisp client (which never
+    /// rotated) or from renames refused for a long time: far over what
+    /// <see cref="MaxBytes"/> rotation keeps. <see cref="CompactOversized"/> cuts it down.
+    /// </summary>
     public const long OldCleanupBytes = 64L * 1024 * 1024;
 
     /// <summary>
-    /// Startup cleanup (C#, S42): a Lisp client that never rotated can leave a
-    /// trigger-log.txt of hundreds of MB, which the first rotation turns into
-    /// an equally big <see cref="OldPath"/> that would otherwise sit there until
-    /// the next rotation. Deletes <see cref="OldPath"/> when it is over
-    /// <paramref name="limit"/>; returns its size when it did, else null
-    /// (absent, small enough, or the delete was refused).
+    /// Startup cleanup (C#, S42): trigger-log.txt and <see cref="OldPath"/>, each
+    /// when over <paramref name="limit"/>, are cut to their newest lines (the
+    /// rotation size's worth, from a line start), so a Lisp-era log of
+    /// hundreds of MB stops taking the disk without losing the lines of the
+    /// last session. Call it before <see cref="Start"/>: the live file is only
+    /// touched while no stream is open. Returns one line per file handled, for
+    /// the client log (what was cut, or why it could not be).
     /// </summary>
-    public long? DeleteOversizedOld(long limit = OldCleanupBytes)
+    public IReadOnlyList<string> CompactOversized(long limit = OldCleanupBytes)
     {
+        var report = new List<string>();
         lock (_gate)
         {
-            try
+            if (_stream is null) Compact(Path, limit, report);
+            Compact(OldPath, limit, report);
+        }
+        return report;
+    }
+
+    private void Compact(string path, long limit, List<string> report)
+    {
+        var name = System.IO.Path.GetFileName(path);
+        var tmp = path + ".tmp";
+        try
+        {
+            var info = new FileInfo(path);
+            if (!info.Exists || info.Length <= limit) return;
+            var size = info.Length;
+            using (var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (var target = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                var old = new FileInfo(OldPath);
-                if (!old.Exists || old.Length <= limit) return null;
-                var size = old.Length;
-                old.Delete();
-                return size;
+                source.Seek(Math.Max(0, size - maxBytes), SeekOrigin.Begin);
+                // Start at a line: skip the partial one the cut landed in.
+                int b;
+                while ((b = source.ReadByte()) >= 0 && b != '\n')
+                {
+                }
+                source.CopyTo(target);
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                return null;
-            }
+            File.Move(tmp, path, overwrite: true);
+            report.Add(FormattableString.Invariant(
+                $"trigger log: cut {name} from {size / (1024 * 1024)} MiB to its newest {new FileInfo(path).Length / 1024} KiB"));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            try { File.Delete(tmp); } catch (Exception d) when (d is IOException or UnauthorizedAccessException) { }
+            report.Add($"trigger log: could not cut {name}: {e.Message}");
         }
     }
 
