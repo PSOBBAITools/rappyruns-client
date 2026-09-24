@@ -1,0 +1,2085 @@
+[
+  {
+    "slug": "ep1-mop-up-operation-1",
+    "episode": 1,
+    "names": [
+      "Mop-up Operation #1"
+    ],
+    "number": 101,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-mop-up-operation-2",
+    "episode": 1,
+    "names": [
+      "Mop-up Operation #2"
+    ],
+    "number": 102,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-mop-up-operation-3",
+    "episode": 1,
+    "names": [
+      "Mop-up Operation #3"
+    ],
+    "number": 103,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-mop-up-operation-4",
+    "episode": 1,
+    "names": [
+      "Mop-up Operation #4"
+    ],
+    "number": 104,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-sweep-up-operation-1",
+    "episode": 1,
+    "names": [
+      "Sweep-up Operation #1"
+    ],
+    "number": 1761,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-sweep-up-operation-2",
+    "episode": 1,
+    "names": [
+      "Sweep-up Operation #2"
+    ],
+    "number": 1762,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-sweep-up-operation-3",
+    "episode": 1,
+    "names": [
+      "Sweep-up Operation #3"
+    ],
+    "number": 1763,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-sweep-up-operation-4",
+    "episode": 1,
+    "names": [
+      "Sweep-up Operation #4"
+    ],
+    "number": 1764,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-endless-nightmare-1",
+    "episode": 1,
+    "names": [
+      "Endless Nightmare #1"
+    ],
+    "number": 108,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 30
+    }
+  },
+  {
+    "slug": "ep1-endless-nightmare-2",
+    "episode": 1,
+    "names": [
+      "Endless Nightmare #2"
+    ],
+    "number": 109,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 30
+    }
+  },
+  {
+    "slug": "ep1-endless-nightmare-3",
+    "episode": 1,
+    "names": [
+      "Endless Nightmare #3"
+    ],
+    "number": 110,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 30
+    }
+  },
+  {
+    "slug": "ep1-endless-nightmare-4",
+    "episode": 1,
+    "names": [
+      "Endless Nightmare #4"
+    ],
+    "number": 111,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 30
+    }
+  },
+  {
+    "slug": "ep1-anomalous-ordeal-1",
+    "episode": 1,
+    "names": [
+      "Anomalous Ordeal #1"
+    ],
+    "number": 1810,
+    "start": {
+      "type": "register",
+      "register": 82
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-anomalous-ordeal-2",
+    "episode": 1,
+    "names": [
+      "Anomalous Ordeal #2"
+    ],
+    "number": 1811,
+    "start": {
+      "type": "register",
+      "register": 82
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-scarlet-realm-1",
+    "episode": 1,
+    "names": [
+      "Scarlet Realm #1"
+    ],
+    "number": 1827,
+    "start": {
+      "type": "register",
+      "register": 5
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-scarlet-realm-2",
+    "episode": 1,
+    "names": [
+      "Scarlet Realm #2"
+    ],
+    "number": 1828,
+    "start": {
+      "type": "register",
+      "register": 7
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-scarlet-realm-3",
+    "episode": 1,
+    "names": [
+      "Scarlet Realm #3"
+    ],
+    "number": 1829,
+    "start": {
+      "type": "register",
+      "register": 25
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-scarlet-realm-4",
+    "episode": 1,
+    "names": [
+      "Scarlet Realm #4"
+    ],
+    "number": 1830,
+    "start": {
+      "type": "register",
+      "register": 4
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-silent-afterimage-1",
+    "episode": 1,
+    "names": [
+      "Silent Afterimage #1"
+    ],
+    "number": 1865,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep1-silent-afterimage-2",
+    "episode": 1,
+    "names": [
+      "Silent Afterimage #2"
+    ],
+    "number": 1866,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep1-chronocide-trial-1",
+    "episode": 1,
+    "names": [
+      "Chronocide Trial #1"
+    ],
+    "number": 1869,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep1-chronocide-trial-2",
+    "episode": 1,
+    "names": [
+      "Chronocide Trial #2"
+    ],
+    "number": 1870,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep1-chronocide-trial-3",
+    "episode": 1,
+    "names": [
+      "Chronocide Trial #3"
+    ],
+    "number": 1871,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep1-chronocide-trial-4",
+    "episode": 1,
+    "names": [
+      "Chronocide Trial #4"
+    ],
+    "number": 1872,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep1-maximum-attack-4th-stage-1a",
+    "episode": 1,
+    "names": [
+      "Maximum Attack 4 -1A-",
+      "Maximum Attack 4th Stage -1A-"
+    ],
+    "number": 144,
+    "start": {
+      "type": "floor-switch",
+      "floor": 4,
+      "switch": 99
+    },
+    "end": {
+      "type": "floor-switch",
+      "floor": 10,
+      "switch": 31
+    }
+  },
+  {
+    "slug": "ep1-maximum-attack-4th-stage-1b",
+    "episode": 1,
+    "names": [
+      "Maximum Attack 4 -1B-",
+      "Maximum Attack 4th Stage -1B-"
+    ],
+    "number": 145,
+    "start": {
+      "type": "floor-switch",
+      "floor": 4,
+      "switch": 99
+    },
+    "end": {
+      "type": "floor-switch",
+      "floor": 10,
+      "switch": 32
+    }
+  },
+  {
+    "slug": "ep1-maximum-attack-4th-stage-1c",
+    "episode": 1,
+    "names": [
+      "Maximum Attack 4 -1C-",
+      "Maximum Attack 4th Stage -1C-"
+    ],
+    "number": 146,
+    "start": {
+      "type": "floor-switch",
+      "floor": 4,
+      "switch": 99
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-maximum-attack-e-episode-1",
+    "episode": 1,
+    "names": [
+      "Maximum Attack E: Episode 1"
+    ],
+    "number": 942,
+    "start": {
+      "type": "floor-switch",
+      "floor": 2,
+      "switch": 0
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-maximum-attack-e-forest",
+    "episode": 1,
+    "names": [
+      "Maximum Attack E:森",
+      "Maximum Attack E: Forest"
+    ],
+    "number": 930,
+    "start": {
+      "type": "floor-switch",
+      "floor": 2,
+      "switch": 0
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep1-maximum-attack-e-cave",
+    "episode": 1,
+    "names": [
+      "Maximum Attack E:洞窟",
+      "Maximum Attack E: Caves"
+    ],
+    "number": 931,
+    "start": {
+      "type": "floor-switch",
+      "floor": 4,
+      "switch": 0
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep1-maximum-attack-e-mine",
+    "episode": 1,
+    "names": [
+      "Maximum Attack E: Mine",
+      "Maximum Attack E: Mines"
+    ],
+    "number": 932,
+    "start": {
+      "type": "floor-switch",
+      "floor": 6,
+      "switch": 0
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep1-maximum-attack-e-ruins",
+    "episode": 1,
+    "names": [
+      "Maximum Attack E: Ruins"
+    ],
+    "number": 933,
+    "start": {
+      "type": "floor-switch",
+      "floor": 10,
+      "switch": 0
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep1-random-attack-xrd-stage",
+    "episode": 1,
+    "names": [
+      "Random Attack Xrd Stage"
+    ],
+    "number": 1303,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-random-attack-xrd-rev-1",
+    "episode": 1,
+    "names": [
+      "Random Attack Xrd REV 1"
+    ],
+    "number": 1801,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-lost-heat-sword",
+    "episode": 1,
+    "names": [
+      "Lost HEAT SWORD"
+    ],
+    "number": 105,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 15
+    }
+  },
+  {
+    "slug": "ep1-lost-ice-spinner",
+    "episode": 1,
+    "names": [
+      "Lost ICE SPINNER"
+    ],
+    "number": 106,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 15
+    }
+  },
+  {
+    "slug": "ep1-lost-soul-blade",
+    "episode": 1,
+    "names": [
+      "Lost SOUL BLADE"
+    ],
+    "number": 107,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 18
+    }
+  },
+  {
+    "slug": "ep1-lost-hell-pallasch",
+    "episode": 1,
+    "names": [
+      "Lost HELL PALLASCH"
+    ],
+    "number": 120,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 110
+    }
+  },
+  {
+    "slug": "ep1-forsaken-friends",
+    "episode": 1,
+    "names": [
+      "Forsaken Friends"
+    ],
+    "number": 907,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 99
+    }
+  },
+  {
+    "slug": "ep1-subterranean-patrol-1",
+    "episode": 1,
+    "names": [
+      "Subterranean Patrol #1"
+    ],
+    "number": 1960,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-towards-the-future",
+    "episode": 1,
+    "names": [
+      "Towards the Future"
+    ],
+    "number": 118,
+    "start": {
+      "type": "register",
+      "register": 12
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep1-tyrell-s-ego",
+    "episode": 1,
+    "names": [
+      "Tyrell's Ego"
+    ],
+    "number": 161,
+    "start": {
+      "type": "register",
+      "register": 4
+    },
+    "end": {
+      "type": "register",
+      "register": 101
+    }
+  },
+  {
+    "slug": "ep1-endless-episode-1",
+    "episode": 1,
+    "names": [
+      "Endless: Episode 1"
+    ],
+    "number": 1850,
+    "start": {
+      "type": "register",
+      "register": 50
+    },
+    "end": {
+      "type": "register",
+      "register": 248
+    }
+  },
+  {
+    "slug": "ep1-christmas-fiasco",
+    "episode": 1,
+    "names": [
+      "Christmas Fiasco",
+      "Christmas Fiasco Episode 1"
+    ],
+    "number": 900,
+    "start": {
+      "type": "floor-switch",
+      "floor": 4,
+      "switch": 100
+    },
+    "end": {
+      "type": "floor-switch",
+      "floor": 10,
+      "switch": 3
+    }
+  },
+  {
+    "slug": "ep1-december-disaster-1",
+    "episode": 1,
+    "names": [
+      "December Disaster #1"
+    ],
+    "number": 1786,
+    "start": {
+      "type": "floor-switch",
+      "floor": 2,
+      "switch": 1
+    },
+    "end": {
+      "type": "register",
+      "register": 241
+    }
+  },
+  {
+    "slug": "ep1-august-atrocity-1",
+    "episode": 1,
+    "names": [
+      "August Atrocity #1"
+    ],
+    "number": 960,
+    "start": {
+      "type": "floor-switch",
+      "floor": 7,
+      "switch": 1
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep1-hollow-battlefield-forest",
+    "episode": 1,
+    "names": [
+      "Hollow Battlefield: Forest"
+    ],
+    "number": 1666,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 0
+    }
+  },
+  {
+    "slug": "ep1-hollow-battlefield-cave",
+    "episode": 1,
+    "names": [
+      "Hollow Battlefield: Cave"
+    ],
+    "number": 1667,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 0
+    }
+  },
+  {
+    "slug": "ep1-hollow-battlefield-mine",
+    "episode": 1,
+    "names": [
+      "Hollow Battlefield: Mine"
+    ],
+    "number": 1668,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 0
+    }
+  },
+  {
+    "slug": "ep1-hollow-battlefield-ruins",
+    "episode": 1,
+    "names": [
+      "Hollow Battlefield: Ruins"
+    ],
+    "number": 1669,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 0
+    }
+  },
+  {
+    "slug": "ep2-phantasmal-world-1",
+    "episode": 2,
+    "names": [
+      "Phantasmal World #1"
+    ],
+    "number": 233,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-phantasmal-world-2",
+    "episode": 2,
+    "names": [
+      "Phantasmal World #2"
+    ],
+    "number": 234,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 111
+    }
+  },
+  {
+    "slug": "ep2-phantasmal-world-3",
+    "episode": 2,
+    "names": [
+      "Phantasmal World #3"
+    ],
+    "number": 235,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "floor-switch",
+      "floor": 11,
+      "switch": 180
+    }
+  },
+  {
+    "slug": "ep2-phantasmal-world-4",
+    "episode": 2,
+    "names": [
+      "Phantasmal World #4"
+    ],
+    "number": 236,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "floor-switch",
+      "floor": 16,
+      "switch": 120
+    }
+  },
+  {
+    "slug": "ep2-sweep-up-operation-5",
+    "episode": 2,
+    "names": [
+      "Sweep-up Operation #5"
+    ],
+    "number": 1765,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-sweep-up-operation-6",
+    "episode": 2,
+    "names": [
+      "Sweep-up Operation #6"
+    ],
+    "number": 1766,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-sweep-up-operation-7",
+    "episode": 2,
+    "names": [
+      "Sweep-up Operation #7"
+    ],
+    "number": 1767,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-sweep-up-operation-8",
+    "episode": 2,
+    "names": [
+      "Sweep-up Operation #8"
+    ],
+    "number": 1768,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-sweep-up-operation-9",
+    "episode": 2,
+    "names": [
+      "Sweep-up Operation #9"
+    ],
+    "number": 1769,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-penumbral-surge-1",
+    "episode": 2,
+    "names": [
+      "Penumbral Surge #1"
+    ],
+    "number": 1821,
+    "start": {
+      "type": "register",
+      "register": 50
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-penumbral-surge-2",
+    "episode": 2,
+    "names": [
+      "Penumbral Surge #2"
+    ],
+    "number": 1822,
+    "start": {
+      "type": "register",
+      "register": 15
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-penumbral-surge-3",
+    "episode": 2,
+    "names": [
+      "Penumbral Surge #3"
+    ],
+    "number": 1823,
+    "start": {
+      "type": "register",
+      "register": 90
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-penumbral-surge-4",
+    "episode": 2,
+    "names": [
+      "Penumbral Surge #4"
+    ],
+    "number": 1824,
+    "start": {
+      "type": "register",
+      "register": 51
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-penumbral-surge-5",
+    "episode": 2,
+    "names": [
+      "Penumbral Surge #5"
+    ],
+    "number": 1825,
+    "start": {
+      "type": "register",
+      "register": 15
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-penumbral-surge-6",
+    "episode": 2,
+    "names": [
+      "Penumbral Surge #6"
+    ],
+    "number": 1826,
+    "start": {
+      "type": "register",
+      "register": 15
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-anomalous-ordeal-3",
+    "episode": 2,
+    "names": [
+      "Anomalous Ordeal #3"
+    ],
+    "number": 1812,
+    "start": {
+      "type": "register",
+      "register": 82
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-anomalous-ordeal-4",
+    "episode": 2,
+    "names": [
+      "Anomalous Ordeal #4"
+    ],
+    "number": 1813,
+    "start": {
+      "type": "register",
+      "register": 82
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-anomalous-ordeal-5",
+    "episode": 2,
+    "names": [
+      "Anomalous Ordeal #5"
+    ],
+    "number": 1814,
+    "start": {
+      "type": "register",
+      "register": 82
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-gal-da-val-s-darkness",
+    "episode": 2,
+    "names": [
+      "Gal Da Val's Darkness"
+    ],
+    "number": 1309,
+    "start": {
+      "type": "floor-switch",
+      "floor": 3,
+      "switch": 20
+    },
+    "end": {
+      "type": "register",
+      "register": 89
+    }
+  },
+  {
+    "slug": "ep2-cal-s-clock-challenge",
+    "episode": 2,
+    "names": [
+      "CAL's Clock Challenge"
+    ],
+    "number": 1700,
+    "start": {
+      "type": "floor-switch",
+      "floor": 1,
+      "switch": 40
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-maximum-attack-2-ver2",
+    "episode": 2,
+    "names": [
+      "MAXIMUM ATTACK 2 Ver2"
+    ],
+    "number": 238,
+    "start": {
+      "type": "floor-switch",
+      "floor": 2,
+      "switch": 12
+    },
+    "end": {
+      "type": "register",
+      "register": 123
+    }
+  },
+  {
+    "slug": "ep2-maximum-attack-4th-stage-2a",
+    "episode": 2,
+    "names": [
+      "Maximum Attack 4 -2A-",
+      "Maximum Attack 4th Stage -2A-"
+    ],
+    "number": 241,
+    "start": {
+      "type": "floor-switch",
+      "floor": 5,
+      "switch": 99
+    },
+    "end": {
+      "type": "floor-switch",
+      "floor": 11,
+      "switch": 29
+    }
+  },
+  {
+    "slug": "ep2-maximum-attack-4th-stage-2b",
+    "episode": 2,
+    "names": [
+      "Maximum Attack 4 -2B-",
+      "Maximum Attack 4th Stage -2B-"
+    ],
+    "number": 242,
+    "start": {
+      "type": "floor-switch",
+      "floor": 5,
+      "switch": 99
+    },
+    "end": {
+      "type": "floor-switch",
+      "floor": 11,
+      "switch": 29
+    }
+  },
+  {
+    "slug": "ep2-maximum-attack-4th-stage-2c",
+    "episode": 2,
+    "names": [
+      "Maximum Attack 4 -2C-",
+      "Maximum Attack 4th Stage -2C-"
+    ],
+    "number": 243,
+    "start": {
+      "type": "floor-switch",
+      "floor": 5,
+      "switch": 99
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-maximum-attack-e-vr",
+    "episode": 2,
+    "names": [
+      "Maximum Attack E: VR"
+    ],
+    "number": 943,
+    "start": {
+      "type": "floor-switch",
+      "floor": 1,
+      "switch": 0
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-maximum-attack-e-gal-da-val",
+    "episode": 2,
+    "names": [
+      "Maximum Attack E: GDV",
+      "Maximum Attack E: Gal Da Val"
+    ],
+    "number": 944,
+    "start": {
+      "type": "floor-switch",
+      "floor": 5,
+      "switch": 0
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-maximum-attack-e-temple",
+    "episode": 2,
+    "names": [
+      "Maximum Attack E: Temple"
+    ],
+    "number": 934,
+    "start": {
+      "type": "floor-switch",
+      "floor": 1,
+      "switch": 0
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep2-maximum-attack-e-spaceship",
+    "episode": 2,
+    "names": [
+      "Maximum Attack E: Spaceship",
+      "Maximum Attack E: Space"
+    ],
+    "number": 935,
+    "start": {
+      "type": "floor-switch",
+      "floor": 3,
+      "switch": 0
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep2-maximum-attack-e-cca",
+    "episode": 2,
+    "names": [
+      "Maximum Attack E: CCA"
+    ],
+    "number": 936,
+    "start": {
+      "type": "floor-switch",
+      "floor": 5,
+      "switch": 0
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep2-maximum-attack-e-seabed",
+    "episode": 2,
+    "names": [
+      "Maximum Attack E: Seabed"
+    ],
+    "number": 937,
+    "start": {
+      "type": "floor-switch",
+      "floor": 10,
+      "switch": 0
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep2-maximum-attack-e-tower",
+    "episode": 2,
+    "names": [
+      "Maximum Attack E: Tower"
+    ],
+    "number": 938,
+    "start": {
+      "type": "floor-switch",
+      "floor": 17,
+      "switch": 0
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep2-random-attack-xrd-rev-2",
+    "episode": 2,
+    "names": [
+      "Random Attack Xrd REV 2"
+    ],
+    "number": 1802,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-lost-shock-rifle",
+    "episode": 2,
+    "names": [
+      "Lost SHOCK RIFLE"
+    ],
+    "number": 1780,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 15
+    }
+  },
+  {
+    "slug": "ep2-lost-bind-assault",
+    "episode": 2,
+    "names": [
+      "Lost BIND ASSAULT"
+    ],
+    "number": 1781,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 15
+    }
+  },
+  {
+    "slug": "ep2-lost-fill-cannon",
+    "episode": 2,
+    "names": [
+      "Lost FILL CANNON"
+    ],
+    "number": 1782,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 15
+    }
+  },
+  {
+    "slug": "ep2-lost-demon-s-railgun",
+    "episode": 2,
+    "names": [
+      "Lost DEMON'S RAILGUN"
+    ],
+    "number": 1783,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 15
+    }
+  },
+  {
+    "slug": "ep2-lost-charge-vulcan",
+    "episode": 2,
+    "names": [
+      "Lost CHARGE VULCAN"
+    ],
+    "number": 1784,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 15
+    }
+  },
+  {
+    "slug": "ep2-respective-tomorrow",
+    "episode": 2,
+    "names": [
+      "Respective Tomorrow"
+    ],
+    "number": 231,
+    "start": {
+      "type": "register",
+      "register": 84
+    },
+    "end": {
+      "type": "register",
+      "register": 98
+    }
+  },
+  {
+    "slug": "ep2-endless-episode-2",
+    "episode": 2,
+    "names": [
+      "Endless: Episode 2"
+    ],
+    "number": 1851,
+    "start": {
+      "type": "register",
+      "register": 50
+    },
+    "end": {
+      "type": "register",
+      "register": 248
+    }
+  },
+  {
+    "slug": "ep2-the-military-strikes-back",
+    "episode": 2,
+    "names": [
+      "The Military Strikes Back"
+    ],
+    "number": 1319,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 121
+    }
+  },
+  {
+    "slug": "ep2-twilight-sanctuary",
+    "episode": 2,
+    "names": [
+      "Twilight Sanctuary"
+    ],
+    "number": 1820,
+    "start": {
+      "type": "register",
+      "register": 50
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep2-a-new-hope-gal-gryphon",
+    "episode": 2,
+    "names": [
+      "A New Hope"
+    ],
+    "number": null,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "monster",
+      "monster": 5475
+    }
+  },
+  {
+    "slug": "ep2-christmas-fiasco",
+    "episode": 2,
+    "names": [
+      "Christmas Fiasco",
+      "Christmas Fiasco Episode 2"
+    ],
+    "number": 901,
+    "start": {
+      "type": "floor-switch",
+      "floor": 4,
+      "switch": 100
+    },
+    "end": {
+      "type": "floor-switch",
+      "floor": 11,
+      "switch": 3
+    }
+  },
+  {
+    "slug": "ep2-december-disaster-2",
+    "episode": 2,
+    "names": [
+      "December Disaster #2"
+    ],
+    "number": 1787,
+    "start": {
+      "type": "floor-switch",
+      "floor": 7,
+      "switch": 200
+    },
+    "end": {
+      "type": "register",
+      "register": 241
+    }
+  },
+  {
+    "slug": "ep2-august-atrocity-2",
+    "episode": 2,
+    "names": [
+      "August Atrocity #2"
+    ],
+    "number": 961,
+    "start": {
+      "type": "floor-switch",
+      "floor": 6,
+      "switch": 1
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep2-hollow-reality-temple",
+    "episode": 2,
+    "names": [
+      "Hollow Reality: Temple"
+    ],
+    "number": 1670,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 0
+    }
+  },
+  {
+    "slug": "ep2-hollow-reality-spaceship",
+    "episode": 2,
+    "names": [
+      "Hollow Reality: Spaceship"
+    ],
+    "number": 1671,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 0
+    }
+  },
+  {
+    "slug": "ep2-hollow-phantasm-jungle",
+    "episode": 2,
+    "names": [
+      "Hollow Phantasm: Jungle"
+    ],
+    "number": 1672,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 0
+    }
+  },
+  {
+    "slug": "ep2-hollow-phantasm-seabed",
+    "episode": 2,
+    "names": [
+      "Hollow Phantasm: Seabed"
+    ],
+    "number": 1673,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 0
+    }
+  },
+  {
+    "slug": "ep2-hollow-phantasm-tower",
+    "episode": 2,
+    "names": [
+      "Hollow Phantasm: Tower"
+    ],
+    "number": 1674,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 0
+    }
+  },
+  {
+    "slug": "ep4-point-of-disaster",
+    "episode": 4,
+    "names": [
+      "Point of Disaster"
+    ],
+    "number": null,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 233
+    }
+  },
+  {
+    "slug": "ep4-war-of-limits-1",
+    "episode": 4,
+    "names": [
+      "War of Limits 1"
+    ],
+    "number": 811,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep4-war-of-limits-2",
+    "episode": 4,
+    "names": [
+      "War of Limits 2"
+    ],
+    "number": 812,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep4-war-of-limits-3",
+    "episode": 4,
+    "names": [
+      "War of Limits 3"
+    ],
+    "number": 813,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep4-war-of-limits-4",
+    "episode": 4,
+    "names": [
+      "War of Limits 4"
+    ],
+    "number": 814,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep4-war-of-limits-5",
+    "episode": 4,
+    "names": [
+      "War of Limits 5"
+    ],
+    "number": 815,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep4-new-mop-up-operation-1",
+    "episode": 4,
+    "names": [
+      "New Mop-Up Operation #1"
+    ],
+    "number": 816,
+    "start": {
+      "type": "register",
+      "register": 205
+    },
+    "end": {
+      "type": "register",
+      "register": 157
+    }
+  },
+  {
+    "slug": "ep4-new-mop-up-operation-2",
+    "episode": 4,
+    "names": [
+      "New Mop-Up Operation #2"
+    ],
+    "number": 817,
+    "start": {
+      "type": "register",
+      "register": 86
+    },
+    "end": {
+      "type": "register",
+      "register": 43
+    }
+  },
+  {
+    "slug": "ep4-new-mop-up-operation-3",
+    "episode": 4,
+    "names": [
+      "New Mop-Up Operation #3"
+    ],
+    "number": 818,
+    "start": {
+      "type": "register",
+      "register": 205
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep4-new-mop-up-operation-4",
+    "episode": 4,
+    "names": [
+      "New Mop-Up Operation #4"
+    ],
+    "number": 819,
+    "start": {
+      "type": "register",
+      "register": 110
+    },
+    "end": {
+      "type": "register",
+      "register": 43
+    }
+  },
+  {
+    "slug": "ep4-new-mop-up-operation-5",
+    "episode": 4,
+    "names": [
+      "New Mop-Up Operation #5"
+    ],
+    "number": 820,
+    "start": {
+      "type": "register",
+      "register": 86
+    },
+    "end": {
+      "type": "register",
+      "register": 43
+    }
+  },
+  {
+    "slug": "ep4-sweep-up-operation-10",
+    "episode": 4,
+    "names": [
+      "Sweep-up Operation #10"
+    ],
+    "number": 1770,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep4-sweep-up-operation-11",
+    "episode": 4,
+    "names": [
+      "Sweep-up Operation #11"
+    ],
+    "number": 1771,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep4-sweep-up-operation-12",
+    "episode": 4,
+    "names": [
+      "Sweep-up Operation #12"
+    ],
+    "number": 1772,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep4-sweep-up-operation-13",
+    "episode": 4,
+    "names": [
+      "Sweep-up Operation #13"
+    ],
+    "number": 1773,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep4-sweep-up-operation-14",
+    "episode": 4,
+    "names": [
+      "Sweep-up Operation #14"
+    ],
+    "number": 1774,
+    "start": {
+      "type": "register",
+      "register": 210
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep4-lost-berserk-baton",
+    "episode": 4,
+    "names": [
+      "Lost BERSERK BATON"
+    ],
+    "number": 1790,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 15
+    }
+  },
+  {
+    "slug": "ep4-lost-spirit-striker",
+    "episode": 4,
+    "names": [
+      "Lost SPIRIT STRIKER"
+    ],
+    "number": 1791,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 15
+    }
+  },
+  {
+    "slug": "ep4-maximum-attack-4th-stage-4a",
+    "episode": 4,
+    "names": [
+      "Maximum Attack 4 -4A-",
+      "Maximum Attack 4th Stage -4A-"
+    ],
+    "number": 303,
+    "start": {
+      "type": "floor-switch",
+      "floor": 5,
+      "switch": 66
+    },
+    "end": {
+      "type": "floor-switch",
+      "floor": 8,
+      "switch": 50
+    }
+  },
+  {
+    "slug": "ep4-maximum-attack-4th-stage-4b",
+    "episode": 4,
+    "names": [
+      "Maximum Attack 4 -4B-",
+      "Maximum Attack 4th Stage -4B-",
+      "Maximum Attack 4th Stage -B-"
+    ],
+    "number": 304,
+    "start": {
+      "type": "floor-switch",
+      "floor": 5,
+      "switch": 66
+    },
+    "end": {
+      "type": "floor-switch",
+      "floor": 8,
+      "switch": 20
+    }
+  },
+  {
+    "slug": "ep4-maximum-attack-4th-stage-4c",
+    "episode": 4,
+    "names": [
+      "Maximum Attack 4 -4C-",
+      "Maximum Attack 4th Stage -4C-"
+    ],
+    "number": 305,
+    "start": {
+      "type": "floor-switch",
+      "floor": 5,
+      "switch": 66
+    },
+    "end": {
+      "type": "floor-switch",
+      "floor": 8,
+      "switch": 192
+    }
+  },
+  {
+    "slug": "ep4-maximum-attack-e-episode-4",
+    "episode": 4,
+    "names": [
+      "Maximum Attack E: Episode 4"
+    ],
+    "number": 945,
+    "start": {
+      "type": "floor-switch",
+      "floor": 2,
+      "switch": 0
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep4-maximum-attack-e-crater",
+    "episode": 4,
+    "names": [
+      "Maximum Attack E: Crater"
+    ],
+    "number": 939,
+    "start": {
+      "type": "floor-switch",
+      "floor": 2,
+      "switch": 0
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep4-maximum-attack-e-desert",
+    "episode": 4,
+    "names": [
+      "Maximum Attack E:地下砂漠",
+      "Maximum Attack E: Desert"
+    ],
+    "number": 940,
+    "start": {
+      "type": "floor-switch",
+      "floor": 8,
+      "switch": 0
+    },
+    "end": {
+      "type": "register",
+      "register": 50
+    }
+  },
+  {
+    "slug": "ep4-random-attack-xrd-rev-4",
+    "episode": 4,
+    "names": [
+      "Random Attack Xrd REV 4"
+    ],
+    "number": 1803,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 254
+    }
+  },
+  {
+    "slug": "ep4-beyond-the-horizon",
+    "episode": 4,
+    "names": [
+      "Beyond the Horizon"
+    ],
+    "number": 313,
+    "start": {
+      "type": "floor-switch",
+      "floor": 1,
+      "switch": 20
+    },
+    "end": {
+      "type": "floor-switch",
+      "floor": 8,
+      "switch": 80
+    }
+  },
+  {
+    "slug": "ep4-christmas-fiasco",
+    "episode": 4,
+    "names": [
+      "Christmas Fiasco",
+      "Christmas Fiasco Episode 4"
+    ],
+    "number": 902,
+    "start": {
+      "type": "floor-switch",
+      "floor": 1,
+      "switch": 100
+    },
+    "end": {
+      "type": "floor-switch",
+      "floor": 8,
+      "switch": 3
+    }
+  },
+  {
+    "slug": "ep4-hollow-wasteland-wilderness",
+    "episode": 4,
+    "names": [
+      "Hollow Wasteland: Wilderness"
+    ],
+    "number": 1675,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 0
+    }
+  },
+  {
+    "slug": "ep4-hollow-wasteland-desert",
+    "episode": 4,
+    "names": [
+      "Hollow Wasteland: Desert"
+    ],
+    "number": 1676,
+    "start": {
+      "type": "warp-in"
+    },
+    "end": {
+      "type": "register",
+      "register": 0
+    }
+  }
+]
