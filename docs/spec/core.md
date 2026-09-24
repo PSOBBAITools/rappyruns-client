@@ -924,7 +924,7 @@ active トラッカーのうち経過 ≥ **15000ms** (`+abort-min-ms+`) のも�
   HH:MM:SS "<quest>" monster ID killed (<name|?>, unitxt U)
   ```
   `"<quest>"` は `~s` (ダブルクォート付き、`"` と `\` をエスケープ)。時刻はローカル時刻。レジスタは 0..255 を id 順、スイッチはバイト順・ビット順 (floor = i/32, switch = 8*(i%32)+bit)。
-- OFF で stream を閉じる。C# はローテーションを追加: 書く直前に、開いているストリームの位置が 8 MiB (`TriggerLog.MaxBytes`) を超えていればストリームを閉じる。開くときにディスク上のファイルが 8 MiB を超えていれば `trigger-log.old.txt` へ改名 (前の世代は上書き、1 世代のみ) し、新しいファイルの先頭に `=== trigger log rotated HH:MM:SS; earlier lines are in trigger-log.old.txt ===` を書く (起動時・再 ON 時も同じ)。改名に失敗したら元のファイルへ追記を続け、さらに 8 MiB 伸びたら再試行する。セッションヘッダーは回した後に書くので、常に自分の行と同じファイルに入る。
+- OFF で stream を閉じる。C# はローテーションを追加: 書く直前に、開いているストリームの位置が 8 MiB (`TriggerLog.MaxBytes`) を超えていればストリームを閉じる。開くときにディスク上のファイルが 8 MiB を超えていれば `trigger-log.old.txt` へ改名 (前の世代は上書き、1 世代のみ) し、新しいファイルの先頭に `=== trigger log rotated HH:MM:SS; earlier lines are in trigger-log.old.txt ===` を書く (起動時・再 ON 時も同じ)。改名に失敗したら元のファイルへ追記を続け、さらに 8 MiB 伸びたら再試行する。セッションヘッダーは回した後に書くので、常に自分の行と同じファイルに入る。 起動時 (トリガーログの Start の後) に `trigger-log.old.txt` が 64 MiB (`OldCleanupBytes`) を超えていれば、Lisp 時代の巨大ログを回したものとみなして一度だけ削除し、クライアントログ (ephinea-ta-recording.log) に記録する (S42)。
 
 ### 16.2 撃破差分 (`newly-killed-monsters`)
 前フレームで hp>0、今フレームで hp==0 のモンスター (今フレームの順序)。

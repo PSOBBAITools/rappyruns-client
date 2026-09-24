@@ -94,6 +94,36 @@ public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = Tr
         }
     }
 
+    /// <summary>An old generation past this is no rotation of ours (at most <see cref="MaxBytes"/> plus one write batch): the Lisp client's unbounded log, rotated once.</summary>
+    public const long OldCleanupBytes = 64L * 1024 * 1024;
+
+    /// <summary>
+    /// Startup cleanup (C#, S42): a Lisp client that never rotated can leave a
+    /// trigger-log.txt of hundreds of MB, which the first rotation turns into
+    /// an equally big <see cref="OldPath"/> that would otherwise sit there until
+    /// the next rotation. Deletes <see cref="OldPath"/> when it is over
+    /// <paramref name="limit"/>; returns its size when it did, else null
+    /// (absent, small enough, or the delete was refused).
+    /// </summary>
+    public long? DeleteOversizedOld(long limit = OldCleanupBytes)
+    {
+        lock (_gate)
+        {
+            try
+            {
+                var old = new FileInfo(OldPath);
+                if (!old.Exists || old.Length <= limit) return null;
+                var size = old.Length;
+                old.Delete();
+                return size;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+    }
+
     /// <summary>trigger-log.lisp:60 time-of-day: local HH:MM:SS.</summary>
     private string TimeOfDay() => clock.LocalNow.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
 

@@ -214,6 +214,24 @@ public class TriggerLogTests
             File.ReadAllText(path));
     }
 
+    [Fact(DisplayName = "a Lisp-era log rotated into a huge old file is deleted at startup; a normal old file stays (S42)")]
+    public void DeletesOversizedOld()
+    {
+        using var temp = new TempDir("eta-test-trigger-rotate");
+        var path = temp.File("trigger-log.txt");
+        File.WriteAllText(path, new string('x', 1000)); // the Lisp client's unbounded log
+        using var log = new TriggerLog(path, new ManualGameClock(), maxBytes: 200);
+        Assert.Null(log.DeleteOversizedOld(limit: 500)); // no old file yet
+        log.Start(); // rotates the 1000 bytes aside
+        log.Close();
+        Assert.Equal(1000, log.DeleteOversizedOld(limit: 500));
+        Assert.False(File.Exists(log.OldPath));
+        Assert.StartsWith("=== trigger log rotated", File.ReadAllText(path)); // the live log is untouched
+        File.WriteAllText(log.OldPath, new string('y', 300));
+        Assert.Null(log.DeleteOversizedOld(limit: 500));
+        Assert.True(File.Exists(log.OldPath));
+    }
+
     [Fact(DisplayName = "trigger log keeps appending when the rotation rename is refused, and retries after more growth")]
     public void KeepsAppendingWhenRenameRefused()
     {

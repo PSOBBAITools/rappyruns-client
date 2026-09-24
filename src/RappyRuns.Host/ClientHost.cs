@@ -312,6 +312,12 @@ public sealed class ClientHost : IDisposable
         RecordingLog.Write(RecordingLog.SessionLine(ClientVersion.Display, _machine, FfmpegPath()));
         if (Config.HwEncode) HwProbe.Start();
         if (Config.TriggerLog) Try("trigger log", () => TriggerLog.Start());
+        // After the Start: that is what rotates a huge Lisp-era log into the old file.
+        Try("trigger log cleanup", () =>
+        {
+            if (TriggerLog.DeleteOversizedOld() is { } size)
+                RecordingLog.Write($"trigger log: deleted {TriggerLog.OldPath} ({size / (1024 * 1024)} MiB, far over the {TriggerLog.MaxBytes / (1024 * 1024)} MiB rotation)");
+        });
         Poll.Start();
         _ = CheckServerAsync();
         _ = CheckTokenAsync(onInvalid: ReloginWithFile);
