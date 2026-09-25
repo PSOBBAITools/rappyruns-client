@@ -53,6 +53,12 @@ public enum FileLoginOutcome
 
     /// <summary>Transport/unexpected status → <c>:file-login-failed</c> (red).</summary>
     Failed,
+
+    /// <summary>
+    /// 201, but the configured token changed while the login was out (C#,
+    /// S49): the new token is dropped, the one set meanwhile kept. No line.
+    /// </summary>
+    Superseded,
 }
 
 /// <summary>A login.txt login result.</summary>
@@ -255,6 +261,8 @@ public sealed class AuthService
                     case PairingPollStatus.Gone:
                         return new PairingResult(PairingOutcome.Expired);
                     case PairingPollStatus.Complete:
+                        // A token pasted while this poll was out wins too (S49).
+                        if (!Tokens.IsUnlinked(_settings.ApiToken)) return new PairingResult(PairingOutcome.Superseded);
                         FinishPairing(poll.Token!);
                         return new PairingResult(PairingOutcome.Completed, poll.Token);
                 }
@@ -276,18 +284,21 @@ public sealed class AuthService
     /// (parsed by the config side; pass nulls when the file was unreadable or
     /// incomplete) for a token with label "Desktop client (&lt;machine&gt;) [login.txt]".
     /// The app shows <c>:file-login-checking</c> before calling. Never falls back to the
-    /// browser pairing.
+    /// browser pairing. A token the player set while the login was out wins
+    /// over the login's (S49, as the pairing's Superseded).
     /// </summary>
     public async Task<FileLoginResult> LoginWithCredentialsAsync(string? username, string? password,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
             return new FileLoginResult(FileLoginOutcome.BadFile);
+        var before = Tokens.Normalize(_settings.ApiToken);
         try
         {
             var result = await _api.LoginAsync(username, password, FileLoginLabel(_machineName), cancellationToken)
                 .ConfigureAwait(false);
             if (result.Status == LoginStatus.Unauthorized) return new FileLoginResult(FileLoginOutcome.Invalid);
+            if (Tokens.Normalize(_settings.ApiToken) != before) return new FileLoginResult(FileLoginOutcome.Superseded);
             FinishPairing(result.Token!);
             return new FileLoginResult(FileLoginOutcome.Ok);
         }
@@ -301,10 +312,12 @@ public sealed class AuthService
     /// <summary>
     /// <c>check-token</c> (spec core §8.5): verify the linked token against GET /api/me.
     /// On success, <paramref name="onVerified"/> runs first (apply the Pin Share,
-    /// moderator and auto-publish flags before anything fallible), then a pending guest
-    /// is merged: ok or gone clears <c>:anon-token</c> (saved), an API error keeps it for
-    /// the next check. Unlinked returns at once without network. The app shows
-    /// <c>:token-checking</c> before calling and applies the returned result.
+    /// moderator and auto-publish flags before anything fallible). Unlinked returns at
+    /// once without network. The app shows <c>:token-checking</c> before calling and
+    /// applies the returned result. The Lisp merged a pending guest here; the C#
+    /// app does it with <see cref="MergeGuestAsync"/> once it knows the check is
+    /// still current (S48), so the result's <see cref="TokenCheckResult.Merge"/> is
+    /// always null from here.
     /// </summary>
     public async Task<TokenCheckResult> CheckTokenAsync(Action<MeUser>? onVerified = null,
         CancellationToken cancellationToken = default)
@@ -317,27 +330,43 @@ public sealed class AuthService
             if (me.Unauthorized) return new TokenCheckResult(TokenCheckKind.Unauthorized);
             var user = me.User!;
             onVerified?.Invoke(user);
-            MergeResult? merge = null;
-            var anon = Tokens.Normalize(_settings.AnonToken);
-            if (anon.Length > 0)
-            {
-                try
-                {
-                    merge = await _api.MergeAnonymousAsync(anon, token, cancellationToken).ConfigureAwait(false);
-                    _settings.AnonToken = "";
-                    _settings.Save();
-                }
-                catch (ApiException)
-                {
-                    // Transport failure: keep the guest token, the next verification retries.
-                }
-            }
-            return new TokenCheckResult(TokenCheckKind.Ok, user, merge);
+            return new TokenCheckResult(TokenCheckKind.Ok, user);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             return new TokenCheckResult(TokenCheckKind.Error, Error: ex);
         }
+    }
+
+    /// <summary>
+    /// The guest merge of <c>check-token</c> (spec core §8.5): move a pending
+    /// anonymous guest's runs into the account of <paramref name="token"/>, a
+    /// token a check just verified. Ok or gone clears <c>:anon-token</c> (saved),
+    /// but only while it is still the guest that was merged (a guest registered
+    /// meanwhile is kept); an API error keeps it for the next check. Null when
+    /// there was no guest or the merge failed. Anything but an API error (a
+    /// config write failure, a bug) is thrown for the caller to report.
+    /// </summary>
+    public async Task<MergeResult?> MergeGuestAsync(string token, CancellationToken cancellationToken = default)
+    {
+        var anon = Tokens.Normalize(_settings.AnonToken);
+        if (anon.Length == 0) return null;
+        MergeResult merge;
+        try
+        {
+            merge = await _api.MergeAnonymousAsync(anon, token, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ApiException)
+        {
+            // Transport failure: keep the guest token, the next verification retries.
+            return null;
+        }
+        if (Tokens.Normalize(_settings.AnonToken) == anon)
+        {
+            _settings.AnonToken = "";
+            _settings.Save();
+        }
+        return merge;
     }
 
     /// <summary>

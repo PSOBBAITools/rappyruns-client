@@ -113,6 +113,7 @@ C# への対応づけの目安:
 - 通信失敗: `token-status-error-text` (赤)
 - ペアリング中: `:pairing-waiting` / `:pairing-expired` / `:pairing-failed` (赤)
 - login.txt: `:file-login-checking` / `:file-login-bad-file` / `:file-login-invalid` / `:file-login-failed`
+- C# 版 (S49): ペアリングと login.txt の行は、その流れを始めた後にトークン確認が始まったか、トークンが替わったら出さない (新しい確認の結果を古い流れの失敗で上書きしない)。流れが成功しても、その間に設定のトークンが変わっていれば (ペアリングは連携済みになっていれば) 新しいトークンを保存しない (core §8.2/§8.3)
 
 #### 1.2.2 Runs 一覧 `runs-list` (`gui.lisp:117-138`)
 
@@ -308,7 +309,7 @@ GUI スレッドとポーリングスレッドの両方から書くのでロッ�
     2. `set-pinshare-permission (pinshare-feature-p user)` — 失敗しうる処理より先に済ませる
     3. `apply-moderator-role` (役割が変わったら窓を作り直す)
     4. `apply-auto-publish`
-    5. `:anon-token` があれば `POST /api/merge-anonymous {"anonymous_token":...}`。200 か 404 なら `:anon-token` を空にする。通信エラーなら残して次回に回す
+    5. `:anon-token` があれば `POST /api/merge-anonymous {"anonymous_token":...}`。200 か 404 なら `:anon-token` を空にする。通信エラーなら残して次回に回す。C# 版 (S48) はホストが確認の後に行い、確認したトークンがまだ設定中のトークンのときだけマージする (別のトークンに替わった後に届いた古い確認は、ゲストの記録を前のアカウントへ移さない。同じトークンの新しい確認が始まっていてもマージはする)。空にするのは、マージしたゲストのトークンがまだ設定に残っているときだけ (その間に登録された新しいゲストは消さない)
     6. `*retry-requested* t` (未送信分を送る)
     7. `notify` が真なら `:token-ok-dialog`
   - `:unauthorized`: `set-pinshare-permission nil`、`:token-invalid` (赤)。notify なら `:token-rejected-dialog`。`on-invalid` を呼ぶ

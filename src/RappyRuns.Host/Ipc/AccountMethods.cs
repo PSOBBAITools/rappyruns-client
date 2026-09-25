@@ -4,9 +4,9 @@ namespace RappyRuns.Host.Ipc;
 internal sealed class AccountMethods(ClientHost host)
 {
     public void Register(IIpcRegistry r) =>
-        r.RegisterSync("account.link", _ =>
+        r.RegisterSync("account.link", parameters =>
         {
-            host.StartPairing();
+            _ = host.StartPairing(); // runs on its own; progress goes to state.token
             return null;
         });
 }

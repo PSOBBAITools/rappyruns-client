@@ -485,6 +485,10 @@ public sealed class ClientHost : IDisposable
     /// check-token (gui.lisp:1486): the token line, the Pin Share verdict, the
     /// moderator role and auto-publish mirror, the guest merge and the queue
     /// flush. <paramref name="onInvalid"/> runs on a definite 401 only.
+    /// The guest merge (S48) runs here, after the check, and only while the
+    /// verified token is still the configured one: a check of a token the
+    /// player has since replaced must not move the guest's runs into that
+    /// account. A later check of the same token does not stop it.
     /// Checks finish in any order: a result applies only while its check is
     /// the latest and its token still the configured one (<see cref="TokenCheckGate"/>);
     /// a superseded check applies nothing and returns null.
@@ -509,9 +513,27 @@ public sealed class ClientHost : IDisposable
             ApplyModerator(user.IsModerator);
             ApplyAutoPublish(user.AutoPublish);
         }, _shutdown.Token).ConfigureAwait(false);
+        if (result.Kind == TokenCheckKind.Ok && ticket.ChecksConfigured(Config.ApiToken))
+        {
+            try
+            {
+                result = result with { Merge = await Auth.MergeGuestAsync(ticket.Token, _shutdown.Token).ConfigureAwait(false) };
+            }
+            catch (Exception e) when (e is not OperationCanceledException || !_shutdown.IsCancellationRequested)
+            {
+                // As when the merge ran inside the check: a failure there
+                // (the config write, say) is the check's error.
+                _log($"token check: guest merge failed: {e.Message}");
+                result = new TokenCheckResult(TokenCheckKind.Error, Error: e);
+            }
+        }
         if (!Current())
         {
-            _log($"token check: a superseded {result.Kind} result was ignored");
+            _log(result.Merge is { } merged
+                ? $"token check: a superseded {result.Kind} result was ignored (the guest merge ran: {merged})"
+                : $"token check: a superseded {result.Kind} result was ignored");
+            // Runs queued under the merged guest go out now, not at the next trigger.
+            if (result.Merge == MergeResult.Ok) Poll.RequestRetry();
             return null;
         }
         switch (result.Kind)
@@ -556,59 +578,77 @@ public sealed class ClientHost : IDisposable
     /// <summary>check-token's on-invalid at startup: a revoked token heals itself when login.txt is there.</summary>
     private void ReloginWithFile()
     {
-        if (Credentials.Present(Options.ExeDir)) StartFileLogin();
+        if (Credentials.Present(Options.ExeDir)) _ = StartFileLogin();
     }
 
     /// <summary>prompt-for-token-setup (gui.lisp:758): no token + login.txt = file login. Never the browser.</summary>
     private void PromptForTokenSetup()
     {
-        if (Auth.IsUnlinked && Credentials.Present(Options.ExeDir)) StartFileLogin();
+        if (Auth.IsUnlinked && Credentials.Present(Options.ExeDir)) _ = StartFileLogin();
     }
 
-    /// <summary>run-file-login-flow (gui.lisp:836); success hands over to TokenLinked → check-token.</summary>
-    internal void StartFileLogin() => _ = Task.Run(async () =>
+    /// <summary>
+    /// run-file-login-flow (gui.lisp:836); success hands over to TokenLinked →
+    /// check-token. Its lines give way to a token check started after it or
+    /// a token changed meanwhile (S49, <see cref="TokenCheckGate.Watch"/>).
+    /// </summary>
+    internal Task StartFileLogin()
     {
-        var credentials = Credentials.Read(Credentials.PathIn(Options.ExeDir));
-        if (credentials is null)
+        var ticket = _tokenChecks.Watch(Config.ApiToken);
+        return Task.Run(async () =>
         {
-            Ui.SetToken(Line.Error(Msg.Of("file-login-bad-file")));
-            return;
-        }
-        Ui.SetToken(Line.Busy(Msg.Of("file-login-checking")));
-        var result = await Auth.LoginWithCredentialsAsync(credentials.Username, credentials.Password, _shutdown.Token)
-            .ConfigureAwait(false);
-        switch (result.Outcome)
-        {
-            case FileLoginOutcome.BadFile:
-                Ui.SetToken(Line.Error(Msg.Of("file-login-bad-file")));
-                break;
-            case FileLoginOutcome.Invalid:
-                Ui.SetToken(Line.Error(Msg.Of("file-login-invalid")));
-                break;
-            case FileLoginOutcome.Failed:
-                Ui.SetToken(Line.Error(Msg.Of("file-login-failed", result.Error)));
-                break;
-        }
-    });
+            var credentials = Credentials.Read(Credentials.PathIn(Options.ExeDir));
+            if (credentials is null)
+            {
+                SetTokenLine(ticket, Line.Error(Msg.Of("file-login-bad-file")));
+                return;
+            }
+            SetTokenLine(ticket, Line.Busy(Msg.Of("file-login-checking")));
+            var result = await Auth.LoginWithCredentialsAsync(credentials.Username, credentials.Password, _shutdown.Token)
+                .ConfigureAwait(false);
+            switch (result.Outcome)
+            {
+                case FileLoginOutcome.BadFile:
+                    SetTokenLine(ticket, Line.Error(Msg.Of("file-login-bad-file")));
+                    break;
+                case FileLoginOutcome.Invalid:
+                    SetTokenLine(ticket, Line.Error(Msg.Of("file-login-invalid")));
+                    break;
+                case FileLoginOutcome.Failed:
+                    SetTokenLine(ticket, Line.Error(Msg.Of("file-login-failed", result.Error)));
+                    break;
+            }
+        });
+    }
 
-    /// <summary>run-pairing-flow (gui.lisp:783) on a worker; progress on the token line.</summary>
-    internal void StartPairing()
+    /// <summary>
+    /// run-pairing-flow (gui.lisp:783) on a worker; progress on the token line,
+    /// which gives way to a token check started after it or a token changed
+    /// meanwhile (S49, <see cref="TokenCheckGate.Watch"/>).
+    /// </summary>
+    internal Task StartPairing()
     {
-        if (Auth.IsPairing || Ui.Pairing) return;
+        if (Auth.IsPairing || Ui.Pairing) return Task.CompletedTask;
         Ui.SetPairing(true);
-        _ = Task.Run(async () =>
+        var ticket = _tokenChecks.Watch(Config.ApiToken);
+        return Task.Run(async () =>
         {
             try
             {
                 var result = await Auth.RunPairingAsync(OpenExternal,
-                    () => Ui.SetToken(Line.Busy(Msg.Of("pairing-waiting"))), _shutdown.Token).ConfigureAwait(false);
+                    () => SetTokenLine(ticket, Line.Busy(Msg.Of("pairing-waiting"))), _shutdown.Token).ConfigureAwait(false);
                 switch (result.Outcome)
                 {
                     case PairingOutcome.Expired:
-                        Ui.SetToken(Line.Neutral(Msg.Of("pairing-expired")));
+                        SetTokenLine(ticket, Line.Neutral(Msg.Of("pairing-expired")));
                         break;
                     case PairingOutcome.FailedToStart:
-                        Ui.SetToken(Line.Error(Msg.Of("pairing-failed", result.Error)));
+                        SetTokenLine(ticket, Line.Error(Msg.Of("pairing-failed", result.Error)));
+                        break;
+                    case PairingOutcome.Superseded when ticket.IsCurrent(Config.ApiToken):
+                        // Linked from the start (no check or token change since):
+                        // "waiting" would stay up with nothing pending, so check again.
+                        _ = CheckTokenAsync();
                         break;
                 }
             }
@@ -617,6 +657,13 @@ public sealed class ClientHost : IDisposable
                 Ui.SetPairing(false);
             }
         });
+    }
+
+    // The token line for a login or pairing flow, unless a newer check owns it.
+    private void SetTokenLine(TokenCheckGate.Ticket ticket, Line line)
+    {
+        if (ticket.IsCurrent(Config.ApiToken)) Ui.SetToken(line);
+        else _log($"token line: a superseded {line.Msg.Key} was not shown");
     }
 
     /// <summary>pinshare-permission-loop: re-ask /api/me every 30 minutes while linked.</summary>

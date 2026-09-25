@@ -71,6 +71,132 @@ public sealed class HostOrderingTests
         Assert.DoesNotContain("alice", Json(h.Host.Ui.Token), StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "ordering: a login.txt login that fails after a newer token check leaves that check's line (S49)")]
+    public async Task FileLoginLosesToNewerCheck()
+    {
+        using var h = new HostHarness(new GatedHandler((url, _) => Me(url) || url.EndsWith("/api/login", StringComparison.Ordinal) ? null : (404, "")),
+            c => c.ApiToken = "token-a");
+        File.WriteAllText(Path.Combine(h.Dir, "login.txt"), "username=alice\npassword=wrong\n");
+        h.CallOrdered("app.hello");
+        var login = h.Host.StartFileLogin();
+        var loginAnswer = h.Http.Take((url, _) => url.EndsWith("/api/login", StringComparison.Ordinal));
+        // Meanwhile the player pastes bob's token and saves: a newer check.
+        h.Config.ApiToken = "token-b";
+        var check = h.Host.CheckTokenAsync();
+        h.Http.Take((url, auth) => Me(url) && auth == "Bearer token-b").SetResult((200, MeB));
+        Assert.Equal(TokenCheckKind.Ok, (await check)!.Kind);
+        loginAnswer.SetResult((401, ""));
+        await login;
+        Assert.Equal(Json(Line.Ok(Msg.Of("token-ok", "bob"))), Json(h.Host.Ui.Token));
+    }
+
+    [Fact(DisplayName = "ordering: a login.txt login that succeeds after the player set another token keeps that token (S49)")]
+    public async Task FileLoginSuccessKeepsNewerToken()
+    {
+        using var h = new HostHarness(new GatedHandler((url, _) => Me(url) || url.EndsWith("/api/login", StringComparison.Ordinal) ? null : (404, "")),
+            c => c.ApiToken = "token-a");
+        File.WriteAllText(Path.Combine(h.Dir, "login.txt"), "username=alice\npassword=right\n");
+        h.CallOrdered("app.hello");
+        var login = h.Host.StartFileLogin();
+        var loginAnswer = h.Http.Take((url, _) => url.EndsWith("/api/login", StringComparison.Ordinal));
+        h.Config.ApiToken = "token-b";
+        var check = h.Host.CheckTokenAsync();
+        h.Http.Take((url, auth) => Me(url) && auth == "Bearer token-b").SetResult((200, MeB));
+        Assert.Equal(TokenCheckKind.Ok, (await check)!.Kind);
+        loginAnswer.SetResult((201, """{"token":"token-alice"}"""));
+        await login;
+        Assert.Equal("token-b", h.Config.ApiToken);
+        Assert.Equal(Json(Line.Ok(Msg.Of("token-ok", "bob"))), Json(h.Host.Ui.Token));
+    }
+
+    [Fact(DisplayName = "ordering: a login.txt login with nothing newer still shows its failure (S49)")]
+    public async Task FileLoginShowsOwnFailure()
+    {
+        using var h = new HostHarness(new GatedHandler((url, _) => url.EndsWith("/api/login", StringComparison.Ordinal) ? (401, "") : (404, "")),
+            c => c.ApiToken = "token-a");
+        File.WriteAllText(Path.Combine(h.Dir, "login.txt"), "username=alice\npassword=wrong\n");
+        h.CallOrdered("app.hello");
+        await h.Host.StartFileLogin();
+        Assert.Equal(Json(Line.Error(Msg.Of("file-login-invalid"))), Json(h.Host.Ui.Token));
+    }
+
+    [Fact(DisplayName = "ordering: a pairing that fails after a newer token check leaves that check's line (S49)")]
+    public async Task PairingLosesToNewerCheck()
+    {
+        using var h = new HostHarness(new GatedHandler((url, _) => Me(url) || url.EndsWith("/api/pair", StringComparison.Ordinal) ? null : (404, "")));
+        h.CallOrdered("app.hello");
+        var pairing = h.Host.StartPairing();
+        var pairAnswer = h.Http.Take((url, _) => url.EndsWith("/api/pair", StringComparison.Ordinal));
+        h.Config.ApiToken = "token-b"; // pasted in Settings instead of waiting for the browser
+        var check = h.Host.CheckTokenAsync();
+        h.Http.Take((url, auth) => Me(url) && auth == "Bearer token-b").SetResult((200, MeB));
+        Assert.Equal(TokenCheckKind.Ok, (await check)!.Kind);
+        pairAnswer.SetResult((500, ""));
+        await pairing;
+        Assert.Equal(Json(Line.Ok(Msg.Of("token-ok", "bob"))), Json(h.Host.Ui.Token));
+    }
+
+    [Fact(DisplayName = "ordering: a token check gone stale before its answer does not merge the guest; the current token's check does (S48)")]
+    public async Task StaleTokenCheckKeepsGuest()
+    {
+        var merges = new List<string?>();
+        using var h = new HostHarness(MergesRecorded(merges), c =>
+        {
+            c.ApiToken = "token-a";
+            c.AnonToken = "guest-1";
+        });
+        h.CallOrdered("app.hello");
+        var check = h.Host.CheckTokenAsync();
+        var answer = h.Http.Take((url, _) => Me(url));
+        h.Config.ApiToken = "token-b"; // the player switched accounts while alice's check was out
+        answer.SetResult((200, MeA));
+        Assert.Null(await check);
+        // The guest's runs were not moved into alice's account, and the
+        // guest token is still there for token-b's own check to merge.
+        lock (merges) Assert.Empty(merges);
+        Assert.Equal("guest-1", h.Config.AnonToken);
+
+        var current = h.Host.CheckTokenAsync();
+        h.Http.Take((url, auth) => Me(url) && auth == "Bearer token-b").SetResult((200, MeB));
+        Assert.Equal(MergeResult.Ok, (await current)!.Merge);
+        lock (merges) Assert.Equal(["Bearer token-b"], merges);
+        Assert.Equal("", h.Config.AnonToken);
+    }
+
+    [Fact(DisplayName = "ordering: an older check of the same token still merges when the newer one fails on the network (S48)")]
+    public async Task SameTokenOlderCheckMerges()
+    {
+        var merges = new List<string?>();
+        using var h = new HostHarness(MergesRecorded(merges), c =>
+        {
+            c.ApiToken = "token-a";
+            c.AnonToken = "guest-1";
+        });
+        h.CallOrdered("app.hello");
+        var older = h.Host.CheckTokenAsync();
+        var olderAnswer = h.Http.Take((url, _) => Me(url));
+        var newer = h.Host.CheckTokenAsync();
+        var newerAnswer = h.Http.Take((url, _) => Me(url));
+        newerAnswer.SetResult((500, ""));
+        Assert.Equal(TokenCheckKind.Error, (await newer)!.Kind);
+        olderAnswer.SetResult((200, MeA));
+        Assert.Null(await older); // superseded: its flags and line do not apply
+        lock (merges) Assert.Equal(["Bearer token-a"], merges); // but the guest went to the account still in use
+        Assert.Equal("", h.Config.AnonToken);
+    }
+
+    // /api/me waits for the test; merges are answered 200 and their Authorization recorded.
+    private static GatedHandler MergesRecorded(List<string?> merges) => new((url, auth) =>
+    {
+        if (Me(url)) return null;
+        if (url.EndsWith("/api/merge-anonymous", StringComparison.Ordinal))
+        {
+            lock (merges) merges.Add(auth);
+            return (200, "{}");
+        }
+        return (404, "");
+    });
+
     [Fact(DisplayName = "ordering: no runs list reaches the UI before the hello reply, and none is lost after it (S32)")]
     public void RunsNeverOvertakeHello()
     {

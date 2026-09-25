@@ -436,7 +436,7 @@ JSON の数値: 浮動小数 (座標等) は **単精度の最短表現** (`12.3
 3. `ceiling(expires_in / interval)` 回、`interval` 秒待って `GET /api/pair/{code}`。
    - 停止要求、または待機中に api-token が設定された → 中止。
    - transport エラー (api-error) は pending 扱いで継続。
-   - gone → 「期限切れ」、complete → `finish-pairing(token)`。
+   - gone → 「期限切れ」、complete → `finish-pairing(token)` (C# 版 S49: その応答を待つ間にトークンが貼られていたら、それを優先して finish-pairing しない)。
    - 回数を使い切ったら「期限切れ」。
 4. 開始自体の失敗 → 赤字で失敗表示 (次回起動で再試行)。
 5. 同時に 1 ワーカーのみ。
@@ -444,7 +444,7 @@ JSON の数値: 浮動小数 (座標等) は **単精度の最短表現** (`12.3
 ### 8.3 login.txt (`credentials.lisp`, `gui.lisp:836`)
 - 場所: exe と同じフォルダの `login.txt` (`lw:lisp-image-name` 基準)。
 - 解析 (`parse-credentials`): 行分割 (`\n`)、各行を Space/Tab/CR/U+FEFF でトリム、空行と `#` 始まりを無視、最初の `=` で分割、キーは小文字化・トリム、`username`/`password` のみ採用 (後勝ち)。両方非空でなければ (NIL, NIL)。**パスワードに `=` を含められる**。UTF-8 で読めなければ (NIL, NIL)。
-- フロー: 読めない → `:file-login-bad-file` 赤字。`POST /api/login {username, password, label: "Desktop client (<Machine>) [login.txt]"}` → ok なら `finish-pairing`、401 → `:file-login-invalid`、エラー → `:file-login-failed`。ブラウザペアリングは決して併発させない。
+- フロー: 読めない → `:file-login-bad-file` 赤字。`POST /api/login {username, password, label: "Desktop client (<Machine>) [login.txt]"}` → ok なら `finish-pairing` (C# 版 S49: ログインを始めた後に設定のトークンが変わっていたら、それを優先して finish-pairing しない)、401 → `:file-login-invalid`、エラー → `:file-login-failed`。ブラウザペアリングは決して併発させない。
 - 起動条件: (a) api-token 空 + login.txt あり (起動時)、(b) `check-token` が 401 を得た + login.txt あり (失効トークンの自己修復)。
 
 ### 8.4 匿名ゲスト (`store.lisp:66 ensure-submission-token`)
@@ -455,7 +455,7 @@ JSON の数値: 浮動小数 (座標等) は **単精度の最短表現** (`12.3
 ### 8.5 check-token とマージ (`gui.lisp:1486 check-token`)
 - api-token 空: Pin Share 許可を偽に、`:token-unlinked` 表示。ネットワークなし。
 - 非空: 別スレッドで `GET /api/me`。
-  - ok: `:token-ok <username>` 表示 → Pin Share 許可 = features に `"pinshare"` → モデレーター判定変化時のみ config 保存 + ウィンドウ再構築 → `auto_publish` 同期 → **anon-token が非空なら `POST /api/merge-anonymous`**、ok/gone で `:anon-token` を `""` にして保存、api-error なら温存 (次回検証で再試行) → `*retry-requested*` を立てる (キューの一括再送)。
+  - ok: `:token-ok <username>` 表示 → Pin Share 許可 = features に `"pinshare"` → モデレーター判定変化時のみ config 保存 + ウィンドウ再構築 → `auto_publish` 同期 → **anon-token が非空なら `POST /api/merge-anonymous`**、ok/gone で `:anon-token` を `""` にして保存、api-error なら温存 (次回検証で再試行) → `*retry-requested*` を立てる (キューの一括再送)。C# 版 (S48) では確認 (`AuthService.CheckTokenAsync`) はマージしない。ホストが確認の後に `MergeGuestAsync` を呼び、確認したトークンがまだ設定中のときだけマージする。詳細は ui-shell §2.3 の 5。
   - unauthorized: Pin Share 許可偽、`:token-invalid` 赤字、`on-invalid` 実行 (login.txt 自己修復)。
   - エラー: `:token-could-not-verify` 赤字 (トークン自体は疑わない)。
 - 呼ばれるタイミング: 起動時、設定保存時 (`notify` でダイアログ)、ペアリング/ログイン完了時、言語切替の再構築時。
