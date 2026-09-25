@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using RappyRuns.Core.Game;
 using RappyRuns.Core.Sexp;
 
 namespace RappyRuns.Core.Ghost;
@@ -82,17 +83,13 @@ public sealed class GhostSession
 {
     private GhostReference? _ghost;
     private CameraState? _liveCamera;
-    // The quest-ptr the current fetch was started (or skipped) for; 0 = none.
-    private long _fetchPtr;
-    private string? _fetchName; // with the pointer, what identifies a load (poll thread only)
     // Makes a landing fetch's "still the same load?" check and its write one
     // step against Reset (the poll thread) - else an exited game's ghost could
     // land just after the reset.
     private readonly Lock _gate = new();
-    // S36: bumped on every new load and every forget, under _gate. A fetch
-    // lands only while it is unchanged: the pointer alone cannot tell a later
-    // quest loaded at the same address (or a relaunched game) from its own.
-    private long _load = 1;
+    // S36/S46: the load the current fetch was started (or skipped) for, under
+    // _gate. A fetch lands only while it is still current.
+    private readonly QuestLoadIdentity _load = new();
 
     /// <summary>The ghost fetched for the currently loaded quest, or null.</summary>
     public GhostReference? Ghost
@@ -132,23 +129,17 @@ public sealed class GhostSession
     // FetchWanted plus the load id it adopted, taken in the same locked step.
     private (GhostFetchRequest? Request, long Load) Wanted(long? questPtr, string? questName, Func<GhostLoadInfo> describeLoad)
     {
-        if (questPtr is not { } ptr || ptr <= 0)
-        {
-            // No quest loaded: forget the load AND the ghost, so a stale
-            // reference can never race the next quest. (Completed runs are
-            // annotated while the quest is still loaded.)
-            ForgetLoad();
-            return (null, 0);
-        }
-        // A different name at the same pointer is a new load too (no lobby frame seen in between).
-        if (questName is null || (ptr == Volatile.Read(ref _fetchPtr) && questName == _fetchName)) return (null, 0);
         long load;
         lock (_gate)
         {
-            Volatile.Write(ref _fetchPtr, ptr);
-            _fetchName = questName;
-            load = ++_load;
+            // No quest loaded (a null pointer too) forgets the load AND the
+            // ghost, so a stale reference can never race the next quest.
+            // (Completed runs are annotated while the quest is still loaded.)
+            var change = _load.Observe(questPtr ?? 0, questName);
+            if (change == QuestLoadChange.Unchanged) return (null, 0);
             Ghost = null;
+            if (change == QuestLoadChange.Unloaded) return (null, 0);
+            load = _load.Load;
         }
         var info = describeLoad();
         if (info.Slugs.Count == 0 || !info.GhostRaceEnabled || !info.HasSubmissionToken) return (null, 0);
@@ -183,7 +174,7 @@ public sealed class GhostSession
             }
             lock (_gate)
             {
-                if (_load == load) Ghost = ghost;
+                if (_load.IsCurrent(load)) Ghost = ghost;
             }
         });
     }
@@ -239,9 +230,7 @@ public sealed class GhostSession
     {
         lock (_gate)
         {
-            Volatile.Write(ref _fetchPtr, 0);
-            _fetchName = null;
-            _load++;
+            _load.Forget();
             Ghost = null;
         }
     }

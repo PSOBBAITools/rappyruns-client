@@ -1,4 +1,5 @@
 using System.Text.Json;
+using RappyRuns.Core.Game;
 using RappyRuns.Core.I18n;
 
 namespace RappyRuns.Core.PinShare;
@@ -29,10 +30,7 @@ public sealed class PinSetTracker
     private readonly object _lock = new();
     private PinSet? _current;
     private IReadOnlyList<string>? _questSlugs;
-    private long? _fetchPtr;
-    private string? _fetchName; // with the pointer, what identifies a load
-    private bool _refetch;      // Refetch asked: the next snapshot adopts the same quest anew
-    private long _load = 1; // S36: bumped per quest load, Refetch and Reset; 0 = none
+    private readonly QuestLoadIdentity _load = new(); // S36/S46: which load is current; under _lock
 
     /// <param name="resolveSlugs">Every category slug matching the quest, primary first (Lisp <c>find-quest-defs</c> → <c>quest-def-slug</c>).</param>
     /// <param name="fetchAllowed">
@@ -71,7 +69,7 @@ public sealed class PinSetTracker
     /// <summary>The quest pointer of the current load; null while none is loaded.</summary>
     public long? FetchPtr
     {
-        get { lock (_lock) return _fetchPtr; }
+        get { lock (_lock) return _load.Ptr; }
     }
 
     /// <summary>
@@ -81,7 +79,7 @@ public sealed class PinSetTracker
     /// </summary>
     public long LoadId
     {
-        get { lock (_lock) return _load; }
+        get { lock (_lock) return _load.Load; }
     }
 
     /// <summary>
@@ -101,31 +99,21 @@ public sealed class PinSetTracker
         long load;
         lock (_lock)
         {
-            if (snapshot.QuestPtr <= 0)
-            {
-                ForgetLoad();
-                return (null, 0);
-            }
-            if (snapshot.QuestName is null) return (null, 0);
-            // A different name at the same pointer is a new load too (no
-            // lobby frame was seen in between).
-            var same = snapshot.QuestPtr == _fetchPtr && snapshot.QuestName == _fetchName;
-            if (same && !_refetch) return (null, 0);
-            _refetch = false;
-            _fetchPtr = snapshot.QuestPtr;
-            _fetchName = snapshot.QuestName;
+            var change = _load.Observe(snapshot.QuestPtr, snapshot.QuestName);
+            if (change == QuestLoadChange.Unloaded) ForgetOwned();
+            if (change is QuestLoadChange.Unchanged or QuestLoadChange.Unloaded) return (null, 0);
             _current = null;
             // A new quest's slugs replace the previous quest's below; until
             // then there are none. A refetch keeps them (same quest).
-            if (!same) _questSlugs = null;
-            load = ++_load;
+            if (change == QuestLoadChange.NewQuest) _questSlugs = null;
+            load = _load.Load;
         }
         var slugs = _resolveSlugs(snapshot);
         var list = slugs.Count > 0 ? slugs : null;
         lock (_lock)
         {
             // A Reset / newer load meanwhile owns the slugs now.
-            if (load != _load) return (null, 0);
+            if (!_load.IsCurrent(load)) return (null, 0);
             _questSlugs = list;
         }
         return (list is not null && _fetchAllowed() ? list : null, load);
@@ -161,7 +149,7 @@ public sealed class PinSetTracker
     {
         lock (_lock)
         {
-            if (load != _load) return false;
+            if (!_load.IsCurrent(load)) return false;
             _current = set;
         }
         if (set is not null) _log?.Invoke($"pin share: drawing pin set \"{set.DisplayName}\"");
@@ -175,16 +163,16 @@ public sealed class PinSetTracker
     /// </summary>
     public void Reset()
     {
-        lock (_lock) ForgetLoad();
+        lock (_lock)
+        {
+            _load.Forget();
+            ForgetOwned();
+        }
     }
 
-    // Callers hold _lock.
-    private void ForgetLoad()
+    // What a forgotten load took with it. Callers hold _lock.
+    private void ForgetOwned()
     {
-        _load++;
-        _fetchPtr = null;
-        _fetchName = null;
-        _refetch = false;
         _questSlugs = null;
         _current = null;
     }
@@ -192,11 +180,7 @@ public sealed class PinSetTracker
     /// <summary>Ask again for the loaded quest's set on the next snapshot (after an overwrite, so the locked copy shows the new pins).</summary>
     public void Refetch()
     {
-        lock (_lock)
-        {
-            _refetch = true;
-            _load++; // the pre-overwrite reply still in flight is stale
-        }
+        lock (_lock) _load.Refetch(); // the pre-overwrite reply still in flight is stale
     }
 
     /// <summary>The Settings line naming the set drawn for the loaded quest (gui.lisp:1229).</summary>
