@@ -1,4 +1,5 @@
 using System.Globalization;
+using RappyRuns.Core;
 using RappyRuns.Core.Media;
 
 namespace RappyRuns.Win.Media;
@@ -272,8 +273,8 @@ public sealed class Win32FfmpegBackend : ICaptureBackend
         }
     }
 
-    /// <summary>uiop:rename-file-overwriting-target.</summary>
-    public void RenameFile(string from, string to) => File.Move(from, to, overwrite: true);
+    /// <summary>uiop:rename-file-overwriting-target, with the data flushed to disk first (S50).</summary>
+    public void RenameFile(string from, string to) => DurableFile.MoveFlushed(from, to);
 
     /// <summary>uiop:delete-file-if-exists.</summary>
     public void DeleteFile(string path)

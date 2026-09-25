@@ -130,9 +130,10 @@ public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = Tr
             var info = new FileInfo(path);
             if (!info.Exists || info.Length <= limit) return;
             var size = info.Length;
-            using (var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-            using (var target = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+            // The cut copy is flushed to disk before it replaces the log (S50).
+            DurableFile.Replace(path, tmp, target =>
             {
+                using var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                 // Start at a line: from one byte before the cut, skip to just
                 // past the next newline (a cut on a line start keeps that line).
                 // The marker and the kept tail together stay under the rotation limit.
@@ -151,8 +152,7 @@ public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = Tr
                 // Say so at the top, as a rotation does, so the file's start is not taken for its history.
                 target.Write(marker);
                 source.CopyTo(target);
-            }
-            File.Move(tmp, path, overwrite: true);
+            });
             report.Add(FormattableString.Invariant(
                 $"trigger log: cut {name} from {size / (1024 * 1024)} MiB to its newest {new FileInfo(path).Length / 1024} KiB"));
         }

@@ -21,15 +21,16 @@ public static class SexpWriter
 
     /// <summary>
     /// Writes one datum to <paramref name="path"/> as UTF-8 without BOM,
-    /// atomically (temp file + replace) so a crash never leaves half a config.
+    /// atomically (temp file flushed to disk, then replace; <see cref="DurableFile"/>)
+    /// so a crash or power cut never leaves half a config.
     /// </summary>
     public static void WriteFile(string path, SexpNode node)
     {
         var dir = Path.GetDirectoryName(Path.GetFullPath(path))!;
         Directory.CreateDirectory(dir);
         var temp = Path.Combine(dir, Path.GetFileName(path) + ".tmp");
-        File.WriteAllText(temp, Write(node), new UTF8Encoding(false));
-        File.Move(temp, path, overwrite: true);
+        var bytes = new UTF8Encoding(false).GetBytes(Write(node));
+        DurableFile.Replace(path, temp, stream => stream.Write(bytes));
     }
 
     private static void Write(SexpNode node, StringBuilder sb)

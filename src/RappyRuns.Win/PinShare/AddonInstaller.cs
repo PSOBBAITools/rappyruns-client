@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using RappyRuns.Core;
 using RappyRuns.Core.PinShare;
 
 namespace RappyRuns.Win.PinShare;
@@ -78,12 +79,7 @@ public sealed class AddonInstaller
     /// of the data (a power cut would otherwise leave an empty file under
     /// the installed name).
     /// </summary>
-    public static void WriteFlushed(string path, byte[] bytes)
-    {
-        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-        stream.Write(bytes);
-        stream.Flush(flushToDisk: true);
-    }
+    public static void WriteFlushed(string path, byte[] bytes) => DurableFile.WriteFlushed(path, bytes);
 
     /// <summary>A shipped file (e.g. init.lua), or null when no bundled folder has it.</summary>
     public string? BundledFile(string name) =>
