@@ -6,6 +6,11 @@ namespace RappyRuns.Core;
 /// unflushed write + rename can leave the real name pointing at an empty or
 /// partial file. Every write here flushes the data to disk before the rename.
 /// </summary>
+/// <remarks>
+/// Not for the recording rename (ffmpeg's output, <c>Win32FfmpegBackend.RenameFile</c>):
+/// that file is written by another process, can be gigabytes, and is renamed
+/// on the poll thread, where a flush of that size would stall run tracking.
+/// </remarks>
 public static class DurableFile
 {
     /// <summary>
@@ -26,25 +31,28 @@ public static class DurableFile
     /// <summary>
     /// Replaces <paramref name="path"/> with new contents: writes
     /// <paramref name="tempPath"/> through <paramref name="write"/>, flushes
-    /// it, then renames it over <paramref name="path"/>. A failure before the
-    /// rename leaves <paramref name="path"/> untouched (the temp file may
-    /// remain; callers that care delete it).
+    /// it, then renames it over <paramref name="path"/>. On failure the error
+    /// is thrown, <paramref name="path"/> is left as it was,
+    /// and the temp file is deleted (best effort).
     /// </summary>
     public static void Replace(string path, string tempPath, Action<Stream> write)
     {
-        WriteFlushed(tempPath, write);
-        File.Move(tempPath, path, overwrite: true);
-    }
-
-    /// <summary>
-    /// Renames a file another writer finished (<paramref name="from"/>, e.g.
-    /// ffmpeg's output) over <paramref name="to"/>, flushing its data to disk
-    /// first.
-    /// </summary>
-    public static void MoveFlushed(string from, string to)
-    {
-        using (var stream = new FileStream(from, FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
-            stream.Flush(flushToDisk: true);
-        File.Move(from, to, overwrite: true);
+        try
+        {
+            WriteFlushed(tempPath, write);
+            File.Move(tempPath, path, overwrite: true);
+        }
+        catch
+        {
+            try
+            {
+                File.Delete(tempPath);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // The original error is the one to report.
+            }
+            throw;
+        }
     }
 }

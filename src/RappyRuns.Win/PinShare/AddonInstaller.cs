@@ -33,7 +33,7 @@ public sealed class AddonInstaller
     /// </param>
     /// <param name="log">The client log.</param>
     /// <param name="universalTime">Seconds since 1900 for the aside name (tests pin it).</param>
-    /// <param name="writeFile">Writes the <c>.new</c> copy; default <see cref="WriteFlushed"/> (tests make it fail).</param>
+    /// <param name="writeFile">Writes the <c>.new</c> copy; default <see cref="DurableFile.WriteFlushed(string, byte[])"/>, flushed to disk before the rename that follows (tests make it fail).</param>
     /// <param name="moveFile">Renames during the DLL swap; default <see cref="File.Move(string, string)"/> (tests make it fail).</param>
     /// <param name="replaceFile">
     /// Renames the addon's <c>init.lua.new</c> over init.lua; default
@@ -45,7 +45,7 @@ public sealed class AddonInstaller
         _bundledDirs = bundledDirs ?? DefaultBundledDirs();
         _log = log;
         _universalTime = universalTime ?? (() => DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 2208988800L);
-        _writeFile = writeFile ?? WriteFlushed;
+        _writeFile = writeFile ?? DurableFile.WriteFlushed;
         _moveFile = moveFile ?? File.Move;
         _replaceFile = replaceFile ?? ((from, to) => File.Move(from, to, overwrite: true));
     }
@@ -72,14 +72,6 @@ public sealed class AddonInstaller
         }
         return dirs;
     }
-
-    /// <summary>
-    /// Writes <paramref name="bytes"/> and flushes them to disk before
-    /// returning, so the rename that follows can never reach the disk ahead
-    /// of the data (a power cut would otherwise leave an empty file under
-    /// the installed name).
-    /// </summary>
-    public static void WriteFlushed(string path, byte[] bytes) => DurableFile.WriteFlushed(path, bytes);
 
     /// <summary>A shipped file (e.g. init.lua), or null when no bundled folder has it.</summary>
     public string? BundledFile(string name) =>

@@ -24,6 +24,7 @@ public class DurableFileTests
         File.WriteAllText(path, "old");
         Assert.Throws<IOException>(() => DurableFile.Replace(path, path + ".tmp", _ => throw new IOException("disk full")));
         Assert.Equal("old", File.ReadAllText(path));
+        Assert.False(File.Exists(path + ".tmp")); // no half-written temp left behind
     }
 
     [Fact(DisplayName = "durable file: write-flushed creates or truncates (S50)")]
@@ -34,18 +35,5 @@ public class DurableFileTests
         File.WriteAllText(path, "a much longer old body");
         DurableFile.WriteFlushed(path, "short"u8.ToArray());
         Assert.Equal("short", File.ReadAllText(path));
-    }
-
-    [Fact(DisplayName = "durable file: move-flushed renames a finished file over the target (S50)")]
-    public void MoveFlushedOverwrites()
-    {
-        using var dir = new TempDir("rr-durable");
-        var from = dir.File("run.tmp.mp4");
-        var to = dir.File("run.mp4");
-        File.WriteAllText(from, "video");
-        File.WriteAllText(to, "stale");
-        DurableFile.MoveFlushed(from, to);
-        Assert.Equal("video", File.ReadAllText(to));
-        Assert.False(File.Exists(from));
     }
 }
