@@ -261,6 +261,8 @@ public sealed class AuthService
                     case PairingPollStatus.Gone:
                         return new PairingResult(PairingOutcome.Expired);
                     case PairingPollStatus.Complete:
+                        // A token pasted while this poll was out wins too (S49).
+                        if (!Tokens.IsUnlinked(_settings.ApiToken)) return new PairingResult(PairingOutcome.Superseded);
                         FinishPairing(poll.Token!);
                         return new PairingResult(PairingOutcome.Completed, poll.Token);
                 }

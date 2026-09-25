@@ -87,6 +87,41 @@ public class AuthServiceTests
         Assert.Equal("eta_pasted", settings.ApiToken);
     }
 
+    [Fact(DisplayName = "pairing: a token pasted while the completing poll was out wins (S49)")]
+    public async Task PairingSupersededDuringPoll()
+    {
+        FakeSettings? s = null;
+        var linked = false;
+        var (auth, _, settings) = Make(r =>
+        {
+            if (r.Method == "POST") return (201, """{"code":"C"}""");
+            s!.ApiToken = "eta_pasted";
+            return (200, """{"token":"eta_new"}""");
+        });
+        s = settings;
+        auth.TokenLinked += _ => linked = true;
+        Assert.Equal(PairingOutcome.Superseded, (await auth.RunPairingAsync(_ => { })).Outcome);
+        Assert.Equal("eta_pasted", settings.ApiToken);
+        Assert.False(linked);
+    }
+
+    [Fact(DisplayName = "login.txt: a token set while the login was out wins (S49)")]
+    public async Task FileLoginSuperseded()
+    {
+        FakeSettings? s = null;
+        var linked = false;
+        var (auth, _, settings) = Make(_ =>
+        {
+            s!.ApiToken = "eta_pasted";
+            return (201, """{"token":"eta_new"}""");
+        }, new FakeSettings { ApiToken = "eta_old" });
+        s = settings;
+        auth.TokenLinked += _ => linked = true;
+        Assert.Equal(FileLoginOutcome.Superseded, (await auth.LoginWithCredentialsAsync("u", "p")).Outcome);
+        Assert.Equal("eta_pasted", settings.ApiToken);
+        Assert.False(linked);
+    }
+
     [Fact(DisplayName = "pairing: failing to start reports pairing-failed in red")]
     public async Task PairingFailsToStart()
     {

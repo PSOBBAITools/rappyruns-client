@@ -436,7 +436,7 @@ JSON の数値: 浮動小数 (座標等) は **単精度の最短表現** (`12.3
 3. `ceiling(expires_in / interval)` 回、`interval` 秒待って `GET /api/pair/{code}`。
    - 停止要求、または待機中に api-token が設定された → 中止。
    - transport エラー (api-error) は pending 扱いで継続。
-   - gone → 「期限切れ」、complete → `finish-pairing(token)`。
+   - gone → 「期限切れ」、complete → `finish-pairing(token)` (C# 版 S49: その応答を待つ間にトークンが貼られていたら、それを優先して finish-pairing しない)。
    - 回数を使い切ったら「期限切れ」。
 4. 開始自体の失敗 → 赤字で失敗表示 (次回起動で再試行)。
 5. 同時に 1 ワーカーのみ。
@@ -444,7 +444,7 @@ JSON の数値: 浮動小数 (座標等) は **単精度の最短表現** (`12.3
 ### 8.3 login.txt (`credentials.lisp`, `gui.lisp:836`)
 - 場所: exe と同じフォルダの `login.txt` (`lw:lisp-image-name` 基準)。
 - 解析 (`parse-credentials`): 行分割 (`\n`)、各行を Space/Tab/CR/U+FEFF でトリム、空行と `#` 始まりを無視、最初の `=` で分割、キーは小文字化・トリム、`username`/`password` のみ採用 (後勝ち)。両方非空でなければ (NIL, NIL)。**パスワードに `=` を含められる**。UTF-8 で読めなければ (NIL, NIL)。
-- フロー: 読めない → `:file-login-bad-file` 赤字。`POST /api/login {username, password, label: "Desktop client (<Machine>) [login.txt]"}` → ok なら `finish-pairing`、401 → `:file-login-invalid`、エラー → `:file-login-failed`。ブラウザペアリングは決して併発させない。
+- フロー: 読めない → `:file-login-bad-file` 赤字。`POST /api/login {username, password, label: "Desktop client (<Machine>) [login.txt]"}` → ok なら `finish-pairing` (C# 版 S49: ログインを始めた後に設定のトークンが変わっていたら、それを優先して finish-pairing しない)、401 → `:file-login-invalid`、エラー → `:file-login-failed`。ブラウザペアリングは決して併発させない。
 - 起動条件: (a) api-token 空 + login.txt あり (起動時)、(b) `check-token` が 401 を得た + login.txt あり (失効トークンの自己修復)。
 
 ### 8.4 匿名ゲスト (`store.lisp:66 ensure-submission-token`)
