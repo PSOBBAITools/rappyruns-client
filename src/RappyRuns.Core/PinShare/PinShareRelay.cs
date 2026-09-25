@@ -89,15 +89,17 @@ public sealed partial class PinShareRelay
     /// none. <see cref="RelayAlert.Code"/> is a stable token the addon may
     /// word itself; <see cref="RelayAlert.Message"/> is the English fallback
     /// it shows for a code it does not know, so a later client can add codes
-    /// without an addon update. <see cref="AlertAddonOutdated"/> carries the
-    /// installed version as its argument: in.txt is shared by every game
-    /// window on the install, and the addon that last spoke need not be the
-    /// one reading, so each addon compares its own version with it. Every
-    /// input changes only in <see cref="Consume"/> / <see cref="SkipBacklog"/>
-    /// or per session, which already mark in.txt dirty.
+    /// without an addon update. <see cref="AlertAddonOutdated"/> is
+    /// conditional: its argument is the installed version, and only an addon
+    /// older than that shows it. in.txt is shared by every game window on the
+    /// install and <see cref="AddonOutdated"/> reflects whichever addon sent
+    /// its name last, so the line goes out whenever an addon has spoken to
+    /// this session and a version is installed, and each window judges
+    /// itself. Every input changes only in <see cref="Consume"/> /
+    /// <see cref="SkipBacklog"/> or per session, which already mark in.txt dirty.
     /// </summary>
     public IReadOnlyList<RelayAlert> Alerts =>
-        AddonOutdated
+        NameSeen && InstalledAddonVersion > 0
             ? [new RelayAlert(AlertAddonOutdated, AlertAddonOutdatedMessage, InstalledAddonVersion.ToString(CultureInfo.InvariantCulture))]
             : [];
 

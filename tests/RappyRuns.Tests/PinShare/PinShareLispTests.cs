@@ -225,7 +225,7 @@ public class PinShareLispTests
     private static readonly Dictionary<int, string> KnownAddonHashes = new()
     {
         [1] = "354b9500e70b9b1be0c407323153fc075f8ba43c118bea5861115c3d2f05586b",
-        [2] = "2c1f1cb0834fecbd20ee4205e745cca0f2a5148d2f073cb6737a4635f8871473", // S47: reads and shows in.txt's alert line
+        [2] = "ea59c6a2f5937703d81cdd0cd75cbef3bd4a469445f19c4a471239e102f1fbd7", // S47: reads and shows in.txt's alert line
     };
 
     [Theory(DisplayName = "addon version: read from the installed init.lua; none reads as 0")]
@@ -343,22 +343,22 @@ public class PinShareLispTests
     [Fact(DisplayName = "the rendered text ends the way readInbox's terminator check wants")]
     public void InboxTerminator() => Assert.EndsWith("\nend\n", Inbox.Render(AfterRename(), 1), StringComparison.Ordinal);
 
-    [Fact(DisplayName = "in.txt: an outdated addon gets an alert line after status; the next version's Reload clears it (S47)")]
+    [Fact(DisplayName = "in.txt: once an addon has spoken, the addon_outdated alert carries the installed version for each window to judge (S47)")]
     public void InboxAlertOutdated()
     {
         var relay = new PinShareRelay { Session = "abcd1234", Channel = "secret" }.SkipBacklog([]);
         relay.SetStatus("connected", "");
-        // An addon from version 2 on, older than the one installed next to the game.
         relay.InstalledAddonVersion = 3;
         relay.Consume(Lines(["1", "version", "2"]), true);
-        Assert.Empty(relay.Alerts); // no name yet: not judged
-        // The name is what turns the alert on; that same command marks in.txt
-        // dirty, so the alert goes out with the next write.
+        Assert.Empty(relay.Alerts); // no name yet: no addon has introduced itself to this session
+        // The name is what turns the line on; that same command marks in.txt
+        // dirty, so it goes out with the next write.
         relay.Dirty = false;
         relay.Consume(Lines(["2", "name", "Teapot"]), true);
         Assert.True(relay.Dirty);
-        // The installed version rides along: each game window sharing this
-        // in.txt compares its own version with it.
+        // in.txt is shared by every game window on the install, and the
+        // client only knows the addon that spoke last: the line says which
+        // version is installed, and only an addon older than that shows it.
         Assert.Equal(
             TabLine("session", "abcd1234")
             + TabLine("time", 1)
@@ -368,27 +368,17 @@ public class PinShareLispTests
             + TabLine("channel", "secret")
             + TabLine("end"),
             Inbox.Render(relay, 1));
-        // Reload: the new script sends the installed version, and the line goes.
+        // A current window speaking last does not take the line away from an older one.
         relay.Consume(Lines(["3", "version", "3"], ["4", "name", "Teapot"]), true);
-        Assert.Empty(relay.Alerts);
-        Assert.DoesNotContain("\nalert\t", Inbox.Render(relay, 1), StringComparison.Ordinal);
+        Assert.False(relay.AddonOutdated);
+        Assert.Equal(new RelayAlert(PinShareRelay.AlertAddonOutdated, PinShareRelay.AlertAddonOutdatedMessage, "3"), Assert.Single(relay.Alerts));
     }
 
-    [Fact(DisplayName = "in.txt: an addon from before versions gets the alert with the installed version (S47)")]
-    public void AlertForUnversionedAddon()
-    {
-        var relay = new PinShareRelay { InstalledAddonVersion = 2 };
-        relay.Consume(Lines(["1", "name", "Teapot"]), false);
-        Assert.Equal(new RelayAlert(PinShareRelay.AlertAddonOutdated, PinShareRelay.AlertAddonOutdatedMessage, "2"), Assert.Single(relay.Alerts));
-    }
-
-    [Fact(DisplayName = "in.txt: no alert before the addon is judged or for a current or unversioned install (S47)")]
+    [Fact(DisplayName = "in.txt: no alert before an addon speaks or for an unversioned install (S47)")]
     public void InboxNoAlert()
     {
-        var relay = new PinShareRelay { Session = "abcd1234" }.SkipBacklog([]);
-        Assert.Empty(relay.Alerts); // nothing from the addon yet
-        relay.Consume(Lines(["1", "version", PinShareRelay.BundledAddonVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)], ["2", "name", "Teapot"]), false);
-        Assert.Empty(relay.Alerts);
+        var relay = new PinShareRelay { Session = "abcd1234" }.SkipBacklog(Lines(["1", "name", "Teapot"]));
+        Assert.Empty(relay.Alerts); // the backlog's name is not this session's
         var linked = new PinShareRelay { InstalledAddonVersion = 0 };
         linked.Consume(Lines(["1", "name", "Teapot"]), false);
         Assert.Empty(linked.Alerts);
@@ -402,13 +392,16 @@ public class PinShareLispTests
         Assert.Contains("elseif kind == \"alert\" then", lua, StringComparison.Ordinal);
         // Every alert line is kept, not only the last.
         Assert.Contains("table.insert(newRelay.alerts,", lua, StringComparison.Ordinal);
+        // Each window judges the outdated alert by its own version.
         Assert.Contains($"a.code == \"{PinShareRelay.AlertAddonOutdated}\"", lua, StringComparison.Ordinal);
-        // readInbox is an if/elseif chain on the line kind with no else, in
-        // version 1 as now: an unknown kind (alert, for a version 1 addon;
-        // a later kind, for this one) falls through untouched.
-        var readInbox = lua[lua.IndexOf("local function readInbox()", StringComparison.Ordinal)..];
-        readInbox = readInbox[..readInbox.IndexOf("\nend\n", StringComparison.Ordinal)];
-        Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"(?m)^\s*else\b"), readInbox);
+        Assert.Contains("ADDON_VERSION < installed", lua, StringComparison.Ordinal);
+        // readInbox's per-line loop is an if/elseif chain on the line kind
+        // with no else (version 1's is the same chain minus alert): an
+        // unknown kind (alert, for a version 1 addon; a later kind, for this
+        // one) falls through untouched.
+        var start = lua.IndexOf("for line in text:gmatch(\"[^\\n]+\") do", StringComparison.Ordinal);
+        var chain = lua[start..lua.IndexOf("relay.session = newRelay.session", start, StringComparison.Ordinal)];
+        Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"(?m)^\s*else\b"), chain);
     }
 
     [Fact(DisplayName = "a server error message is returned for the log, state untouched")]
