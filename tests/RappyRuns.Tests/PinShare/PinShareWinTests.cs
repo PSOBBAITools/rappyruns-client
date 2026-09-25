@@ -451,10 +451,10 @@ public class PinSharePermissionAndFetchTests
         var tracker = new PinSetTracker(
             q => q.QuestName == "none" ? [] : ["ep1-a", "ep1-b"],
             () => allowed,
-            (slug, extra, _) =>
+            (slug, extra, _, _) =>
             {
                 fetches.Add((slug, extra));
-                return Task.FromResult<JsonElement?>(Json("""{"id":3,"name":"S","author":"T","mine":1,"items":{"pins":[]}}"""));
+                return Task.FromResult(new PinSetResponse(Json("""{"id":3,"name":"S","author":"T","mine":1,"items":{"pins":[]}}""")));
             });
         await tracker.OnSnapshot(new PinShareQuest(10, "A"))!;
         Assert.Equal("S", tracker.Current!.DisplayName);
@@ -485,20 +485,81 @@ public class PinSharePermissionAndFetchTests
             new PinSetTracker(_ => ["x"], () => false).Also(t => t.FetchWanted(new PinShareQuest(1, "Q"))).PinSetText(RappyRuns.Core.I18n.Language.En));
     }
 
+    [Fact(DisplayName = "pin sets: re-asked with the ETag while the quest stays loaded; only a change swaps the drawn set")]
+    public async Task ReaskWhileLoaded()
+    {
+        long now = 0;
+        var asked = new List<string?>();
+        var replies = new Queue<Func<PinSetResponse>>();
+        var tracker = new PinSetTracker(_ => ["ep1-a"], () => true, (_, _, etag, _) =>
+        {
+            asked.Add(etag);
+            return Task.FromResult(replies.Dequeue()());
+        }, nowMs: () => now);
+        PinSetResponse Set(string name, string etag) => new(Json($$$"""{"name":"{{{name}}}","items":{"pins":[]}}"""), etag);
+        var quest = new PinShareQuest(10, "A");
+
+        replies.Enqueue(() => Set("v1", "\"e1\""));
+        await tracker.OnSnapshot(quest)!;
+        var v1 = tracker.Current!;
+        Assert.Null(tracker.OnSnapshot(quest)); // not due yet
+        Assert.Null(tracker.OnSnapshot(null)); // a failed read never re-asks
+
+        // Unchanged: a 304 (or the same body without an ETag) keeps the very same PinSet, so the relay does not redraw.
+        now += (long)PinSetTracker.RefreshInterval.TotalMilliseconds;
+        replies.Enqueue(() => new PinSetResponse(null, "\"e1\"", NotModified: true));
+        await tracker.OnSnapshot(quest)!;
+        Assert.Same(v1, tracker.Current);
+        now += (long)PinSetTracker.RefreshInterval.TotalMilliseconds;
+        replies.Enqueue(() => Set("v1", "\"e1\""));
+        await tracker.OnSnapshot(quest)!;
+        Assert.Same(v1, tracker.Current);
+
+        // Edited on the site: the new set replaces it.
+        now += (long)PinSetTracker.RefreshInterval.TotalMilliseconds;
+        replies.Enqueue(() => Set("v2", "\"e2\""));
+        await tracker.OnSnapshot(quest)!;
+        Assert.Equal("v2", tracker.Current!.DisplayName);
+
+        // A failed re-ask keeps what is drawn and waits the backoff, not the interval.
+        now += (long)PinSetTracker.RefreshInterval.TotalMilliseconds;
+        replies.Enqueue(() => throw new InvalidOperationException("offline"));
+        await tracker.OnSnapshot(quest)!;
+        Assert.Equal("v2", tracker.Current!.DisplayName);
+        now += (long)PinSetTracker.RefreshInterval.TotalMilliseconds;
+        Assert.Null(tracker.OnSnapshot(quest));
+        now += (long)PinSetTracker.FailureBackoff.TotalMilliseconds;
+
+        // Unchosen or made private on the site: nothing is drawn, and the next re-ask sends no ETag.
+        replies.Enqueue(() => new PinSetResponse(null));
+        await tracker.OnSnapshot(quest)!;
+        Assert.Null(tracker.Current);
+        now += (long)PinSetTracker.RefreshInterval.TotalMilliseconds;
+        replies.Enqueue(() => Set("v3", "\"e3\""));
+        await tracker.OnSnapshot(quest)!;
+        Assert.Equal("v3", tracker.Current!.DisplayName);
+        Assert.Equal([null, "\"e1\"", "\"e1\"", "\"e1\"", "\"e2\"", "\"e2\"", null], asked);
+
+        // Back in the lobby: no re-asks.
+        now += (long)PinSetTracker.RefreshInterval.TotalMilliseconds;
+        Assert.Null(tracker.OnSnapshot(new PinShareQuest(0, null)));
+        Assert.Null(tracker.OnSnapshot(new PinShareQuest(0, null)));
+    }
+
     [Fact(DisplayName = "pin sets: a late reply for an earlier load at the same address, or from before a Refetch or Reset, is dropped (S36)")]
     public async Task LateReplySameAddress()
     {
         // The fetch runs on a pool thread: each call hands the test its reply to complete.
-        using var replies = new System.Collections.Concurrent.BlockingCollection<TaskCompletionSource<JsonElement?>>();
-        TaskCompletionSource<JsonElement?> Next() =>
+        using var replies = new System.Collections.Concurrent.BlockingCollection<TaskCompletionSource<PinSetResponse>>();
+        TaskCompletionSource<PinSetResponse> Next() =>
             replies.TryTake(out var reply, TimeSpan.FromSeconds(10)) ? reply : throw new TimeoutException("no fetch started");
-        var tracker = new PinSetTracker(_ => ["ep1-a"], () => true, (_, _, _) =>
+        var tracker = new PinSetTracker(_ => ["ep1-a"], () => true, (_, _, _, _) =>
         {
-            var reply = new TaskCompletionSource<JsonElement?>();
+            var reply = new TaskCompletionSource<PinSetResponse>();
             replies.Add(reply);
             return reply.Task;
         });
-        JsonElement Set(string name) => Json($$$"""{"name":"{{{name}}}","items":{"pins":[]}}""");
+        PinSetResponse Set(string name) => new(Json($$$"""{"name":"{{{name}}}","items":{"pins":[]}}"""));
 
         var old = tracker.OnSnapshot(new PinShareQuest(10, "A"))!;
         var first = Next();

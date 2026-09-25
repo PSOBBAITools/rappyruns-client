@@ -12,25 +12,46 @@ namespace RappyRuns.Core.PinShare;
 public sealed record PinShareQuest(long QuestPtr, string? QuestName, int? QuestNumber = null, int? Episode = null);
 
 /// <summary>
+/// One pin-set fetch's answer: the set's payload and ETag on 200, no payload
+/// on 404 (none chosen, or the set went private), <see cref="NotModified"/>
+/// on 304 (the set is still the one the ETag names).
+/// </summary>
+public sealed record PinSetResponse(JsonElement? Payload, string? ETag = null, bool NotModified = false);
+
+/// <summary>
 /// The pin set chosen on the site for the loaded quest: when to fetch it,
 /// and what is current (Lisp <c>*pinshare-pin-set*</c>,
 /// <c>*pinshare-quest-slugs*</c>, <c>*pinshare-set-fetch-ptr*</c>,
 /// <c>pinshare-set-fetch-wanted</c> pinshare.lisp:663 and
-/// <c>maybe-start-pin-set-fetch</c> pinshare-win32.lisp:500). Fetched once
-/// per quest load - the same pointer rule as the ghost. Thread-safe: the
-/// poll loop feeds snapshots, the fetch lands on a pool thread, the relay
-/// and the UI read.
+/// <c>maybe-start-pin-set-fetch</c> pinshare-win32.lisp:500). Fetched when
+/// a quest loads - the same pointer rule as the ghost - and re-asked every
+/// <see cref="RefreshInterval"/> while it stays loaded, so a set edited or
+/// chosen on the site shows up in-game within seconds (the ETag makes an
+/// unchanged set a bodiless 304). Thread-safe: the poll loop feeds
+/// snapshots, the fetch lands on a pool thread, the relay and the UI read.
 /// </summary>
 public sealed class PinSetTracker
 {
+    /// <summary>How often the loaded quest's set is re-asked.</summary>
+    public static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
+
+    /// <summary>The wait after a failed fetch (offline, token revoked) - not a request every few seconds that is bound to fail.</summary>
+    public static readonly TimeSpan FailureBackoff = TimeSpan.FromSeconds(60);
+
     private readonly Func<PinShareQuest, IReadOnlyList<string>> _resolveSlugs;
     private readonly Func<bool> _fetchAllowed;
-    private readonly Func<string, IReadOnlyList<string>, CancellationToken, Task<JsonElement?>>? _fetch;
+    private readonly Func<string, IReadOnlyList<string>, string?, CancellationToken, Task<PinSetResponse>>? _fetch;
     private readonly Action<string>? _log;
+    private readonly Func<long> _nowMs;
     private readonly object _lock = new();
     private PinSet? _current;
     private IReadOnlyList<string>? _questSlugs;
     private readonly QuestLoadIdentity _quest = new(); // S36/S46: which load is current; under _lock
+    // Re-ask state, under _lock: the drawn set's ETag, when the next re-ask
+    // is due, and the load a fetch is in flight for (0 = none).
+    private string? _etag;
+    private long _nextFetchMs;
+    private long _inFlightLoad;
 
     /// <param name="resolveSlugs">Every category slug matching the quest, primary first (Lisp <c>find-quest-defs</c> → <c>quest-def-slug</c>).</param>
     /// <param name="fetchAllowed">
@@ -39,19 +60,23 @@ public sealed class PinSetTracker
     /// </param>
     /// <param name="fetch">
     /// <c>GET /api/quests/&lt;slug&gt;/pins?slugs=&lt;rest,...&gt;</c> with the
-    /// linked token: the payload on 200, null on 404 (none chosen, or the set
-    /// went private); throws on auth and transport failures.
+    /// linked token and the ETag to send as If-None-Match (null when no set
+    /// is drawn): see <see cref="PinSetResponse"/>; throws on auth and
+    /// transport failures.
     /// </param>
+    /// <param name="nowMs">A monotonic clock in ms; tests pass a fake.</param>
     public PinSetTracker(
         Func<PinShareQuest, IReadOnlyList<string>> resolveSlugs,
         Func<bool> fetchAllowed,
-        Func<string, IReadOnlyList<string>, CancellationToken, Task<JsonElement?>>? fetch = null,
-        Action<string>? log = null)
+        Func<string, IReadOnlyList<string>, string?, CancellationToken, Task<PinSetResponse>>? fetch = null,
+        Action<string>? log = null,
+        Func<long>? nowMs = null)
     {
         _resolveSlugs = resolveSlugs;
         _fetchAllowed = fetchAllowed;
         _fetch = fetch;
         _log = log;
+        _nowMs = nowMs ?? (() => Environment.TickCount64);
     }
 
     /// <summary>The set to draw for the loaded quest, or null.</summary>
@@ -131,27 +156,81 @@ public sealed class PinSetTracker
 
     /// <summary>
     /// Feeds one poll snapshot; when a quest just loaded, fetches its set in
-    /// the background. The result lands only if that quest load is still
-    /// current; the relay picks it up on its next tick. Returns the fetch
-    /// task (for tests), or null when none started.
+    /// the background, and while it stays loaded re-asks every
+    /// <see cref="RefreshInterval"/>. A result lands only if that quest load
+    /// is still current; the relay picks it up on its next tick. Returns the
+    /// fetch task (for tests), or null when none started.
     /// </summary>
     public Task? OnSnapshot(PinShareQuest? snapshot, CancellationToken cancellationToken = default)
     {
         var (slugs, load) = Wanted(snapshot);
-        if (slugs is null || _fetch is null) return null;
-        return Task.Run(async () =>
+        if (_fetch is null) return null;
+        if (slugs is not null)
         {
-            PinSet? set = null;
+            lock (_lock)
+            {
+                if (!_quest.IsCurrent(load)) return null;
+                _etag = null;
+                _inFlightLoad = load;
+            }
+            return Fetch(slugs, load, null, revalidating: false, cancellationToken);
+        }
+        // A failed read (null snapshot) changes nothing, as in Wanted.
+        if (snapshot is null || snapshot.QuestPtr == 0 || !ReaskDue() || !_fetchAllowed()) return null;
+        string? etag;
+        lock (_lock)
+        {
+            if (!ReaskDue()) return null; // a Reset or another fetch got in between
+            slugs = _questSlugs!;
+            load = _quest.Load;
+            etag = _etag;
+            _inFlightLoad = load;
+        }
+        return Fetch(slugs, load, etag, revalidating: true, cancellationToken);
+    }
+
+    // A quest with slugs is loaded, nothing is in flight and the interval passed.
+    private bool ReaskDue()
+    {
+        lock (_lock) return _questSlugs is not null && _quest.Ptr is not null && _inFlightLoad == 0 && _nowMs() >= _nextFetchMs;
+    }
+
+    private Task Fetch(IReadOnlyList<string> slugs, long load, string? etag, bool revalidating,
+        CancellationToken cancellationToken) =>
+        Task.Run(async () =>
+        {
+            PinSetResponse? response = null;
             try
             {
-                set = PinSet.FromFetch(await _fetch(slugs[0], [.. slugs.Skip(1)], cancellationToken).ConfigureAwait(false));
+                response = await _fetch!(slugs[0], [.. slugs.Skip(1)], etag, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception e)
             {
                 _log?.Invoke($"pin set fetch failed: {e.Message}");
             }
-            Land(load, set);
+            Landed(load, revalidating, response);
         }, CancellationToken.None);
+
+    // A failed first fetch draws nothing (as before); a failed re-ask keeps
+    // what is drawn. Either way the next try waits FailureBackoff. A re-ask
+    // that finds the set unchanged - a 304, or the same body from a server
+    // that sends no ETag - leaves the drawn PinSet alone, so the relay does
+    // not redraw it.
+    private void Landed(long load, bool revalidating, PinSetResponse? response)
+    {
+        PinSet? set;
+        lock (_lock)
+        {
+            if (_inFlightLoad == load) _inFlightLoad = 0;
+            if (!_quest.IsCurrent(load)) return;
+            _nextFetchMs = _nowMs() + (long)(response is null ? FailureBackoff : RefreshInterval).TotalMilliseconds;
+            if (revalidating && (response is null or { NotModified: true })) return;
+            set = PinSet.FromFetch(response?.Payload);
+            if (revalidating && set?.Payload.GetRawText() == _current?.Payload.GetRawText()) return;
+            _etag = set is null ? null : response!.ETag;
+        }
+        if (!Land(load, set) || !revalidating) return;
+        if (set is null) _log?.Invoke("pin share: the pin set is no longer chosen on the site");
     }
 
     /// <summary>Adopts a fetched set when <paramref name="load"/> (<see cref="LoadId"/> at the fetch) is still the current load; true when adopted.</summary>
@@ -185,6 +264,7 @@ public sealed class PinSetTracker
     {
         _questSlugs = null;
         _current = null;
+        _etag = null;
     }
 
     /// <summary>Ask again for the loaded quest's set on the next snapshot (after an overwrite, so the locked copy shows the new pins).</summary>

@@ -14,12 +14,16 @@ internal sealed record SeenRequest(
     string? ContentType,
     string? UserAgent,
     string? Accept,
-    long? ContentLength);
+    long? ContentLength,
+    string? IfNoneMatch = null);
 
 /// <summary>An in-memory HTTP server: records requests, answers with a scripted responder.</summary>
 internal sealed class FakeHandler(Func<SeenRequest, (int Status, string Body)> respond) : HttpMessageHandler
 {
     public List<SeenRequest> Requests { get; } = [];
+
+    /// <summary>The ETag every response carries, if any.</summary>
+    public string? ETag { get; init; }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -34,14 +38,17 @@ internal sealed class FakeHandler(Func<SeenRequest, (int Status, string Body)> r
             request.Content?.Headers.TryGetValues("Content-Type", out var ct) == true ? string.Join(",", ct) : null,
             request.Headers.TryGetValues("User-Agent", out var ua) ? string.Join(" ", ua) : null,
             request.Headers.TryGetValues("Accept", out var accept) ? string.Join(",", accept) : null,
-            request.Content?.Headers.ContentLength);
+            request.Content?.Headers.ContentLength,
+            request.Headers.TryGetValues("If-None-Match", out var inm) ? string.Join(",", inm) : null);
         lock (Requests) Requests.Add(seen);
         var (status, body) = respond(seen);
-        return new HttpResponseMessage((HttpStatusCode)status)
+        var response = new HttpResponseMessage((HttpStatusCode)status)
         {
             Content = new ByteArrayContent(Encoding.UTF8.GetBytes(body)),
             RequestMessage = request,
         };
+        if (ETag is not null) response.Headers.TryAddWithoutValidation("ETag", ETag);
+        return response;
     }
 
     /// <summary>A fixed answer for every request.</summary>

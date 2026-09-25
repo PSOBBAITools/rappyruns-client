@@ -291,6 +291,16 @@ public class ApiClientTests
         Assert.Null(h2.Requests[0].Authorization);
         await Assert.ThrowsAsync<ApiException>(() => Api.Make(401).Client.FetchPinSetAsync("q"));
         await Assert.ThrowsAsync<ApiException>(() => Api.Make(503).Client.FetchPinSetAsync("q"));
+        var (unchanged, h3, _) = Api.Make(304, "", Linked);
+        var same = await unchanged.FetchPinSetAsync("q", etag: "\"pins-1\"");
+        Assert.True(same.NotModified);
+        Assert.Equal("\"pins-1\"", same.ETag);
+        Assert.Equal("\"pins-1\"", h3.Requests[0].IfNoneMatch);
+        Assert.Null(handler.Requests[0].IfNoneMatch);
+        var tagged = new FakeHandler(_ => (200, """{"id":7,"items":{}}""")) { ETag = "\"pins-2\"" };
+        var fresh = await new ApiClient(new HttpTransport(tagged), Linked).FetchPinSetAsync("q", etag: "\"pins-1\"");
+        Assert.False(fresh.NotModified);
+        Assert.Equal("\"pins-2\"", fresh.ETag);
     }
 
     [Theory(DisplayName = "pin set save status mapping")]

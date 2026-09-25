@@ -205,10 +205,11 @@ public sealed record QuestRuleResult(QuestRuleOutcome Outcome, JsonNode? Payload
 public sealed record GhostFetchResult(bool Found, string? Body, JsonNode? Payload);
 
 /// <summary>
-/// GET /api/quests/{slug}/pins: <see cref="Found"/> on 200 with the parsed set;
-/// not found on 404 (no set chosen, or it went private).
+/// GET /api/quests/{slug}/pins: <see cref="Found"/> on 200 with the parsed set and
+/// its <see cref="ETag"/>; not found on 404 (no set chosen, or it went private);
+/// <see cref="NotModified"/> on 304 (the If-None-Match still names the set).
 /// </summary>
-public sealed record PinSetFetchResult(bool Found, JsonNode? Payload);
+public sealed record PinSetFetchResult(bool Found, JsonNode? Payload, string? ETag = null, bool NotModified = false);
 
 /// <summary>POST /api/pin-sets[/{id}/items] outcomes (<c>save-pin-set</c>).</summary>
 public enum PinSetSaveOutcome

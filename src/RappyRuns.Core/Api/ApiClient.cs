@@ -272,18 +272,22 @@ public sealed class ApiClient(HttpTransport transport, IAuthSettings settings)
 
     /// <summary>
     /// GET /api/quests/{slug}/pins?slugs=... (L): the pin set chosen on the site for the
-    /// loaded quest. 200 → found, 404 → none (none chosen, or it went private);
+    /// loaded quest. 200 → found, 404 → none (none chosen, or it went private),
+    /// 304 → unchanged since <paramref name="etag"/> (sent as If-None-Match);
     /// 401 and anything else throw.
     /// </summary>
     public async Task<PinSetFetchResult> FetchPinSetAsync(string slug, IReadOnlyList<string>? extraSlugs = null,
-        string? token = null, CancellationToken cancellationToken = default)
+        string? token = null, string? etag = null, CancellationToken cancellationToken = default)
     {
         var path = Urls.PinsPath(slug, extraSlugs);
-        var r = await Transport.SendAsync("GET", Url(path), token: LinkedToken(token), cancellationToken: cancellationToken)
+        var headers = etag is null ? null : new[] { KeyValuePair.Create("If-None-Match", etag) };
+        var r = await Transport.SendAsync("GET", Url(path), token: LinkedToken(token), headers: headers,
+                cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         return r.Status switch
         {
-            200 => new PinSetFetchResult(true, ApiJson.TryParse(r.Body)),
+            200 => new PinSetFetchResult(true, ApiJson.TryParse(r.Body), r.ETag),
+            304 => new PinSetFetchResult(true, null, etag, NotModified: true),
             404 => new PinSetFetchResult(false, null),
             401 => throw ApiException.InvalidToken(),
             _ => throw new ApiException($"GET {path} -> {r.Status}") { Status = r.Status },

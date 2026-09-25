@@ -6,8 +6,8 @@ using System.Text;
 
 namespace RappyRuns.Core.Api;
 
-/// <summary>Status code and UTF-8 decoded body of a completed request.</summary>
-public sealed record HttpResult(int Status, string Body);
+/// <summary>Status code and UTF-8 decoded body of a completed request, plus the response's ETag when it sent one.</summary>
+public sealed record HttpResult(int Status, string Body, string? ETag = null);
 
 /// <summary>
 /// Per-phase timeouts, approximating WinHttpSetTimeouts (spec core §6).
@@ -117,7 +117,7 @@ public sealed class HttpTransport : IDisposable
             using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token)
                 .ConfigureAwait(false);
             var bytes = await ReadBodyAsync(response, _normal.Receive, cts).ConfigureAwait(false);
-            return new HttpResult((int)response.StatusCode, Encoding.UTF8.GetString(bytes));
+            return new HttpResult((int)response.StatusCode, Encoding.UTF8.GetString(bytes), response.Headers.ETag?.ToString());
         }
         catch (Exception ex) when (Map(ex, method, url, cancellationToken) is { } mapped)
         {

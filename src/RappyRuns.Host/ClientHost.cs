@@ -137,10 +137,11 @@ public sealed class ClientHost : IDisposable
         PinSets = new PinSetTracker(
             q => Catalog.FindAll(q.QuestNumber, q.Episode, q.QuestName).Select(d => d.Slug).ToList(),
             () => config.PinshareEnabled && Permission.Allowed && !config.IsUnlinked,
-            async (slug, extra, ct) =>
+            async (slug, extra, etag, ct) =>
             {
-                var r = await Api.FetchPinSetAsync(slug, extra, cancellationToken: ct).ConfigureAwait(false);
-                return r.Found && r.Payload is not null ? JsonSerializer.SerializeToElement(r.Payload) : null;
+                var r = await Api.FetchPinSetAsync(slug, extra, etag: etag, cancellationToken: ct).ConfigureAwait(false);
+                if (r.NotModified) return new PinSetResponse(null, r.ETag, NotModified: true);
+                return new PinSetResponse(r.Found && r.Payload is not null ? JsonSerializer.SerializeToElement(r.Payload) : null, r.ETag);
             },
             _log);
         PinShare = new PinShareSupervisor(
