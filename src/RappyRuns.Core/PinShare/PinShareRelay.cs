@@ -4,6 +4,9 @@ using System.Text.RegularExpressions;
 
 namespace RappyRuns.Core.PinShare;
 
+/// <summary>One in.txt <c>alert</c> line (C#, S47): <c>alert\t&lt;code&gt;\t&lt;message&gt;[\t&lt;arg&gt;]</c>.</summary>
+public sealed record RelayAlert(string Code, string Message, string? Arg = null);
+
 /// <summary>
 /// The relay's state for one session (Lisp <c>pinshare-relay</c> struct,
 /// pinshare.lisp:29): the client stands in for the Pin Share addon's
@@ -20,7 +23,7 @@ public sealed partial class PinShareRelay
     /// ADDON_VERSION of the init.lua this client ships (C#, S21). Kept in step
     /// with client/data/pin-share/init.lua by a test; bump both together.
     /// </summary>
-    public const int BundledAddonVersion = 1;
+    public const int BundledAddonVersion = 2;
 
     /// <summary>The party's shared passphrase ("" = local-only: a pin set drawn without a server).</summary>
     public string Channel { get; set; } = "";
@@ -73,6 +76,32 @@ public sealed partial class PinShareRelay
     /// so a name with no version is an addon from before versions.
     /// </summary>
     public bool AddonOutdated => NameSeen && (AddonVersion ?? 0) < InstalledAddonVersion;
+
+    /// <summary>in.txt <c>alert</c> code: the running addon is older than the installed one.</summary>
+    public const string AlertAddonOutdated = "addon_outdated";
+
+    /// <summary>The English fallback for <see cref="AlertAddonOutdated"/> (the addon from version 2 shows this text as is).</summary>
+    public const string AlertAddonOutdatedMessage = "This addon is outdated: Reload it from the game's addon menu";
+
+    /// <summary>
+    /// What the client wants the addon's window to say about the client's
+    /// view of it (C#, S47), one in.txt <c>alert</c> line each; empty for
+    /// none. <see cref="RelayAlert.Code"/> is a stable token the addon may
+    /// attach a condition to; <see cref="RelayAlert.Message"/> is the text it
+    /// shows. An addon shows a code it does not know unconditionally, so a
+    /// client alone may add only codes that suit every window. <see cref="AlertAddonOutdated"/> is
+    /// conditional: its argument is the installed version, and only an addon
+    /// older than that shows it. in.txt is shared by every game window on the
+    /// install and <see cref="AddonOutdated"/> reflects whichever addon sent
+    /// its name last, so the line goes out whenever an addon has spoken to
+    /// this session and a version is installed, and each window judges
+    /// itself. Every input changes only in <see cref="Consume"/> /
+    /// <see cref="SkipBacklog"/> or per session, which already mark in.txt dirty.
+    /// </summary>
+    public IReadOnlyList<RelayAlert> Alerts =>
+        NameSeen && InstalledAddonVersion > 0
+            ? [new RelayAlert(AlertAddonOutdated, AlertAddonOutdatedMessage, InstalledAddonVersion.ToString(CultureInfo.InvariantCulture))]
+            : [];
 
     /// <summary>
     /// ADDON_VERSION of the init.lua installed next to the game - what a
