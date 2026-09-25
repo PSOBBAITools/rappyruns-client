@@ -90,6 +90,25 @@ public sealed class HostOrderingTests
         Assert.Equal(Json(Line.Ok(Msg.Of("token-ok", "bob"))), Json(h.Host.Ui.Token));
     }
 
+    [Fact(DisplayName = "ordering: a login.txt login that succeeds after the player set another token keeps that token (S49)")]
+    public async Task FileLoginSuccessKeepsNewerToken()
+    {
+        using var h = new HostHarness(new GatedHandler((url, _) => Me(url) || url.EndsWith("/api/login", StringComparison.Ordinal) ? null : (404, "")),
+            c => c.ApiToken = "token-a");
+        File.WriteAllText(Path.Combine(h.Dir, "login.txt"), "username=alice\npassword=right\n");
+        h.CallOrdered("app.hello");
+        var login = h.Host.StartFileLogin();
+        var loginAnswer = h.Http.Take((url, _) => url.EndsWith("/api/login", StringComparison.Ordinal));
+        h.Config.ApiToken = "token-b";
+        var check = h.Host.CheckTokenAsync();
+        h.Http.Take((url, auth) => Me(url) && auth == "Bearer token-b").SetResult((200, MeB));
+        Assert.Equal(TokenCheckKind.Ok, (await check)!.Kind);
+        loginAnswer.SetResult((201, """{"token":"token-alice"}"""));
+        await login;
+        Assert.Equal("token-b", h.Config.ApiToken);
+        Assert.Equal(Json(Line.Ok(Msg.Of("token-ok", "bob"))), Json(h.Host.Ui.Token));
+    }
+
     [Fact(DisplayName = "ordering: a login.txt login with nothing newer still shows its failure (S49)")]
     public async Task FileLoginShowsOwnFailure()
     {

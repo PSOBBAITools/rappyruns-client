@@ -623,6 +623,11 @@ public sealed class ClientHost : IDisposable
                     case PairingOutcome.FailedToStart:
                         SetTokenLine(ticket, Line.Error(Msg.Of("pairing-failed", result.Error)));
                         break;
+                    case PairingOutcome.Superseded when ticket.IsCurrent(Config.ApiToken):
+                        // Linked from the start (no check or token change since):
+                        // "waiting" would stay up with nothing pending, so check again.
+                        _ = CheckTokenAsync();
+                        break;
                 }
             }
             finally

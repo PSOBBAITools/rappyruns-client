@@ -53,6 +53,12 @@ public enum FileLoginOutcome
 
     /// <summary>Transport/unexpected status → <c>:file-login-failed</c> (red).</summary>
     Failed,
+
+    /// <summary>
+    /// 201, but the configured token changed while the login was out (C#,
+    /// S49): the new token is dropped, the one set meanwhile kept. No line.
+    /// </summary>
+    Superseded,
 }
 
 /// <summary>A login.txt login result.</summary>
@@ -276,18 +282,21 @@ public sealed class AuthService
     /// (parsed by the config side; pass nulls when the file was unreadable or
     /// incomplete) for a token with label "Desktop client (&lt;machine&gt;) [login.txt]".
     /// The app shows <c>:file-login-checking</c> before calling. Never falls back to the
-    /// browser pairing.
+    /// browser pairing. A token the player set while the login was out wins
+    /// over the login's (S49, as the pairing's Superseded).
     /// </summary>
     public async Task<FileLoginResult> LoginWithCredentialsAsync(string? username, string? password,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
             return new FileLoginResult(FileLoginOutcome.BadFile);
+        var before = Tokens.Normalize(_settings.ApiToken);
         try
         {
             var result = await _api.LoginAsync(username, password, FileLoginLabel(_machineName), cancellationToken)
                 .ConfigureAwait(false);
             if (result.Status == LoginStatus.Unauthorized) return new FileLoginResult(FileLoginOutcome.Invalid);
+            if (Tokens.Normalize(_settings.ApiToken) != before) return new FileLoginResult(FileLoginOutcome.Superseded);
             FinishPairing(result.Token!);
             return new FileLoginResult(FileLoginOutcome.Ok);
         }
