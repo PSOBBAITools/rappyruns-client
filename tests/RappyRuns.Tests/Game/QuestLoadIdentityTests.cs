@@ -38,6 +38,14 @@ public class QuestLoadIdentityTests
         Assert.False(id.IsCurrent(loaded)); // a reply in flight is stale now
         Assert.Equal(QuestLoadChange.Refetched, id.Observe(0x1000, "Lost HEAT SWORD"));
         Assert.Equal(QuestLoadChange.Unchanged, id.Observe(0x1000, "Lost HEAT SWORD"));
+        // A refetch waits through an unread name, and a negative pointer is no quest.
+        id.Refetch();
+        Assert.Equal(QuestLoadChange.Unchanged, id.Observe(0x1000, null));
+        Assert.Equal(QuestLoadChange.Refetched, id.Observe(0x1000, "Lost HEAT SWORD"));
+        Assert.Equal(QuestLoadChange.Unloaded, id.Observe(-1, "Lost HEAT SWORD"));
+        // A refetch with nothing loaded: the next sighting is still a new quest.
+        id.Refetch();
+        Assert.Equal(QuestLoadChange.NewQuest, id.Observe(0x1000, "Lost HEAT SWORD"));
         // Forget clears a pending refetch too.
         id.Refetch();
         id.Forget();

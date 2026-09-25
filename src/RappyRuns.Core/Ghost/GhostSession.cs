@@ -89,7 +89,7 @@ public sealed class GhostSession
     private readonly Lock _gate = new();
     // S36/S46: the load the current fetch was started (or skipped) for, under
     // _gate. A fetch lands only while it is still current.
-    private readonly QuestLoadIdentity _load = new();
+    private readonly QuestLoadIdentity _quest = new();
 
     /// <summary>The ghost fetched for the currently loaded quest, or null.</summary>
     public GhostReference? Ghost
@@ -135,11 +135,11 @@ public sealed class GhostSession
             // No quest loaded (a null pointer too) forgets the load AND the
             // ghost, so a stale reference can never race the next quest.
             // (Completed runs are annotated while the quest is still loaded.)
-            var change = _load.Observe(questPtr ?? 0, questName);
+            var change = _quest.Observe(questPtr ?? 0, questName);
             if (change == QuestLoadChange.Unchanged) return (null, 0);
             Ghost = null;
             if (change == QuestLoadChange.Unloaded) return (null, 0);
-            load = _load.Load;
+            load = _quest.Load;
         }
         var info = describeLoad();
         if (info.Slugs.Count == 0 || !info.GhostRaceEnabled || !info.HasSubmissionToken) return (null, 0);
@@ -174,7 +174,7 @@ public sealed class GhostSession
             }
             lock (_gate)
             {
-                if (_load.IsCurrent(load)) Ghost = ghost;
+                if (_quest.IsCurrent(load)) Ghost = ghost;
             }
         });
     }
@@ -230,7 +230,7 @@ public sealed class GhostSession
     {
         lock (_gate)
         {
-            _load.Forget();
+            _quest.Forget();
             Ghost = null;
         }
     }
