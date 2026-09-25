@@ -37,9 +37,11 @@ public static class Inbox
         Line("time", PinShareText.FormatNumber(unixTime));
         Line("ack", PinShareText.FormatNumber(relay.LastSeq));
         Line("status", relay.Status, PinShareText.Clean(relay.StatusMessage));
-        // S47: only when there is one, so an alert-free in.txt stays byte
-        // for byte what addons before version 2 (and the Lisp relay) know.
-        // Those addons skip line kinds they do not know.
+        // S47: only when there is one. Before an addon has sent its name to
+        // this session (and for an unversioned install) there is none, so
+        // in.txt is byte for byte the Lisp relay's; after it, addon_outdated
+        // goes out for every window to judge. Addons before version 2 skip
+        // line kinds they do not know.
         foreach (var alert in relay.Alerts)
         {
             var code = PinShareText.Clean(alert.Code);

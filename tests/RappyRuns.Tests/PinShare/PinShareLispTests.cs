@@ -225,7 +225,7 @@ public class PinShareLispTests
     private static readonly Dictionary<int, string> KnownAddonHashes = new()
     {
         [1] = "354b9500e70b9b1be0c407323153fc075f8ba43c118bea5861115c3d2f05586b",
-        [2] = "ea59c6a2f5937703d81cdd0cd75cbef3bd4a469445f19c4a471239e102f1fbd7", // S47: reads and shows in.txt's alert line
+        [2] = "d23bb3c52fb3aa4e09a9608c874d6edd0ef7f07e1168a5a70fa6d11178d33757", // S47: reads and shows in.txt's alert line
     };
 
     [Theory(DisplayName = "addon version: read from the installed init.lua; none reads as 0")]

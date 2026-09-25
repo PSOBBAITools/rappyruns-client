@@ -80,16 +80,16 @@ public sealed partial class PinShareRelay
     /// <summary>in.txt <c>alert</c> code: the running addon is older than the installed one.</summary>
     public const string AlertAddonOutdated = "addon_outdated";
 
-    /// <summary>The English fallback for <see cref="AlertAddonOutdated"/> (the addon from version 2 words it itself).</summary>
+    /// <summary>The English fallback for <see cref="AlertAddonOutdated"/> (the addon from version 2 shows this text as is).</summary>
     public const string AlertAddonOutdatedMessage = "This addon is outdated: Reload it from the game's addon menu";
 
     /// <summary>
     /// What the client wants the addon's window to say about the client's
     /// view of it (C#, S47), one in.txt <c>alert</c> line each; empty for
     /// none. <see cref="RelayAlert.Code"/> is a stable token the addon may
-    /// word itself; <see cref="RelayAlert.Message"/> is the English fallback
-    /// it shows for a code it does not know, so a later client can add codes
-    /// without an addon update. <see cref="AlertAddonOutdated"/> is
+    /// attach a condition to; <see cref="RelayAlert.Message"/> is the text it
+    /// shows. An addon shows a code it does not know unconditionally, so a
+    /// client alone may add only codes that suit every window. <see cref="AlertAddonOutdated"/> is
     /// conditional: its argument is the installed version, and only an addon
     /// older than that shows it. in.txt is shared by every game window on the
     /// install and <see cref="AddonOutdated"/> reflects whichever addon sent
