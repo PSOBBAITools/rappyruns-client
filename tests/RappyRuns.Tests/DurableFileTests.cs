@@ -27,6 +27,31 @@ public class DurableFileTests
         Assert.False(File.Exists(path + ".tmp")); // no half-written temp left behind
     }
 
+    [Fact(DisplayName = "durable file: a refused rename leaves the target and removes the temp file (S50)")]
+    public void RefusedMoveKeepsTarget()
+    {
+        using var dir = new TempDir("rr-durable");
+        var path = dir.File("config.sexp");
+        File.WriteAllText(path, "old");
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read)) // held without delete sharing
+            Assert.True(Record.Exception(() => DurableFile.Replace(path, path + ".tmp", s => s.Write("new"u8)))
+                is IOException or UnauthorizedAccessException);
+        Assert.Equal("old", File.ReadAllText(path));
+        Assert.False(File.Exists(path + ".tmp"));
+    }
+
+    [Fact(DisplayName = "durable file: a temp file it could not open is left alone (S50)")]
+    public void ForeignTempKept()
+    {
+        using var dir = new TempDir("rr-durable");
+        var path = dir.File("config.sexp");
+        var temp = path + ".tmp";
+        File.WriteAllText(temp, "another writer's");
+        using (new FileStream(temp, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete))
+            Assert.ThrowsAny<IOException>(() => DurableFile.Replace(path, temp, s => s.Write("new"u8)));
+        Assert.Equal("another writer's", File.ReadAllText(temp));
+    }
+
     [Fact(DisplayName = "durable file: write-flushed creates or truncates (S50)")]
     public void WriteFlushedTruncates()
     {

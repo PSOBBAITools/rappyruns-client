@@ -33,16 +33,23 @@ public static class DurableFile
     /// <paramref name="tempPath"/> through <paramref name="write"/>, flushes
     /// it, then renames it over <paramref name="path"/>. On failure the error
     /// is thrown, <paramref name="path"/> is left as it was,
-    /// and the temp file is deleted (best effort).
+    /// and a temp file this call created is deleted (best effort; a temp
+    /// file it could not open may be another writer's and is left alone).
     /// </summary>
     public static void Replace(string path, string tempPath, Action<Stream> write)
     {
+        var created = false;
         try
         {
-            WriteFlushed(tempPath, write);
+            using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                created = true;
+                write(stream);
+                stream.Flush(flushToDisk: true);
+            }
             File.Move(tempPath, path, overwrite: true);
         }
-        catch
+        catch when (created)
         {
             try
             {
