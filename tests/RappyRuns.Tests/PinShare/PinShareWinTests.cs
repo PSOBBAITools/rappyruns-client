@@ -109,6 +109,41 @@ public class PinShareInstallerTests
         Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(installed));
     }
 
+    [Fact(DisplayName = "install: a refused final rename moves the old dll back; if that fails too, the aside copy is kept (S39)")]
+    public void RefusedSwapMovesBack()
+    {
+        using var game = new GameFolder();
+        Directory.CreateDirectory(game.AddonDir);
+        var installed = Path.Combine(game.AddonDir, "pinshare-input.dll");
+        File.WriteAllBytes(installed, [9, 9]);
+        var log = new List<string>();
+        // The rename of .new into place is refused; the others go through.
+        var refuseNew = new AddonInstaller([game.Bundled], log.Add, () => 3900000000, moveFile: (from, to) =>
+        {
+            if (from.EndsWith(".new", StringComparison.Ordinal)) throw new UnauthorizedAccessException("new refused");
+            File.Move(from, to);
+        });
+        refuseNew.InstallInputDll(game.AddonDir);
+        Assert.Equal([9, 9], File.ReadAllBytes(installed));
+        Assert.Empty(AddonInstaller.OldInputDlls(game.AddonDir));
+        Assert.Contains("pin share: input dll not installed: UnauthorizedAccessException: new refused", log);
+
+        // Every rename after the first is refused: the working copy is stranded aside...
+        var moves = 0;
+        var refuseAll = new AddonInstaller([game.Bundled], log.Add, () => 3900000000, moveFile: (from, to) =>
+        {
+            if (moves++ > 0) throw new IOException($"refused {Path.GetFileName(from)}");
+            File.Move(from, to);
+        });
+        refuseAll.InstallInputDll(game.AddonDir);
+        Assert.False(File.Exists(installed));
+        var aside = Assert.Single(AddonInstaller.OldInputDlls(game.AddonDir));
+        Assert.Contains(log, line => line.StartsWith("pin share: input dll not installed: IOException: refused pinshare-input.dll.new (and moving the previous copy back failed", StringComparison.Ordinal));
+        // ...and the next sweep keeps it while no DLL is installed.
+        new AddonInstaller([game.Bundled], log.Add, () => 3900000000, (_, _) => throw new IOException("still refused")).InstallInputDll(game.AddonDir);
+        Assert.Equal([9, 9], File.ReadAllBytes(aside));
+    }
+
     [Fact(DisplayName = "install: a free old dll leaves no aside copy; a taken aside name gets a suffix; a stray .new is swept (S39)")]
     public void AsideHousekeeping()
     {

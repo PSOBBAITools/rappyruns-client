@@ -23,6 +23,7 @@ public sealed class AddonInstaller
     private readonly Action<string>? _log;
     private readonly Func<long> _universalTime;
     private readonly Action<string, byte[]> _writeFile;
+    private readonly Action<string, string> _moveFile;
 
     /// <param name="bundledDirs">
     /// Where to look for the shipped files, first match wins. Default:
@@ -31,13 +32,15 @@ public sealed class AddonInstaller
     /// <param name="log">The client log.</param>
     /// <param name="universalTime">Seconds since 1900 for the aside name (tests pin it).</param>
     /// <param name="writeFile">Writes an installed file; default <see cref="File.WriteAllBytes(string, byte[])"/> (tests make it fail).</param>
+    /// <param name="moveFile">Renames during the DLL swap; default <see cref="File.Move(string, string)"/> (tests make it fail).</param>
     public AddonInstaller(IReadOnlyList<string>? bundledDirs = null, Action<string>? log = null, Func<long>? universalTime = null,
-        Action<string, byte[]>? writeFile = null)
+        Action<string, byte[]>? writeFile = null, Action<string, string>? moveFile = null)
     {
         _bundledDirs = bundledDirs ?? DefaultBundledDirs();
         _log = log;
         _universalTime = universalTime ?? (() => DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 2208988800L);
         _writeFile = writeFile ?? File.WriteAllBytes;
+        _moveFile = moveFile ?? File.Move;
     }
 
     /// <summary>
@@ -116,7 +119,11 @@ public sealed class AddonInstaller
     public void InstallInputDll(string addonDir)
     {
         var installed = Path.Combine(addonDir, InputDllFile);
-        foreach (var old in OldInputDlls(addonDir).Append(installed + NewSuffix))
+        // With no DLL in place, an aside copy may be the only working one (a
+        // swap whose move-back failed): keep them; only a user can tell.
+        IEnumerable<string> sweep = File.Exists(installed) ? OldInputDlls(addonDir) : [];
+        // A .new outlives InstallFile only if the client died mid-swap.
+        foreach (var old in sweep.Append(installed + NewSuffix))
         {
             try { File.Delete(old); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
@@ -127,11 +134,16 @@ public sealed class AddonInstaller
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
-            _log?.Invoke($"pin share: input dll not installed: {e.GetType().Name}: {e.Message}");
+            // The refusal's own type (a failed move-back wraps it).
+            var cause = e is MoveBackFailedException ? e.InnerException! : e;
+            _log?.Invoke($"pin share: input dll not installed: {cause.GetType().Name}: {e.Message}");
         }
     }
 
     private const string NewSuffix = ".new";
+
+    /// <summary>The swap's final rename failed and so did putting the old copy back.</summary>
+    private sealed class MoveBackFailedException(string message, Exception inner) : IOException(message, inner);
 
     /// <summary>
     /// Copies the shipped <paramref name="name"/> into <paramref name="addonDir"/>
@@ -171,25 +183,26 @@ public sealed class AddonInstaller
             _writeFile(fresh, wanted);
             if (!File.Exists(installed))
             {
-                File.Move(fresh, installed);
+                _moveFile(fresh, installed);
                 return true;
             }
             var aside = AsideName(addonDir, name);
-            File.Move(installed, aside);
+            _moveFile(installed, aside);
             try
             {
-                File.Move(fresh, installed);
+                _moveFile(fresh, installed);
             }
             catch (Exception e)
             {
                 try
                 {
-                    File.Move(aside, installed);
+                    _moveFile(aside, installed);
                 }
                 catch (Exception r) when (r is IOException or UnauthorizedAccessException)
                 {
-                    // The working copy stays aside; the next install deletes it only once nothing holds it.
-                    throw new IOException($"{e.GetType().Name}: {e.Message} (and moving the previous copy back failed: {r.Message})", e);
+                    // The working copy stays aside, and the sweep keeps aside
+                    // copies while no DLL is installed.
+                    throw new MoveBackFailedException($"{e.Message} (and moving the previous copy back failed: {r.Message})", e);
                 }
                 throw;
             }
