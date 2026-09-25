@@ -20,7 +20,16 @@ internal sealed class TokenCheckGate
 
         /// <summary>True while no later check started and <paramref name="configuredToken"/> is still the checked one.</summary>
         public bool IsCurrent(string? configuredToken) =>
-            Volatile.Read(ref gate._latest) == sequence && Tokens.Normalize(configuredToken) == Token;
+            Volatile.Read(ref gate._latest) == sequence && ChecksConfigured(configuredToken);
+
+        /// <summary>
+        /// True while <paramref name="configuredToken"/> is still the checked one,
+        /// even if a later check of it started: what the guest merge needs (S48).
+        /// Merging into the account the player still uses is right whichever
+        /// check does it, and waiting for the later one would lose the merge
+        /// when that one fails on the network.
+        /// </summary>
+        public bool ChecksConfigured(string? configuredToken) => Tokens.Normalize(configuredToken) == Token;
     }
 
     /// <summary>Starts a check of <paramref name="configuredToken"/>; every earlier ticket goes stale.</summary>

@@ -71,16 +71,11 @@ public sealed class HostOrderingTests
         Assert.DoesNotContain("alice", Json(h.Host.Ui.Token), StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "ordering: a token check gone stale before its answer does not merge the guest or clear its token (S48)")]
+    [Fact(DisplayName = "ordering: a token check gone stale before its answer does not merge the guest; the current token's check does (S48)")]
     public async Task StaleTokenCheckKeepsGuest()
     {
-        var merges = 0;
-        using var h = new HostHarness(new GatedHandler((url, _) =>
-        {
-            if (Me(url)) return null;
-            if (url.EndsWith("/api/merge-anonymous", StringComparison.Ordinal)) Interlocked.Increment(ref merges);
-            return (200, "");
-        }), c =>
+        var merges = new List<string?>();
+        using var h = new HostHarness(MergesRecorded(merges), c =>
         {
             c.ApiToken = "token-a";
             c.AnonToken = "guest-1";
@@ -93,9 +88,49 @@ public sealed class HostOrderingTests
         Assert.Null(await check);
         // The guest's runs were not moved into alice's account, and the
         // guest token is still there for token-b's own check to merge.
-        Assert.Equal(0, Volatile.Read(ref merges));
+        lock (merges) Assert.Empty(merges);
         Assert.Equal("guest-1", h.Config.AnonToken);
+
+        var current = h.Host.CheckTokenAsync();
+        h.Http.Take((url, auth) => Me(url) && auth == "Bearer token-b").SetResult((200, MeB));
+        Assert.Equal(MergeResult.Ok, (await current)!.Merge);
+        lock (merges) Assert.Equal(["Bearer token-b"], merges);
+        Assert.Equal("", h.Config.AnonToken);
     }
+
+    [Fact(DisplayName = "ordering: an older check of the same token still merges when the newer one fails on the network (S48)")]
+    public async Task SameTokenOlderCheckMerges()
+    {
+        var merges = new List<string?>();
+        using var h = new HostHarness(MergesRecorded(merges), c =>
+        {
+            c.ApiToken = "token-a";
+            c.AnonToken = "guest-1";
+        });
+        h.CallOrdered("app.hello");
+        var older = h.Host.CheckTokenAsync();
+        var olderAnswer = h.Http.Take((url, _) => Me(url));
+        var newer = h.Host.CheckTokenAsync();
+        var newerAnswer = h.Http.Take((url, _) => Me(url));
+        newerAnswer.SetResult((500, ""));
+        Assert.Equal(TokenCheckKind.Error, (await newer)!.Kind);
+        olderAnswer.SetResult((200, MeA));
+        Assert.Null(await older); // superseded: its flags and line do not apply
+        lock (merges) Assert.Equal(["Bearer token-a"], merges); // but the guest went to the account still in use
+        Assert.Equal("", h.Config.AnonToken);
+    }
+
+    // /api/me waits for the test; merges are answered 200 and their Authorization recorded.
+    private static GatedHandler MergesRecorded(List<string?> merges) => new((url, auth) =>
+    {
+        if (Me(url)) return null;
+        if (url.EndsWith("/api/merge-anonymous", StringComparison.Ordinal))
+        {
+            lock (merges) merges.Add(auth);
+            return (200, "{}");
+        }
+        return (404, "");
+    });
 
     [Fact(DisplayName = "ordering: no runs list reaches the UI before the hello reply, and none is lost after it (S32)")]
     public void RunsNeverOvertakeHello()

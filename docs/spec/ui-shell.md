@@ -308,7 +308,7 @@ GUI スレッドとポーリングスレッドの両方から書くのでロッ�
     2. `set-pinshare-permission (pinshare-feature-p user)` — 失敗しうる処理より先に済ませる
     3. `apply-moderator-role` (役割が変わったら窓を作り直す)
     4. `apply-auto-publish`
-    5. `:anon-token` があれば `POST /api/merge-anonymous {"anonymous_token":...}`。200 か 404 なら `:anon-token` を空にする。通信エラーなら残して次回に回す
+    5. `:anon-token` があれば `POST /api/merge-anonymous {"anonymous_token":...}`。200 か 404 なら `:anon-token` を空にする。通信エラーなら残して次回に回す。C# 版 (S48) はホストが確認の後に行い、確認したトークンがまだ設定中のトークンのときだけマージする (別のトークンに替わった後に届いた古い確認は、ゲストの記録を前のアカウントへ移さない。同じトークンの新しい確認が始まっていてもマージはする)。空にするのは、マージしたゲストのトークンがまだ設定に残っているときだけ (その間に登録された新しいゲストは消さない)
     6. `*retry-requested* t` (未送信分を送る)
     7. `notify` が真なら `:token-ok-dialog`
   - `:unauthorized`: `set-pinshare-permission nil`、`:token-invalid` (赤)。notify なら `:token-rejected-dialog`。`on-invalid` を呼ぶ

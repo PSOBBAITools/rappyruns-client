@@ -301,22 +301,15 @@ public sealed class AuthService
     /// <summary>
     /// <c>check-token</c> (spec core §8.5): verify the linked token against GET /api/me.
     /// On success, <paramref name="onVerified"/> runs first (apply the Pin Share,
-    /// moderator and auto-publish flags before anything fallible), then a pending guest
-    /// is merged: ok or gone clears <c>:anon-token</c> (saved), an API error keeps it for
-    /// the next check. Unlinked returns at once without network. The app shows
-    /// <c>:token-checking</c> before calling and applies the returned result.
+    /// moderator and auto-publish flags before anything fallible). Unlinked returns at
+    /// once without network. The app shows <c>:token-checking</c> before calling and
+    /// applies the returned result. The Lisp merged a pending guest here; the C#
+    /// app does it with <see cref="MergeGuestAsync"/> once it knows the check is
+    /// still current (S48), so the result's <see cref="TokenCheckResult.Merge"/> is
+    /// always null from here.
     /// </summary>
-    /// <param name="onVerified">Runs on a 200, before the merge.</param>
-    /// <param name="isCurrent">
-    /// Asked after the 200, before the merge (C#, S48): false when the app has
-    /// since changed the token or started a newer check. The merge is then
-    /// skipped and the guest token kept, so a stale check cannot move the
-    /// guest's runs into the account it verified; the current check merges.
-    /// Null means always current.
-    /// </param>
-    /// <param name="cancellationToken">Cancels the requests.</param>
     public async Task<TokenCheckResult> CheckTokenAsync(Action<MeUser>? onVerified = null,
-        Func<bool>? isCurrent = null, CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
     {
         var token = Tokens.Normalize(_settings.ApiToken);
         if (token.Length == 0) return new TokenCheckResult(TokenCheckKind.Unlinked);
@@ -326,27 +319,42 @@ public sealed class AuthService
             if (me.Unauthorized) return new TokenCheckResult(TokenCheckKind.Unauthorized);
             var user = me.User!;
             onVerified?.Invoke(user);
-            MergeResult? merge = null;
-            var anon = Tokens.Normalize(_settings.AnonToken);
-            if (anon.Length > 0 && (isCurrent?.Invoke() ?? true))
-            {
-                try
-                {
-                    merge = await _api.MergeAnonymousAsync(anon, token, cancellationToken).ConfigureAwait(false);
-                    _settings.AnonToken = "";
-                    _settings.Save();
-                }
-                catch (ApiException)
-                {
-                    // Transport failure: keep the guest token, the next verification retries.
-                }
-            }
-            return new TokenCheckResult(TokenCheckKind.Ok, user, merge);
+            return new TokenCheckResult(TokenCheckKind.Ok, user);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             return new TokenCheckResult(TokenCheckKind.Error, Error: ex);
         }
+    }
+
+    /// <summary>
+    /// The guest merge of <c>check-token</c> (spec core §8.5): move a pending
+    /// anonymous guest's runs into the account of <paramref name="token"/>, a
+    /// token a check just verified. Ok or gone clears <c>:anon-token</c> (saved),
+    /// but only while it is still the guest that was merged (a guest registered
+    /// meanwhile is kept); an API error keeps it for the next check. Null when
+    /// there was no guest or the merge failed.
+    /// </summary>
+    public async Task<MergeResult?> MergeGuestAsync(string token, CancellationToken cancellationToken = default)
+    {
+        var anon = Tokens.Normalize(_settings.AnonToken);
+        if (anon.Length == 0) return null;
+        MergeResult merge;
+        try
+        {
+            merge = await _api.MergeAnonymousAsync(anon, token, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // Transport failure: keep the guest token, the next verification retries.
+            return null;
+        }
+        if (Tokens.Normalize(_settings.AnonToken) == anon)
+        {
+            _settings.AnonToken = "";
+            _settings.Save();
+        }
+        return merge;
     }
 
     /// <summary>
