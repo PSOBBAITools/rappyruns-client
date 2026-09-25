@@ -546,7 +546,7 @@ DLL の更新 `pinshare-install-input-dll` (`pinshare-win32.lisp:158`):
 
 | 命令 | 引数 | 送る JSON |
 |---|---|---|
-| `version` | 整数 (init.lua の `ADDON_VERSION`) | 送らない (C#, S21)。中継のセッションごとに1回、`name` より先にアドオンが書く。C# は同梱版 (`PinShareRelay.BundledAddonVersion`、テストで init.lua と照合) と比べ、このセッションで `name` が届いたのに版が無いか古ければ `AddonOutdated` (「アドオンが古い版のまま。ゲームのアドオンメニューから Reload」) を出す。バックログの name/version は判定に使わない。Lisp の中継は未知の命令として捨てるので互換 |
+| `version` | 整数 (init.lua の `ADDON_VERSION`) | 送らない (C#, S21)。中継のセッションごとに1回、`name` より先にアドオンが書く。C# はゲームの隣にインストール済みの init.lua の版 (Reload で読み込まれるもの。開発者のリンク先で版が無ければ 0 = 判定しない) と比べ、このセッションで `name` が届いたのに版が無いか古ければ `AddonOutdated` (「アドオンが古い版のまま。ゲームのアドオンメニューから Reload」) を出す。バックログの name/version は判定に使わない。アドオン側は版を送れたセッションにだけ name を送る。同梱版 `PinShareRelay.BundledAddonVersion` はテストで init.lua と照合し、init.lua の中身のハッシュも版ごとに固定する (版の上げ忘れを検出)。Lisp の中継は未知の命令として捨てるので互換 |
 | `name` | 名前 | 接続中なら hello 一式を送り直す (サーバーは色を名前ごとに持つため) |
 | `color` | RRGGBB | `{"t":"color","color":v}` |
 | `arrow_color` | RRGGBB か空 (空はピンと同じ色) | `{"t":"arrow_color","color":v}` |

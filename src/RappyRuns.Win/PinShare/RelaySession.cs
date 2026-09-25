@@ -67,6 +67,7 @@ internal sealed class RelaySession
     private double _openedAt;
     private double _lastWrite = double.NegativeInfinity;
     private bool _setDrawn;
+    private (bool Seen, bool Outdated) _addon;
     private PinSet? _drawnSet;
 
     public RelaySession(PinShareSupervisor owner, PinShareRelay relay, PinShareWanted wanted, string outPath, string inPath, string tmpPath)
@@ -106,7 +107,8 @@ internal sealed class RelaySession
                 // A set fetched (or dropped) mid-session redraws at once
                 // rather than on the next heartbeat.
                 var set = _owner.CurrentPinSet;
-                if (!_setDrawn || !ReferenceEquals(set, _drawnSet))
+                var setChanged = !_setDrawn || !ReferenceEquals(set, _drawnSet);
+                if (setChanged)
                 {
                     _setDrawn = true;
                     _drawnSet = set;
@@ -114,14 +116,19 @@ internal sealed class RelaySession
                 }
                 var messages = _relay.Consume(Outbox.Parse(ExchangeFiles.ReadText(_outPath)), _socket is not null);
                 if (_socket is not null && messages.Count > 0) Send(messages);
-                // Local mode's line follows the drawn set and the addon's version.
-                if (LocalOnly) LocalStatus(set);
-                // The addon's first command to this session flips the
-                // "waiting for the addon" line; its name without a current
-                // version turns it into "addon outdated", and a Reload back (S21).
-                if (_socket is not null && _owner.Status.Kind is PinShareStatusKind.ConnectedNoAddon or PinShareStatusKind.Connected or PinShareStatusKind.AddonOutdated
-                    && _relay.AddonSeen)
-                    ConnectedStatus();
+                // Re-derive the line only when what it depends on moved: the
+                // addon's first command to this session flips "waiting for the
+                // addon", its name without a current version "addon outdated",
+                // and a Reload flips it back (S21); local mode also names the set.
+                var addon = (_relay.AddonSeen, _relay.AddonOutdated);
+                if (setChanged || addon != _addon)
+                {
+                    _addon = addon;
+                    if (LocalOnly) LocalStatus(set);
+                    else if (_socket is not null && _owner.Status.Kind is PinShareStatusKind.ConnectedNoAddon or PinShareStatusKind.Connected
+                                 or PinShareStatusKind.AddonOutdated)
+                        ConnectedStatus();
+                }
                 if (_relay.Dirty || Now - _lastWrite >= 1)
                 {
                     if (WriteInbox(set)) _lastWrite = Now;
@@ -162,17 +169,17 @@ internal sealed class RelaySession
     }
 
     private void ConnectedStatus() =>
-        Status("connected", "", _relay.AddonOutdated
-            ? new PinShareStatus(PinShareStatusKind.AddonOutdated)
-            : _relay.AddonSeen
-                ? new PinShareStatus(PinShareStatusKind.Connected, _relay.Channel, _relay.Members.Count)
-                // Connected, yet the game has not loaded the script (fresh install: it needs a Reload).
-                : new PinShareStatus(PinShareStatusKind.ConnectedNoAddon));
+        Status("connected", "", AddonProblem() ?? (_relay.AddonSeen
+            ? new PinShareStatus(PinShareStatusKind.Connected, _relay.Channel, _relay.Members.Count)
+            // Connected, yet the game has not loaded the script (fresh install: it needs a Reload).
+            : new PinShareStatus(PinShareStatusKind.ConnectedNoAddon)));
 
     private void LocalStatus(PinSet? set) =>
-        Status("local", "", _relay.AddonOutdated
-            ? new PinShareStatus(PinShareStatusKind.AddonOutdated)
-            : new PinShareStatus(PinShareStatusKind.LocalOnly, set?.DisplayName));
+        Status("local", "", AddonProblem() ?? new PinShareStatus(PinShareStatusKind.LocalOnly, set?.DisplayName));
+
+    // The game runs an older addon than the installed one: a Reload fixes it (S21).
+    private PinShareStatus? AddonProblem() =>
+        _relay.AddonOutdated ? new PinShareStatus(PinShareStatusKind.AddonOutdated) : null;
 
     private void BackOff()
     {

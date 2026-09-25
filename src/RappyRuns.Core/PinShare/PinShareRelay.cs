@@ -64,12 +64,29 @@ public sealed class PinShareRelay
     public bool NameSeen { get; private set; }
 
     /// <summary>
-    /// The game runs an older addon than the one installed next to it (an
+    /// The game runs an older addon than the one installed next to it
+    /// (<see cref="InstalledAddonVersion"/>; an
     /// update landed while the game kept the old script loaded). Judged once
     /// the addon's name has arrived: a current addon sends its version first,
     /// so a name with no version is an addon from before versions.
     /// </summary>
-    public bool AddonOutdated => NameSeen && (AddonVersion ?? 0) < BundledAddonVersion;
+    public bool AddonOutdated => NameSeen && (AddonVersion ?? 0) < InstalledAddonVersion;
+
+    /// <summary>
+    /// ADDON_VERSION of the init.lua installed next to the game - what a
+    /// Reload loads, so the only fair yardstick (a developer's linked working
+    /// copy is never overwritten with the bundled one). 0 when it has none,
+    /// which never reads as outdated. The supervisor sets it per session.
+    /// </summary>
+    public int InstalledAddonVersion { get; set; } = BundledAddonVersion;
+
+    /// <summary>The <c>local ADDON_VERSION = &lt;n&gt;</c> line of an init.lua, or 0 when it has none (C#, S21).</summary>
+    public static int AddonVersionOf(string? initLua) =>
+        initLua is not null
+        && System.Text.RegularExpressions.Regex.Match(initLua, @"^local ADDON_VERSION = (\d{1,9})\s*$",
+            System.Text.RegularExpressions.RegexOptions.Multiline) is { Success: true } match
+            ? int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture)
+            : 0;
 
     /// <summary>in.txt needs rewriting.</summary>
     public bool Dirty { get; set; } = true;

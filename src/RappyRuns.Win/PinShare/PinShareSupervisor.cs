@@ -198,6 +198,8 @@ public sealed class PinShareSupervisor : IDisposable
             Channel = wanted.Channel,
             // Fresh per session: the addon only re-sends its name to a NEW session.
             Session = RandomNumberGenerator.GetHexString(8, lowercase: true),
+            // What a Reload would load (S21): the installed copy, not the bundled one.
+            InstalledAddonVersion = PinShareRelay.AddonVersionOf(ExchangeFiles.ReadText(Path.Combine(addonDir, AddonInstaller.AddonFile))),
         };
         // The old PowerShell relay still running would fight us over both
         // files; stand aside until its heartbeat goes stale.

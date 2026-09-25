@@ -199,11 +199,38 @@ public class PinShareLispTests
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "client", "data", "pin-share", "init.lua"))) dir = dir.Parent;
         Assert.NotNull(dir);
         var lua = File.ReadAllText(Path.Combine(dir.FullName, "client", "data", "pin-share", "init.lua"));
-        var match = System.Text.RegularExpressions.Regex.Match(lua, @"^local ADDON_VERSION = (\d+)\s*$", System.Text.RegularExpressions.RegexOptions.Multiline);
-        Assert.True(match.Success, "init.lua defines local ADDON_VERSION = <n>");
-        Assert.Equal(PinShareRelay.BundledAddonVersion, int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(PinShareRelay.BundledAddonVersion, PinShareRelay.AddonVersionOf(lua));
         // The addon sends it (before its name) to each new relay session.
         Assert.Contains("sendCommand({ \"version\", ADDON_VERSION })", lua, StringComparison.Ordinal);
+        // A forgotten bump would silently disable the check: every edit of
+        // init.lua must come with a new ADDON_VERSION (and BundledAddonVersion)
+        // and a new entry here.
+        var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(lua.Replace("\r\n", "\n", StringComparison.Ordinal))));
+        Assert.True(KnownAddonHashes.TryGetValue(PinShareRelay.BundledAddonVersion, out var known) && known == hash,
+            $"init.lua changed (sha256 {hash}): bump ADDON_VERSION and PinShareRelay.BundledAddonVersion, then record the hash for the new version");
+    }
+
+    // sha256 of init.lua (LF line ends) per ADDON_VERSION.
+    private static readonly Dictionary<int, string> KnownAddonHashes = new()
+    {
+        [1] = "4e6c704f38ef6f2b4f657305b36ab6de286a1f4d2dbb89f2e66f43088450f6f2",
+    };
+
+    [Theory(DisplayName = "addon version: read from the installed init.lua; none reads as 0")]
+    [InlineData("-- x\nlocal ADDON_VERSION = 7\nlocal y = 1\n", 7)]
+    [InlineData("local ADDON_VERSION = 12\r\n", 12)]
+    [InlineData("-- pin share addon v2", 0)]
+    [InlineData("  local ADDON_VERSION = 5\n", 0)]
+    [InlineData(null, 0)]
+    public void AddonVersionOf(string? lua, int version) => Assert.Equal(version, PinShareRelay.AddonVersionOf(lua));
+
+    [Fact(DisplayName = "addon version: an installed init.lua without a version (a developer's linked copy) never reads as outdated")]
+    public void UnversionedInstallNeverOutdated()
+    {
+        var relay = new PinShareRelay { InstalledAddonVersion = 0 };
+        relay.Consume(Lines(["1", "name", "Teapot"]), false);
+        Assert.False(relay.AddonOutdated);
     }
 
     private const string StateMessage =

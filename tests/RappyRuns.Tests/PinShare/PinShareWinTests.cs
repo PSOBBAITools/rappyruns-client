@@ -325,6 +325,32 @@ public class PinShareRelayIntegrationTests
         Assert.Equal(0, connects);
     }
 
+    [Fact(DisplayName = "relay: an addon older than the installed one shows addon-outdated until a Reload (S21)")]
+    public async Task AddonOutdated()
+    {
+        using var game = new GameFolder();
+        File.WriteAllText(Path.Combine(game.Bundled, "init.lua"), "-- pin share\nlocal ADDON_VERSION = 3\n");
+        var tracker = new PinSetTracker(_ => ["ep1-q"], () => true);
+        using var supervisor = new PinShareSupervisor(
+            () => new PinShareConfig(true, "", null), new PinSharePermission(true), tracker, game.Installer(),
+            connect: (_, _) => throw new InvalidOperationException("no server"));
+        supervisor.GameExe = game.Exe;
+        supervisor.Start();
+        tracker.FetchWanted(new PinShareQuest(42, "Q"));
+        tracker.Land(tracker.LoadId, new PinSet(PinShareJson.TryParse("""{"name":"Route","items":{"pins":[]}}""")!.Value));
+        await WaitFor(() => supervisor.Status == new PinShareStatus(PinShareStatusKind.LocalOnly, "Route"), "local");
+
+        // The game still runs the addon of an earlier client: version 2, then its name.
+        File.WriteAllText(game.OutPath, "100\tversion\t2\n101\tname\tTeapot\n");
+        await WaitFor(() => supervisor.Status.Kind == PinShareStatusKind.AddonOutdated, "outdated");
+        Assert.Contains("status\tlocal\t\n", Inbox(game), StringComparison.Ordinal); // the addon's own line is unchanged
+
+        // Reload: the installed addon introduces itself with the installed version.
+        File.AppendAllText(game.OutPath, "102\tversion\t3\n103\tname\tTeapot\n");
+        await WaitFor(() => supervisor.Status == new PinShareStatus(PinShareStatusKind.LocalOnly, "Route"), "back to local");
+        supervisor.Stop();
+    }
+
     [Fact(DisplayName = "relay: a fresh heartbeat from another relay is a conflict until it goes stale")]
     public async Task Conflict()
     {
