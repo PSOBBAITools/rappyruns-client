@@ -84,6 +84,47 @@ public class PinShareInstallerTests
         Assert.False(File.Exists(aside));
     }
 
+    [Fact(DisplayName = "install: a refused dll write puts the working copy back and logs the real reason (S39)")]
+    public void RefusedDllWriteRestores()
+    {
+        using var game = new GameFolder();
+        Directory.CreateDirectory(game.AddonDir);
+        var installed = Path.Combine(game.AddonDir, "pinshare-input.dll");
+        File.WriteAllBytes(installed, [9, 9]);
+        var log = new List<string>();
+        var refusing = new AddonInstaller([game.Bundled], log.Add, () => 3900000000, (path, bytes) =>
+        {
+            File.WriteAllBytes(path, bytes[..1]); // a partial file, then the refusal
+            throw new UnauthorizedAccessException($"Access to the path '{path}' is denied.");
+        });
+        refusing.InstallInputDll(game.AddonDir);
+        Assert.Equal([9, 9], File.ReadAllBytes(installed)); // the working copy, whole
+        Assert.Empty(AddonInstaller.OldInputDlls(game.AddonDir));
+        Assert.Contains(log, line => line.StartsWith("pin share: input dll not installed: UnauthorizedAccessException: Access to the path", StringComparison.Ordinal));
+        // A second failed attempt loses nothing either.
+        refusing.InstallInputDll(game.AddonDir);
+        Assert.Equal([9, 9], File.ReadAllBytes(installed));
+        // Then a working install replaces it.
+        game.Installer().InstallInputDll(game.AddonDir);
+        Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(installed));
+    }
+
+    [Fact(DisplayName = "install: a working copy left aside by a failed restore is brought back, not deleted (S39)")]
+    public void AsideCopyRestoredWhenDllMissing()
+    {
+        using var game = new GameFolder();
+        Directory.CreateDirectory(game.AddonDir);
+        File.WriteAllBytes(Path.Combine(game.AddonDir, "pinshare-input.dll.old-3800000000"), [7]);
+        File.WriteAllBytes(Path.Combine(game.AddonDir, "pinshare-input.dll.old-3800000100"), [8]);
+        var log = new List<string>();
+        new AddonInstaller([game.Bundled], log.Add, () => 3900000000, (_, _) => throw new IOException("disk full"))
+            .InstallInputDll(game.AddonDir);
+        var installed = Path.Combine(game.AddonDir, "pinshare-input.dll");
+        Assert.Equal([8], File.ReadAllBytes(installed)); // the newest aside copy
+        Assert.Contains("pin share: input dll restored from pinshare-input.dll.old-3800000100", log);
+        Assert.Contains(log, line => line.EndsWith("IOException: disk full", StringComparison.Ordinal));
+    }
+
     [Fact(DisplayName = "install: a junction to a working copy is never written into; a dangling one is broken-link")]
     public void Junctions()
     {

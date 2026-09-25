@@ -22,6 +22,7 @@ public sealed class AddonInstaller
     private readonly IReadOnlyList<string> _bundledDirs;
     private readonly Action<string>? _log;
     private readonly Func<long> _universalTime;
+    private readonly Action<string, byte[]> _writeFile;
 
     /// <param name="bundledDirs">
     /// Where to look for the shipped files, first match wins. Default:
@@ -29,11 +30,14 @@ public sealed class AddonInstaller
     /// </param>
     /// <param name="log">The client log.</param>
     /// <param name="universalTime">Seconds since 1900 for the aside name (tests pin it).</param>
-    public AddonInstaller(IReadOnlyList<string>? bundledDirs = null, Action<string>? log = null, Func<long>? universalTime = null)
+    /// <param name="writeFile">Writes an installed file; default <see cref="File.WriteAllBytes(string, byte[])"/> (tests make it fail).</param>
+    public AddonInstaller(IReadOnlyList<string>? bundledDirs = null, Action<string>? log = null, Func<long>? universalTime = null,
+        Action<string, byte[]>? writeFile = null)
     {
         _bundledDirs = bundledDirs ?? DefaultBundledDirs();
         _log = log;
         _universalTime = universalTime ?? (() => DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 2208988800L);
+        _writeFile = writeFile ?? File.WriteAllBytes;
     }
 
     /// <summary>
@@ -100,16 +104,33 @@ public sealed class AddonInstaller
     /// Installs or updates pinshare-input.dll (lets the addon's bindings take
     /// priority over the game) next to the addon. Best effort: without it the
     /// addon still works, bound keys just reach the game too, so failures are
-    /// only logged. A running game keeps the DLL loaded and locked; Windows
-    /// still allows renaming a loaded DLL, so the old one moves aside to a
-    /// fresh <c>pinshare-input.dll.old-&lt;universal time&gt;</c> (fresh, since an
-    /// earlier aside copy may itself still be loaded by another game window)
-    /// and the new one takes effect the next time the game starts. Aside
-    /// copies are deleted once nothing holds them.
+    /// only logged, with the exception type and message (an access-denied
+    /// refusal says so). A running game keeps the DLL loaded and locked;
+    /// Windows still allows renaming a loaded DLL, so the old one always moves
+    /// aside first to a fresh <c>pinshare-input.dll.old-&lt;universal time&gt;</c>
+    /// (fresh, since an earlier aside copy may itself still be loaded by
+    /// another game window) and the new one takes effect the next time the
+    /// game starts. Aside copies are deleted once nothing holds them - unless
+    /// no DLL is installed, when the newest aside copy is put back instead.
     /// </summary>
     public void InstallInputDll(string addonDir)
     {
         var installed = Path.Combine(addonDir, InputDllFile);
+        var asides = OldInputDlls(addonDir);
+        // A failed restore left the working copy aside (S39): bring the newest
+        // back rather than delete the only copy.
+        if (!File.Exists(installed) && asides.OrderByDescending(p => p, StringComparer.OrdinalIgnoreCase).FirstOrDefault() is { } newest)
+        {
+            try
+            {
+                File.Move(newest, installed);
+                _log?.Invoke($"pin share: input dll restored from {Path.GetFileName(newest)}");
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                _log?.Invoke($"pin share: input dll could not be restored from {Path.GetFileName(newest)}: {e.Message}");
+            }
+        }
         foreach (var old in OldInputDlls(addonDir))
         {
             try { File.Delete(old); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
@@ -121,7 +142,7 @@ public sealed class AddonInstaller
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
-            _log?.Invoke($"pin share: input dll not installed: {e.Message}");
+            _log?.Invoke($"pin share: input dll not installed: {e.GetType().Name}: {e.Message}");
         }
     }
 
@@ -130,12 +151,14 @@ public sealed class AddonInstaller
     /// unless the installed copy already has the same bytes. True when it
     /// wrote; false when already current or nothing is shipped under that
     /// name. The addon file creates the folder first. With
-    /// <paramref name="renameAside"/>, a write that fails (presumably the game
-    /// holds the file loaded) moves the old copy aside to a fresh
-    /// <c>&lt;name&gt;.old-&lt;universal time&gt;</c> and writes anew; if that write
-    /// fails too, the cause was not the lock (antivirus, permissions), so the
-    /// working copy is put back rather than leave an aside file the next
-    /// install would delete. Only the DLL uses <paramref name="renameAside"/>:
+    /// <paramref name="renameAside"/> (C#, S39; the Lisp overwrote in place
+    /// first): an existing copy is first renamed to a fresh
+    /// <c>&lt;name&gt;.old-&lt;universal time&gt;</c> - allowed even while the game
+    /// holds it loaded - and only then is the new file written, so a failed
+    /// write never truncates the working copy. If the write fails (antivirus,
+    /// permissions), the partial file is removed and the aside copy put back;
+    /// the write's own error is what is thrown, with a failed restore added to
+    /// its message. Only the DLL uses <paramref name="renameAside"/>:
     /// <see cref="OldInputDlls"/> is what cleans those aside copies up.
     /// Throws on failure; each caller handles it.
     /// </summary>
@@ -146,30 +169,31 @@ public sealed class AddonInstaller
         var installed = Path.Combine(addonDir, name);
         var wanted = File.ReadAllBytes(bundled);
         if (File.Exists(installed) && wanted.AsSpan().SequenceEqual(File.ReadAllBytes(installed))) return false;
-        if (!renameAside)
+        if (!renameAside || !File.Exists(installed))
         {
             Directory.CreateDirectory(addonDir);
-            File.WriteAllBytes(installed, wanted);
+            _writeFile(installed, wanted);
             return true;
         }
+        var aside = Path.Combine(addonDir, $"{name}.old-{_universalTime()}");
+        File.Move(installed, aside); // a refusal here leaves the working copy untouched
         try
         {
-            File.WriteAllBytes(installed, wanted);
+            _writeFile(installed, wanted);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            var aside = Path.Combine(addonDir, $"{name}.old-{_universalTime()}");
-            File.Move(installed, aside);
             try
             {
-                File.WriteAllBytes(installed, wanted);
-            }
-            catch (Exception)
-            {
-                try { File.Delete(installed); } catch (Exception d) when (d is IOException or UnauthorizedAccessException) { }
+                if (File.Exists(installed)) File.Delete(installed);
                 File.Move(aside, installed);
-                throw;
             }
+            catch (Exception r) when (r is IOException or UnauthorizedAccessException)
+            {
+                // The next install finds no DLL and brings the aside copy back.
+                throw new IOException($"{e.Message} (and the previous copy could not be put back: {r.Message})", e);
+            }
+            throw;
         }
         return true;
     }
