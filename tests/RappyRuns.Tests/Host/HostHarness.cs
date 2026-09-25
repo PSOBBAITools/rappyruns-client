@@ -15,7 +15,13 @@ namespace RappyRuns.Tests.Host;
 /// <summary>An <see cref="IHostServices"/> that touches nothing on the machine (S32).</summary>
 internal sealed class FakeHostServices : IHostServices
 {
-    public List<string> Lines { get; } = [];
+    private readonly List<string> _lines = [];
+
+    /// <summary>The log so far (a copy: background threads keep logging).</summary>
+    public List<string> Lines
+    {
+        get { lock (_lines) return [.. _lines]; }
+    }
 
     public FakeAutostart AutostartSetting { get; } = new();
 
@@ -23,7 +29,7 @@ internal sealed class FakeHostServices : IHostServices
 
     public void Log(string line)
     {
-        lock (Lines) Lines.Add(line);
+        lock (_lines) _lines.Add(line);
     }
 
     public IAutostartSetting Autostart(string valueName) => AutostartSetting;
@@ -186,6 +192,20 @@ internal sealed class HostHarness : IDisposable
     public FakeHostServices Services { get; } = new();
 
     public RecordingSink Sink { get; } = new();
+
+    /// <summary>Everything the UI has been sent so far, in order.</summary>
+    public List<(string Name, string Json)> Events => Sink.Events;
+
+    /// <summary>Polls <paramref name="condition"/> until it holds (every 10 ms, up to <paramref name="timeoutMs"/>).</summary>
+    public static async Task WaitFor(Func<bool> condition, int timeoutMs = 5000)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (!condition())
+        {
+            if (Environment.TickCount64 > deadline) throw new TimeoutException("condition not met");
+            await Task.Delay(10);
+        }
+    }
 
     public ClientHost Host { get; }
 
