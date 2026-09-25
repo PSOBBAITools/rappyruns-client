@@ -72,16 +72,16 @@ public class PinShareInstallerTests
         var installed = Path.Combine(game.AddonDir, "pinshare-input.dll");
         File.WriteAllBytes(installed, [9, 9]);
         // A loaded DLL: no writing, but renaming is allowed.
-        using (new FileStream(installed, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete))
+        using (var loaded = new FileStream(installed, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete))
         {
             game.Installer().InstallInputDll(game.AddonDir);
+            Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(installed));
+            Assert.Equal(9, loaded.ReadByte()); // the game still has its old copy, renamed away under it
         }
-        Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(installed));
-        var aside = Path.Combine(game.AddonDir, "pinshare-input.dll.old-3900000000");
-        Assert.Equal([9, 9], File.ReadAllBytes(aside));
-        // The next install cleans the aside copy once nothing holds it.
+        // (A mapped DLL cannot be deleted, so a real game keeps the aside file;
+        // this stand-in lock allows the delete.) The next install sweeps any leftover.
         game.Installer().InstallInputDll(game.AddonDir);
-        Assert.False(File.Exists(aside));
+        Assert.Empty(AddonInstaller.OldInputDlls(game.AddonDir));
     }
 
     [Fact(DisplayName = "install: a refused dll write puts the working copy back and logs the real reason (S39)")]
@@ -109,20 +109,30 @@ public class PinShareInstallerTests
         Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(installed));
     }
 
-    [Fact(DisplayName = "install: a working copy left aside by a failed restore is brought back, not deleted (S39)")]
-    public void AsideCopyRestoredWhenDllMissing()
+    [Fact(DisplayName = "install: a free old dll leaves no aside copy; a taken aside name gets a suffix; a stray .new is swept (S39)")]
+    public void AsideHousekeeping()
     {
         using var game = new GameFolder();
         Directory.CreateDirectory(game.AddonDir);
-        File.WriteAllBytes(Path.Combine(game.AddonDir, "pinshare-input.dll.old-3800000000"), [7]);
-        File.WriteAllBytes(Path.Combine(game.AddonDir, "pinshare-input.dll.old-3800000100"), [8]);
-        var log = new List<string>();
-        new AddonInstaller([game.Bundled], log.Add, () => 3900000000, (_, _) => throw new IOException("disk full"))
-            .InstallInputDll(game.AddonDir);
         var installed = Path.Combine(game.AddonDir, "pinshare-input.dll");
-        Assert.Equal([8], File.ReadAllBytes(installed)); // the newest aside copy
-        Assert.Contains("pin share: input dll restored from pinshare-input.dll.old-3800000100", log);
-        Assert.Contains(log, line => line.EndsWith("IOException: disk full", StringComparison.Ordinal));
+        File.WriteAllBytes(installed, [9, 9]);
+        File.WriteAllBytes(installed + ".new", [0]); // an interrupted install
+        game.Installer().InstallInputDll(game.AddonDir);
+        Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(installed));
+        Assert.Empty(AddonInstaller.OldInputDlls(game.AddonDir)); // nothing held the old copy
+        Assert.False(File.Exists(installed + ".new"));
+
+        // That second's aside name is held by a game window: the next one gets "-1".
+        File.WriteAllBytes(installed, [9, 9]);
+        var held = Path.Combine(game.AddonDir, "pinshare-input.dll.old-3900000000");
+        File.WriteAllBytes(held, [5]);
+        using (new FileStream(held, FileMode.Open, FileAccess.Read, FileShare.Read))
+        using (new FileStream(installed, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete))
+        {
+            game.Installer().InstallInputDll(game.AddonDir);
+            Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(installed));
+            Assert.Equal([5], File.ReadAllBytes(held));
+        }
     }
 
     [Fact(DisplayName = "install: a junction to a working copy is never written into; a dangling one is broken-link")]
