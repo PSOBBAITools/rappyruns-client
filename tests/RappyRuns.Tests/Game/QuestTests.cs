@@ -214,9 +214,12 @@ public class TriggerLogTests
             File.ReadAllText(path));
     }
 
-    // 100 numbered lines of 10 bytes: "line 0000\n".."line 0099\n".
+    // Numbered 10-byte lines: Lines(0, 3) = "line 0000\nline 0001\nline 0002\n".
     private static string Lines(int from, int count) =>
         string.Concat(Enumerable.Range(from, count).Select(i => FormattableString.Invariant($"line {i:0000}\n")));
+
+    // The marker a cut file starts with (59 bytes at the test clock's 12:00:00).
+    private const string CutMarker = "=== trigger log cut 12:00:00; older lines were dropped ===\n";
 
     [Fact(DisplayName = "a huge Lisp-era log (live or old) is cut to its newest whole lines at startup; small files stay (S42)")]
     public void CompactsOversized()
@@ -224,20 +227,29 @@ public class TriggerLogTests
         using var temp = new TempDir("eta-test-trigger-rotate");
         var path = temp.File("trigger-log.txt");
         File.WriteAllText(path, Lines(0, 100)); // the Lisp client's unbounded log: 1000 bytes
-        using var log = new TriggerLog(path, new ManualGameClock(), maxBytes: 205);
+        // 259 - 59 (marker) = 200 bytes kept: the cut falls exactly on a line start.
+        using var log = new TriggerLog(path, new ManualGameClock(), maxBytes: 259);
         File.WriteAllText(log.OldPath, Lines(500, 60)); // 600 bytes
         var report = log.CompactOversized(limit: 500);
         Assert.Equal(2, report.Count);
         Assert.All(report, line => Assert.StartsWith("trigger log: cut ", line, StringComparison.Ordinal));
-        // The last 205 bytes start mid-line; the cut keeps whole lines only.
-        Assert.Equal(Lines(80, 20), File.ReadAllText(path));
-        Assert.Equal(Lines(540, 20), File.ReadAllText(log.OldPath));
+        Assert.Equal(CutMarker + Lines(80, 20), File.ReadAllText(path)); // line 80 itself is kept
+        Assert.Equal(CutMarker + Lines(540, 20), File.ReadAllText(log.OldPath));
         Assert.False(File.Exists(path + ".tmp"));
 
         Assert.Empty(log.CompactOversized(limit: 500)); // small now: nothing to do
         log.Start(); // no rotation: the live log is under the limit again
         log.Close();
-        Assert.StartsWith(Lines(80, 20) + "=== trigger logging started", File.ReadAllText(path), StringComparison.Ordinal);
+        Assert.StartsWith(CutMarker + Lines(80, 20) + "=== trigger logging started", File.ReadAllText(path), StringComparison.Ordinal);
+
+        // A cut landing mid-line drops that partial line; a tail with no newline is kept raw.
+        using var midLine = new TriggerLog(temp.File("mid.txt"), new ManualGameClock(), maxBytes: 264);
+        File.WriteAllText(midLine.Path, Lines(0, 100));
+        midLine.CompactOversized(limit: 500);
+        Assert.Equal(CutMarker + Lines(80, 20), File.ReadAllText(midLine.Path));
+        File.WriteAllText(midLine.Path, new string('z', 1000));
+        midLine.CompactOversized(limit: 500);
+        Assert.Equal(CutMarker + new string('z', 264 - 59), File.ReadAllText(midLine.Path));
     }
 
     [Fact(DisplayName = "an open live log is never cut, and a refused cut is reported (S42)")]

@@ -133,12 +133,23 @@ public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = Tr
             using (var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
             using (var target = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                source.Seek(Math.Max(0, size - maxBytes), SeekOrigin.Begin);
-                // Start at a line: skip the partial one the cut landed in.
-                int b;
-                while ((b = source.ReadByte()) >= 0 && b != '\n')
+                // Start at a line: from one byte before the cut, skip to just
+                // past the next newline (a cut on a line start keeps that line).
+                // The marker and the kept tail together stay under the rotation limit.
+                var marker = Encoding.UTF8.GetBytes($"=== trigger log cut {TimeOfDay()}; older lines were dropped ===\n");
+                var cut = Math.Max(0, size - Math.Max(0, maxBytes - marker.Length));
+                if (cut > 0)
                 {
+                    source.Seek(cut - 1, SeekOrigin.Begin);
+                    int b;
+                    while ((b = source.ReadByte()) >= 0 && b != '\n')
+                    {
+                    }
+                    // No newline in the whole tail: keep the raw tail rather than nothing.
+                    if (b < 0) source.Seek(cut, SeekOrigin.Begin);
                 }
+                // Say so at the top, as a rotation does, so the file's start is not taken for its history.
+                target.Write(marker);
                 source.CopyTo(target);
             }
             File.Move(tmp, path, overwrite: true);
