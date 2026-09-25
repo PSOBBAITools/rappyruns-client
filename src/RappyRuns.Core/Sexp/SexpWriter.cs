@@ -21,10 +21,12 @@ public static class SexpWriter
 
     /// <summary>
     /// Writes one datum to <paramref name="path"/> as UTF-8 without BOM,
-    /// atomically (temp file + replace; <see cref="DurableFile"/>) so a crash
-    /// never leaves half a file. With <paramref name="durable"/> (the default)
-    /// the temp file is flushed to disk first, so a power cut cannot either;
-    /// a writer on the tracking thread passes false so it never waits on the disk.
+    /// via temp file + replace (<see cref="DurableFile"/>), so a client crash
+    /// never leaves half a file. Only with <paramref name="durable"/> (the
+    /// default) is the temp file flushed to disk first, which also covers a
+    /// power cut; without it a power cut can still leave the file empty or
+    /// partial. A writer on the tracking thread passes false so it never
+    /// waits on the disk.
     /// </summary>
     public static void WriteFile(string path, SexpNode node, bool durable = true)
     {

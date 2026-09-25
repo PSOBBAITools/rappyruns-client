@@ -105,9 +105,11 @@ public sealed class ConfigStore
     /// save-config!: write the whole plist back (atomically, unlike the Lisp
     /// client). Only keys present in memory are written - after a first run
     /// that is every default except the forced keys, as in Lisp.
-    /// Throws on I/O failure, like the Lisp write did.
+    /// Throws on I/O failure, like the Lisp write did. Flushed to disk before
+    /// the rename (S50) unless <paramref name="durable"/> is false, which a
+    /// save on the tracking thread passes so it never waits on the disk.
     /// </summary>
-    public void Save()
+    public void Save(bool durable = true)
     {
         // Serialized (the atomic write shares one temp file) and each save
         // snapshots under the lock, so the file is never older than memory.
@@ -115,7 +117,7 @@ public sealed class ConfigStore
         {
             SexpNode form;
             lock (_lock) form = _config.ToSexp();
-            SexpWriter.WriteFile(FilePath, form);
+            SexpWriter.WriteFile(FilePath, form, durable);
         }
     }
 

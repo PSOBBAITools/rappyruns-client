@@ -441,12 +441,16 @@ public sealed class ClientHost : IDisposable
         return _autostartEnabled;
     }
 
-    /// <summary>save-config!, logged instead of thrown (the settings stay in memory).</summary>
-    internal void SaveConfig()
+    /// <summary>
+    /// save-config!, logged instead of thrown (the settings stay in memory).
+    /// <paramref name="durable"/> false skips the disk flush (S50): for saves
+    /// on the poll thread, which must never wait on the disk.
+    /// </summary>
+    internal void SaveConfig(bool durable = true)
     {
         try
         {
-            Config.Save();
+            Config.Save(durable);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -838,7 +842,7 @@ public sealed class ClientHost : IDisposable
         {
             Config.OverlayCorner = "CUSTOM";
             Config.Set(ConfigKeys.OverlayPosition, OverlayPlacement.ToSexp(dragged));
-            SaveConfig();
+            SaveConfig(durable: false); // the poll thread (S50)
         }
         if (!(Config.GhostOverlay && inQuest))
         {

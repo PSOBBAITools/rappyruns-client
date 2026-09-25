@@ -9,8 +9,9 @@ namespace RappyRuns.Core;
 /// </summary>
 /// <remarks>
 /// Durable: config.sexp (<c>ConfigStore</c>) and the Pin Share addon files
-/// (<c>AddonInstaller</c>). Not durable: the run queue (saved from the poll
-/// thread) and the trigger log compaction (a diagnostic log). Not in this helper at
+/// (<c>AddonInstaller</c>), except the overlay position saved on the poll
+/// thread. Not durable: the run queue (saved from the poll thread) and the
+/// trigger log compaction (a diagnostic log). Not in this helper at
 /// all: the recording rename (ffmpeg's output, <c>Win32FfmpegBackend.RenameFile</c>),
 /// written by another process and possibly gigabytes.
 /// </remarks>
@@ -24,13 +25,15 @@ public static class DurableFile
     /// </summary>
     public static void Write(string path, Action<Stream> write, bool durable = true)
     {
-        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        using var stream = Open(path);
         write(stream);
         stream.Flush(flushToDisk: durable);
     }
 
     /// <summary>A durable <see cref="Write"/> of the given bytes (the addon installer's writer).</summary>
     public static void WriteFlushed(string path, byte[] bytes) => Write(path, s => s.Write(bytes));
+
+    private static FileStream Open(string path) => new(path, FileMode.Create, FileAccess.Write, FileShare.None);
 
     /// <summary>
     /// Replaces <paramref name="path"/> with new contents: writes
@@ -46,7 +49,7 @@ public static class DurableFile
         var created = false;
         try
         {
-            using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            using (var stream = Open(tempPath))
             {
                 created = true;
                 write(stream);

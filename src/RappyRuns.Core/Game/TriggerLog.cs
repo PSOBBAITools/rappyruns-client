@@ -159,7 +159,7 @@ public sealed class TriggerLog(string path, IGameClock clock, long maxBytes = Tr
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // DurableFile.Replace has removed its temp file.
+            // DurableFile.Replace removed the temp file if it created one.
             report.Add($"trigger log: could not cut {name}: {e.Message}");
         }
     }
