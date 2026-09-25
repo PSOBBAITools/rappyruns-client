@@ -491,7 +491,8 @@ public class PinSharePermissionAndFetchTests
         long now = 0;
         var asked = new List<string?>();
         var replies = new Queue<Func<PinSetResponse>>();
-        var tracker = new PinSetTracker(_ => ["ep1-a"], () => true, (_, _, etag, _) =>
+        var allowed = true;
+        var tracker = new PinSetTracker(_ => ["ep1-a"], () => allowed, (_, _, etag, _) =>
         {
             asked.Add(etag);
             return Task.FromResult(replies.Dequeue()());
@@ -539,6 +540,36 @@ public class PinSharePermissionAndFetchTests
         await tracker.OnSnapshot(quest)!;
         Assert.Equal("v3", tracker.Current!.DisplayName);
         Assert.Equal([null, "\"e1\"", "\"e1\"", "\"e1\"", "\"e2\"", "\"e2\"", null], asked);
+
+        // A 200 that is not a set (a proxy's page) is a failed re-ask: the set stays.
+        now += (long)PinSetTracker.RefreshInterval.TotalMilliseconds;
+        replies.Enqueue(() => new PinSetResponse(Json("""{"error":"bad gateway"}""")));
+        await tracker.OnSnapshot(quest)!;
+        Assert.Equal("v3", tracker.Current!.DisplayName);
+        now += (long)PinSetTracker.FailureBackoff.TotalMilliseconds;
+
+        // The same body under a new ETag keeps the PinSet but adopts the ETag.
+        var v3 = tracker.Current;
+        replies.Enqueue(() => Set("v3", "\"e3b\""));
+        await tracker.OnSnapshot(quest)!;
+        Assert.Same(v3, tracker.Current);
+        now += (long)PinSetTracker.RefreshInterval.TotalMilliseconds;
+        replies.Enqueue(() => new PinSetResponse(null, "\"e3b\"", NotModified: true));
+        await tracker.OnSnapshot(quest)!;
+        Assert.Equal("\"e3b\"", asked[^1]);
+
+        // Another quest at the same address while fetching is off: its first
+        // re-ask must not revalidate the old quest's ETag.
+        allowed = false;
+        var other = new PinShareQuest(10, "B");
+        Assert.Null(tracker.OnSnapshot(other));
+        Assert.Null(tracker.Current);
+        allowed = true;
+        now += (long)PinSetTracker.RefreshInterval.TotalMilliseconds;
+        replies.Enqueue(() => Set("b", "\"eb\""));
+        await tracker.OnSnapshot(other)!;
+        Assert.Null(asked[^1]);
+        Assert.Equal("b", tracker.Current!.DisplayName);
 
         // Back in the lobby: no re-asks.
         now += (long)PinSetTracker.RefreshInterval.TotalMilliseconds;

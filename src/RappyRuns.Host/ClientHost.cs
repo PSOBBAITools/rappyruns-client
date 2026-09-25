@@ -141,7 +141,10 @@ public sealed class ClientHost : IDisposable
             {
                 var r = await Api.FetchPinSetAsync(slug, extra, etag: etag, cancellationToken: ct).ConfigureAwait(false);
                 if (r.NotModified) return new PinSetResponse(null, r.ETag, NotModified: true);
-                return new PinSetResponse(r.Found && r.Payload is not null ? JsonSerializer.SerializeToElement(r.Payload) : null, r.ETag);
+                if (!r.Found) return new PinSetResponse(null);
+                // A 200 that is not JSON is a failed fetch, not "none chosen".
+                if (r.Payload is null) throw new ApiException($"pin set for {slug}: unreadable body");
+                return new PinSetResponse(JsonSerializer.SerializeToElement(r.Payload), r.ETag);
             },
             _log);
         PinShare = new PinShareSupervisor(

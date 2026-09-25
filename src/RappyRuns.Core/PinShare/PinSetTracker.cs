@@ -135,10 +135,12 @@ public sealed class PinSetTracker
                     // A new quest's slugs replace the previous quest's below;
                     // until then there are none.
                     _current = null;
+                    _etag = null;
                     _questSlugs = null;
                     break;
                 case QuestLoadChange.Refetched:
                     _current = null; // the slugs stay: same quest
+                    _etag = null;
                     break;
             }
             load = _quest.Load;
@@ -183,7 +185,9 @@ public sealed class PinSetTracker
             if (!ReaskDue()) return null; // a Reset or another fetch got in between
             slugs = _questSlugs!;
             load = _quest.Load;
-            etag = _etag;
+            // Only a drawn set is revalidated: an ETag outliving it would get
+            // a 304 for a set that is not on screen.
+            etag = _current is null ? null : _etag;
             _inFlightLoad = load;
         }
         return Fetch(slugs, load, etag, revalidating: true, cancellationToken);
@@ -212,10 +216,11 @@ public sealed class PinSetTracker
         }, CancellationToken.None);
 
     // A failed first fetch draws nothing (as before); a failed re-ask keeps
-    // what is drawn. Either way the next try waits FailureBackoff. A re-ask
-    // that finds the set unchanged - a 304, or the same body from a server
-    // that sends no ETag - leaves the drawn PinSet alone, so the relay does
-    // not redraw it.
+    // what is drawn. Either way the next try waits FailureBackoff. A body
+    // that is not a set counts as failed - "unchosen" is only a 404 (no
+    // payload). A re-ask that finds the set unchanged - a 304, or the same
+    // body under a new or missing ETag - leaves the drawn PinSet alone, so
+    // the relay does not redraw it.
     private void Landed(long load, bool revalidating, PinSetResponse? response)
     {
         PinSet? set;
@@ -223,11 +228,12 @@ public sealed class PinSetTracker
         {
             if (_inFlightLoad == load) _inFlightLoad = 0;
             if (!_quest.IsCurrent(load)) return;
-            _nextFetchMs = _nowMs() + (long)(response is null ? FailureBackoff : RefreshInterval).TotalMilliseconds;
-            if (revalidating && (response is null or { NotModified: true })) return;
             set = PinSet.FromFetch(response?.Payload);
-            if (revalidating && set?.Payload.GetRawText() == _current?.Payload.GetRawText()) return;
+            var failed = response is null || (response.Payload is not null && set is null);
+            _nextFetchMs = _nowMs() + (long)(failed ? FailureBackoff : RefreshInterval).TotalMilliseconds;
+            if (revalidating && (failed || response!.NotModified)) return;
             _etag = set is null ? null : response!.ETag;
+            if (revalidating && set?.Payload.GetRawText() == _current?.Payload.GetRawText()) return;
         }
         if (!Land(load, set) || !revalidating) return;
         if (set is null) _log?.Invoke("pin share: the pin set is no longer chosen on the site");

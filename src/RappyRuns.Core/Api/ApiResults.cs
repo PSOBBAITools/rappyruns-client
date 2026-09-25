@@ -207,7 +207,8 @@ public sealed record GhostFetchResult(bool Found, string? Body, JsonNode? Payloa
 /// <summary>
 /// GET /api/quests/{slug}/pins: <see cref="Found"/> on 200 with the parsed set and
 /// its <see cref="ETag"/>; not found on 404 (no set chosen, or it went private);
-/// <see cref="NotModified"/> on 304 (the If-None-Match still names the set).
+/// <see cref="NotModified"/> on 304 (the If-None-Match still names the set:
+/// <see cref="Found"/> but no <see cref="Payload"/> - check NotModified first).
 /// </summary>
 public sealed record PinSetFetchResult(bool Found, JsonNode? Payload, string? ETag = null, bool NotModified = false);
 
