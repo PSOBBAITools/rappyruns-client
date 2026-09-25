@@ -111,14 +111,16 @@ internal sealed class RelaySession
                     _setDrawn = true;
                     _drawnSet = set;
                     _relay.Dirty = true;
-                    if (LocalOnly)
-                        Status("local", "", new PinShareStatus(PinShareStatusKind.LocalOnly, set?.DisplayName));
                 }
                 var messages = _relay.Consume(Outbox.Parse(ExchangeFiles.ReadText(_outPath)), _socket is not null);
                 if (_socket is not null && messages.Count > 0) Send(messages);
+                // Local mode's line follows the drawn set and the addon's version.
+                if (LocalOnly) LocalStatus(set);
                 // The addon's first command to this session flips the
-                // "waiting for the addon" line.
-                if (_socket is not null && _owner.Status.Kind == PinShareStatusKind.ConnectedNoAddon && _relay.AddonSeen)
+                // "waiting for the addon" line; its name without a current
+                // version turns it into "addon outdated", and a Reload back (S21).
+                if (_socket is not null && _owner.Status.Kind is PinShareStatusKind.ConnectedNoAddon or PinShareStatusKind.Connected or PinShareStatusKind.AddonOutdated
+                    && _relay.AddonSeen)
                     ConnectedStatus();
                 if (_relay.Dirty || Now - _lastWrite >= 1)
                 {
@@ -160,10 +162,17 @@ internal sealed class RelaySession
     }
 
     private void ConnectedStatus() =>
-        Status("connected", "", _relay.AddonSeen
-            ? new PinShareStatus(PinShareStatusKind.Connected, _relay.Channel, _relay.Members.Count)
-            // Connected, yet the game has not loaded the script (fresh install: it needs a Reload).
-            : new PinShareStatus(PinShareStatusKind.ConnectedNoAddon));
+        Status("connected", "", _relay.AddonOutdated
+            ? new PinShareStatus(PinShareStatusKind.AddonOutdated)
+            : _relay.AddonSeen
+                ? new PinShareStatus(PinShareStatusKind.Connected, _relay.Channel, _relay.Members.Count)
+                // Connected, yet the game has not loaded the script (fresh install: it needs a Reload).
+                : new PinShareStatus(PinShareStatusKind.ConnectedNoAddon));
+
+    private void LocalStatus(PinSet? set) =>
+        Status("local", "", _relay.AddonOutdated
+            ? new PinShareStatus(PinShareStatusKind.AddonOutdated)
+            : new PinShareStatus(PinShareStatusKind.LocalOnly, set?.DisplayName));
 
     private void BackOff()
     {

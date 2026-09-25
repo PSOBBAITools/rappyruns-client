@@ -14,6 +14,8 @@ public enum PinShareStatusKind
     Connected,
     /// <summary>Connected, yet the game has not loaded the script (fresh install: it needs a Reload).</summary>
     ConnectedNoAddon,
+    /// <summary>The game still runs an older addon than the installed one (C#, S21): it needs a Reload.</summary>
+    AddonOutdated,
     /// <summary>No passphrase, but a pin set to draw: in.txt without a server. Text = set name.</summary>
     LocalOnly,
     /// <summary>Text = the error.</summary>
@@ -51,6 +53,7 @@ public sealed record PinShareStatus(PinShareStatusKind Kind, string? Text = null
             PinShareStatusKind.Connecting => (Tr("pinshare-status-connecting"), false),
             PinShareStatusKind.Connected => (Tr("pinshare-status-connected", Text, Count), false),
             PinShareStatusKind.ConnectedNoAddon => (Tr("pinshare-status-no-addon"), false),
+            PinShareStatusKind.AddonOutdated => (Tr("pinshare-status-addon-outdated"), true),
             PinShareStatusKind.LocalOnly => (Tr("pinshare-status-local-only", Text), false),
             PinShareStatusKind.Error => (Tr("pinshare-status-error", Text), true),
             PinShareStatusKind.NoAddonPlugin => (Tr("pinshare-status-no-plugin"), true),

@@ -14,6 +14,12 @@ namespace RappyRuns.Core.PinShare;
 /// </summary>
 public sealed class PinShareRelay
 {
+    /// <summary>
+    /// ADDON_VERSION of the init.lua this client ships (C#, S21). Kept in step
+    /// with client/data/pin-share/init.lua by a test; bump both together.
+    /// </summary>
+    public const int BundledAddonVersion = 1;
+
     /// <summary>The party's shared passphrase ("" = local-only: a pin set drawn without a server).</summary>
     public string Channel { get; set; } = "";
 
@@ -50,6 +56,20 @@ public sealed class PinShareRelay
     /// addon menu).
     /// </summary>
     public bool AddonSeen { get; set; }
+
+    /// <summary>The <c>version</c> the addon sent to THIS session, or null (none yet, or an addon older than versions).</summary>
+    public int? AddonVersion { get; private set; }
+
+    /// <summary>The addon sent its name to THIS session (the backlog's does not count).</summary>
+    public bool NameSeen { get; private set; }
+
+    /// <summary>
+    /// The game runs an older addon than the one installed next to it (an
+    /// update landed while the game kept the old script loaded). Judged once
+    /// the addon's name has arrived: a current addon sends its version first,
+    /// so a name with no version is an addon from before versions.
+    /// </summary>
+    public bool AddonOutdated => NameSeen && (AddonVersion ?? 0) < BundledAddonVersion;
 
     /// <summary>in.txt needs rewriting.</summary>
     public bool Dirty { get; set; } = true;
@@ -92,9 +112,16 @@ public sealed class PinShareRelay
             var value = fields.Count > 2 ? PinShareText.Clean(fields[2]) : null;
             switch (line.Command)
             {
+                case "version":
+                    // version <n>: sent once per session, before the name. Old
+                    // relays drop it as an unknown command.
+                    if (value is not null && PinShareText.ParseInteger(value) is { } version)
+                        AddonVersion = (int)Math.Clamp(version, 0, int.MaxValue);
+                    break;
                 case "name":
                     if (value is null) break;
                     Name = value;
+                    NameSeen = true;
                     if (connected) messages.AddRange(HelloMessages());
                     break;
                 case "color":
@@ -128,6 +155,9 @@ public sealed class PinShareRelay
     {
         Consume(lines, connected: false);
         AddonSeen = false;
+        // The version check is about the addon talking to this session.
+        AddonVersion = null;
+        NameSeen = false;
         return this;
     }
 

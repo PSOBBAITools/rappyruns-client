@@ -148,6 +148,64 @@ public class PinShareLispTests
         return relay;
     }
 
+    // --- addon version (C#, S21) ---------------------------------------------
+
+    [Fact(DisplayName = "addon version: a current addon's version then name is not outdated, and version sends nothing")]
+    public void CurrentAddonVersion()
+    {
+        var relay = BacklogRelay();
+        Assert.False(relay.AddonOutdated); // nothing from this session yet
+        Assert.Empty(relay.Consume(Lines(["8", "version", PinShareRelay.BundledAddonVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)]), true));
+        Assert.Equal(PinShareRelay.BundledAddonVersion, relay.AddonVersion);
+        Assert.False(relay.AddonOutdated); // no name yet: not judged
+        relay.Consume(Lines(["9", "name", "Teapot"]), true);
+        Assert.False(relay.AddonOutdated);
+        Assert.True(relay.AddonSeen);
+    }
+
+    [Fact(DisplayName = "addon version: a name with no version (an addon from before versions) is outdated; the backlog's name is not judged")]
+    public void OldAddonWithoutVersion()
+    {
+        // The backlog holds a name and a version, but they are not this session's.
+        var relay = new PinShareRelay { Channel = "secret" }.SkipBacklog(Lines(["5", "version", "1"], ["6", "name", "Teapot"]));
+        Assert.Null(relay.AddonVersion);
+        Assert.False(relay.NameSeen);
+        Assert.False(relay.AddonOutdated);
+        relay.Consume(Lines(["7", "clear_mine"]), true);
+        Assert.False(relay.AddonOutdated); // a command, but no name yet
+        relay.Consume(Lines(["8", "name", "Teapot"]), true);
+        Assert.True(relay.AddonOutdated);
+        // A Reload: the fresh addon sends its version, then its name again.
+        relay.Consume(Lines(["9", "version", "1"], ["10", "name", "Teapot"]), true);
+        Assert.False(relay.AddonOutdated);
+    }
+
+    [Theory(DisplayName = "addon version: an older or unreadable version counts as outdated")]
+    [InlineData("0", true)]
+    [InlineData("-3", true)]
+    [InlineData("x", true)]
+    [InlineData("2", false)]
+    public void VersionParsing(string version, bool outdated)
+    {
+        var relay = new PinShareRelay();
+        relay.Consume(Lines(["1", "version", version], ["2", "name", "Teapot"]), false);
+        Assert.Equal(outdated, relay.AddonOutdated);
+    }
+
+    [Fact(DisplayName = "addon version: BundledAddonVersion matches ADDON_VERSION in the shipped init.lua")]
+    public void BundledVersionMatchesInitLua()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "client", "data", "pin-share", "init.lua"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        var lua = File.ReadAllText(Path.Combine(dir.FullName, "client", "data", "pin-share", "init.lua"));
+        var match = System.Text.RegularExpressions.Regex.Match(lua, @"^local ADDON_VERSION = (\d+)\s*$", System.Text.RegularExpressions.RegexOptions.Multiline);
+        Assert.True(match.Success, "init.lua defines local ADDON_VERSION = <n>");
+        Assert.Equal(PinShareRelay.BundledAddonVersion, int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture));
+        // The addon sends it (before its name) to each new relay session.
+        Assert.Contains("sendCommand({ \"version\", ADDON_VERSION })", lua, StringComparison.Ordinal);
+    }
+
     private const string StateMessage =
         "{\"t\":\"state\",\"pins\":[{\"id\":3,\"owner\":\"Tea\\tpot\",\"floor\":10203,\"x\":1.5,\"y\":0,\"z\":-2.25,\"label\":\"集合\",\"no\":4,\"ownerNo\":2,\"room\":7,\"roomNo\":1,\"color\":\"ff8c00\",\"remaining\":42},{\"id\":4,\"owner\":\"Old\",\"floor\":1,\"x\":1,\"y\":2,\"z\":3,\"label\":\"\",\"no\":5,\"ownerNo\":1,\"room\":null,\"roomNo\":null,\"color\":\"\",\"remaining\":-1},{\"id\":\"bad\",\"floor\":1,\"x\":1,\"y\":2,\"z\":3}],\"arrows\":[{\"id\":9,\"owner\":\"Kettle\",\"floor\":5,\"room\":12,\"x1\":1,\"y1\":2,\"z1\":3,\"x2\":4,\"y2\":5,\"z2\":6,\"xm\":2.5,\"ym\":3.5,\"zm\":9,\"color\":\"66e0ff\",\"remaining\":30}],\"members\":[\"Teapot\",\"Kettle\"]}";
 
@@ -466,6 +524,7 @@ public class PinShareLispTests
             new(PinShareStatusKind.Off), new(PinShareStatusKind.NotAllowed), new(PinShareStatusKind.NoChannel),
             new(PinShareStatusKind.WaitingGame), new(PinShareStatusKind.Connecting),
             new(PinShareStatusKind.Connected, "secret", 2), new(PinShareStatusKind.ConnectedNoAddon),
+            new(PinShareStatusKind.AddonOutdated),
             new(PinShareStatusKind.LocalOnly, "TTF route"), new(PinShareStatusKind.Error, "boom"),
             new(PinShareStatusKind.NoAddonPlugin), new(PinShareStatusKind.InstallFailed, "denied"),
             new(PinShareStatusKind.BrokenLink, @"C:\Games\addons\Pin Share"), new(PinShareStatusKind.Conflict),

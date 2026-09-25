@@ -6,5 +6,6 @@
   "rooms-empty": { "en": "No rooms yet - play a quest and its rooms and enemies appear here.", "ja": "まだ部屋はありません。クエストをプレイすると、部屋と敵がここに表示されます。" },
   "run-open-page": { "en": "Open the run page", "ja": "記録ページを開く" },
   "video-untrimmed": { "en": "saved - check the end", "ja": "保存済み - 終わりを確認" },
+  "pinshare-status-addon-outdated": { "en": "Pin Share: addon outdated - Reload it from the game's addon menu", "ja": "Pin Share: アドオンが古い版のままです - ゲームのアドオンメニューから Reload してください" },
   "trigger-log-on-rotated": { "en": "{0}\n\n(Once the log grows past {2} MiB it is renamed to {1} and a fresh file starts, so check both.)", "ja": "{0}\n\n(ログが {2} MiB を超えると {1} に名前が変わり新しいファイルが始まるので、両方を確認してください。)" }
 }

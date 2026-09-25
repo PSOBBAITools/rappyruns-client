@@ -62,6 +62,7 @@ public static class StatusMsgs
         PinShareStatusKind.Connecting => Line.Busy(Msg.Of("pinshare-status-connecting")),
         PinShareStatusKind.Connected => Line.Ok(Msg.Of("pinshare-status-connected", status.Text, status.Count)),
         PinShareStatusKind.ConnectedNoAddon => Line.Neutral(Msg.Of("pinshare-status-no-addon")),
+        PinShareStatusKind.AddonOutdated => Line.Error(Msg.Of("pinshare-status-addon-outdated")),
         PinShareStatusKind.LocalOnly => Line.Neutral(Msg.Of("pinshare-status-local-only", status.Text)),
         PinShareStatusKind.Error => Line.Error(Msg.Of("pinshare-status-error", status.Text)),
         PinShareStatusKind.NoAddonPlugin => Line.Error(Msg.Of("pinshare-status-no-plugin")),

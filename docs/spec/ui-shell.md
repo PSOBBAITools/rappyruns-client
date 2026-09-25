@@ -232,6 +232,7 @@ C# への対応づけの目安:
 | `(:connecting)` | `:pinshare-status-connecting` | |
 | `(:connected channel members)` | `:pinshare-status-connected` | |
 | `(:connected-no-addon)` | `:pinshare-status-no-addon` (接続済みだが、アドオンからまだ命令が来ていない。新規インストール後は Reload が必要) | |
+| (C#) `AddonOutdated` | `pinshare-status-addon-outdated` (ゲームが古い版のアドオンを読み込んだまま。Reload が必要。S21) | ○ |
 | `(:local-only set-name)` | `:pinshare-status-local-only` (合言葉なしでピンセットだけ表示している) | |
 | `(:error text)` | `:pinshare-status-error` | ○ |
 | `(:no-addon-plugin)` | `:pinshare-status-no-plugin` (Solybum のアドオンプラグインが無い) | ○ |
@@ -529,7 +530,7 @@ DLL の更新 `pinshare-install-input-dll` (`pinshare-win32.lisp:158`):
   - `*pinshare-channel-items*` = 接続中なら (pins . arrows)。GUI の保存ボタンが使う
   - ピンセットが変わったら dirty にする。local-only なら `(:local-only name)`
   - out.txt を読んで `pinshare-relay-consume` を通し、接続中なら送る
-  - 接続中で、アドオンから初めて命令が来たら `:connected-no-addon` を `:connected` にする
+  - 接続中で、アドオンから初めて命令が来たら `:connected-no-addon` を `:connected` にする。C# はアドオンが古ければ (上の `version` の表) `AddonOutdated` にし、Reload で版が届けば戻す。local-only でも同じ判定をする
   - dirty か、前回書いてから 1 秒経っていたら in.txt を書く
 - 書き込みは `in.txt.tmp` に書いてから `MoveFileEx(REPLACE_EXISTING)` で置き換える。失敗したら dirty のままにして次のティックでやり直す
 - 終わるとき: 保存用の一覧を nil にし、接続を取り消し、**in.txt をピン無し・ピンセット無しで書き直す** (アドオンは数秒間まだ新しい in.txt と見なして描き続けるので、前のクエストのピンセットが残って見えないようにする)
@@ -545,6 +546,7 @@ DLL の更新 `pinshare-install-input-dll` (`pinshare-win32.lisp:158`):
 
 | 命令 | 引数 | 送る JSON |
 |---|---|---|
+| `version` | 整数 (init.lua の `ADDON_VERSION`) | 送らない (C#, S21)。中継のセッションごとに1回、`name` より先にアドオンが書く。C# は同梱版 (`PinShareRelay.BundledAddonVersion`、テストで init.lua と照合) と比べ、このセッションで `name` が届いたのに版が無いか古ければ `AddonOutdated` (「アドオンが古い版のまま。ゲームのアドオンメニューから Reload」) を出す。バックログの name/version は判定に使わない。Lisp の中継は未知の命令として捨てるので互換 |
 | `name` | 名前 | 接続中なら hello 一式を送り直す (サーバーは色を名前ごとに持つため) |
 | `color` | RRGGBB | `{"t":"color","color":v}` |
 | `arrow_color` | RRGGBB か空 (空はピンと同じ色) | `{"t":"arrow_color","color":v}` |
