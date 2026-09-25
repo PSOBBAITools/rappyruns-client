@@ -176,7 +176,7 @@ public class PinShareLispTests
         relay.Consume(Lines(["8", "name", "Teapot"]), true);
         Assert.True(relay.AddonOutdated);
         // A Reload: the fresh addon sends its version, then its name again.
-        relay.Consume(Lines(["9", "version", "1"], ["10", "name", "Teapot"]), true);
+        relay.Consume(Lines(["9", "version", PinShareRelay.BundledAddonVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)], ["10", "name", "Teapot"]), true);
         Assert.False(relay.AddonOutdated);
     }
 
@@ -195,10 +195,7 @@ public class PinShareLispTests
     [Fact(DisplayName = "addon version: BundledAddonVersion matches ADDON_VERSION in the shipped init.lua")]
     public void BundledVersionMatchesInitLua()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "client", "data", "pin-share", "init.lua"))) dir = dir.Parent;
-        Assert.NotNull(dir);
-        var lua = File.ReadAllText(Path.Combine(dir.FullName, "client", "data", "pin-share", "init.lua"));
+        var lua = ShippedInitLua();
         Assert.Equal(PinShareRelay.BundledAddonVersion, PinShareRelay.AddonVersionOf(lua));
         // The addon sends it (before its name) to each new relay session.
         Assert.Contains("sendCommand({ \"version\", ADDON_VERSION })", lua, StringComparison.Ordinal);
@@ -213,10 +210,20 @@ public class PinShareLispTests
             $"init.lua changed (sha256 {hash}): bump ADDON_VERSION and PinShareRelay.BundledAddonVersion, then record the hash for the new version");
     }
 
+    /// <summary>The init.lua this client ships (client/data/pin-share, found from the test binary upward).</summary>
+    private static string ShippedInitLua()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "client", "data", "pin-share", "init.lua"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        return File.ReadAllText(Path.Combine(dir.FullName, "client", "data", "pin-share", "init.lua")).Replace("\r\n", "\n", StringComparison.Ordinal);
+    }
+
     // sha256 of init.lua's code lines (no whole-line comments or blank lines, LF-joined) per ADDON_VERSION.
     private static readonly Dictionary<int, string> KnownAddonHashes = new()
     {
         [1] = "354b9500e70b9b1be0c407323153fc075f8ba43c118bea5861115c3d2f05586b",
+        [2] = "dcec307797d727c941112944e0d6a01a6236a8ba58e07d83a42ebe79f2c70159", // S47: reads and shows in.txt's alert line
     };
 
     [Theory(DisplayName = "addon version: read from the installed init.lua; none reads as 0")]
@@ -248,6 +255,9 @@ public class PinShareLispTests
         relay.Consume(Lines(["8", "clear_all"]), true);
         relay.Consume(Lines(["9", "arrow_color", ""], ["10", "name", "Kettle"]), true);
         relay.Session = "abcd1234";
+        // The Lisp-era scenario: its addon sends a name but no version, so
+        // judge nothing here (the alert line has its own tests, S47).
+        relay.InstalledAddonVersion = 0;
         relay.SetStatus("connected", "");
         relay.NoteMessage(StateMessage);
         return relay;
@@ -330,6 +340,57 @@ public class PinShareLispTests
 
     [Fact(DisplayName = "the rendered text ends the way readInbox's terminator check wants")]
     public void InboxTerminator() => Assert.EndsWith("\nend\n", Inbox.Render(AfterRename(), 1), StringComparison.Ordinal);
+
+    [Fact(DisplayName = "in.txt: an outdated addon gets an alert line after status; the next version's Reload clears it (S47)")]
+    public void InboxAlertOutdated()
+    {
+        var relay = new PinShareRelay { Session = "abcd1234", Channel = "secret" }.SkipBacklog([]);
+        relay.SetStatus("connected", "");
+        // An addon from version 2 on, older than the one installed next to the game.
+        relay.InstalledAddonVersion = 3;
+        relay.Dirty = false;
+        relay.Consume(Lines(["1", "version", "2"], ["2", "name", "Teapot"]), true);
+        Assert.True(relay.Dirty); // the alert reaches the addon on the next write
+        Assert.Equal(
+            TabLine("session", "abcd1234")
+            + TabLine("time", 1)
+            + TabLine("ack", 2)
+            + TabLine("status", "connected", "")
+            + TabLine("alert", "addon_outdated", "This addon is outdated: Reload it from the game's addon menu")
+            + TabLine("channel", "secret")
+            + TabLine("end"),
+            Inbox.Render(relay, 1));
+        // Reload: the new script sends the installed version, and the line goes.
+        relay.Consume(Lines(["3", "version", "3"], ["4", "name", "Teapot"]), true);
+        Assert.Null(relay.Alert);
+        Assert.DoesNotContain("\nalert\t", Inbox.Render(relay, 1), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "in.txt: no alert before the addon is judged or for a current or unversioned install (S47)")]
+    public void InboxNoAlert()
+    {
+        var relay = new PinShareRelay { Session = "abcd1234" }.SkipBacklog([]);
+        Assert.Null(relay.Alert); // nothing from the addon yet
+        relay.Consume(Lines(["1", "version", PinShareRelay.BundledAddonVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)], ["2", "name", "Teapot"]), false);
+        Assert.Null(relay.Alert);
+        var linked = new PinShareRelay { InstalledAddonVersion = 0 };
+        linked.Consume(Lines(["1", "name", "Teapot"]), false);
+        Assert.Null(linked.Alert);
+        Assert.DoesNotContain("alert", Inbox.Render(linked, 1), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "in.txt: the shipped addon reads the alert line, and addons before version 2 skip unknown line kinds (S47)")]
+    public void AddonReadsAlert()
+    {
+        var lua = ShippedInitLua();
+        Assert.Contains("elseif kind == \"alert\" then", lua, StringComparison.Ordinal);
+        Assert.Contains($"relay.alert.code == \"{PinShareRelay.AlertAddonOutdated}\"", lua, StringComparison.Ordinal);
+        // readInbox is an if/elseif chain on the line kind with no else: an
+        // unknown kind (alert, for a version 1 addon) falls through untouched.
+        var readInbox = lua[lua.IndexOf("local function readInbox()", StringComparison.Ordinal)..];
+        readInbox = readInbox[..readInbox.IndexOf("\nend\n", StringComparison.Ordinal)];
+        Assert.DoesNotContain("\n        else\n", readInbox, StringComparison.Ordinal);
+    }
 
     [Fact(DisplayName = "a server error message is returned for the log, state untouched")]
     public void ServerError()

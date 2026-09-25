@@ -20,7 +20,7 @@ public sealed partial class PinShareRelay
     /// ADDON_VERSION of the init.lua this client ships (C#, S21). Kept in step
     /// with client/data/pin-share/init.lua by a test; bump both together.
     /// </summary>
-    public const int BundledAddonVersion = 1;
+    public const int BundledAddonVersion = 2;
 
     /// <summary>The party's shared passphrase ("" = local-only: a pin set drawn without a server).</summary>
     public string Channel { get; set; } = "";
@@ -73,6 +73,21 @@ public sealed partial class PinShareRelay
     /// so a name with no version is an addon from before versions.
     /// </summary>
     public bool AddonOutdated => NameSeen && (AddonVersion ?? 0) < InstalledAddonVersion;
+
+    /// <summary>in.txt <c>alert</c> code: the running addon is older than the installed one.</summary>
+    public const string AlertAddonOutdated = "addon_outdated";
+
+    /// <summary>
+    /// What the client wants the addon's window to say about the client's
+    /// view of it (C#, S47), as in.txt's <c>alert</c> line, or null for none.
+    /// <c>Code</c> is a stable token the addon may word itself; <c>Message</c>
+    /// is the English fallback it shows for a code it does not know, so a
+    /// later client can add codes without an addon update. Every input it
+    /// depends on changes only in <see cref="Consume"/> / <see cref="SkipBacklog"/>
+    /// or per session, which already mark in.txt dirty.
+    /// </summary>
+    public (string Code, string Message)? Alert =>
+        AddonOutdated ? (AlertAddonOutdated, "This addon is outdated: Reload it from the game's addon menu") : null;
 
     /// <summary>
     /// ADDON_VERSION of the init.lua installed next to the game - what a
