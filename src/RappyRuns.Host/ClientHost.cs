@@ -485,6 +485,10 @@ public sealed class ClientHost : IDisposable
     /// check-token (gui.lisp:1486): the token line, the Pin Share verdict, the
     /// moderator role and auto-publish mirror, the guest merge and the queue
     /// flush. <paramref name="onInvalid"/> runs on a definite 401 only.
+    /// The guest merge (S48) runs here, after the check, and only while the
+    /// verified token is still the configured one: a check of a token the
+    /// player has since replaced must not move the guest's runs into that
+    /// account. A later check of the same token does not stop it.
     /// Checks finish in any order: a result applies only while its check is
     /// the latest and its token still the configured one (<see cref="TokenCheckGate"/>);
     /// a superseded check applies nothing and returns null.
@@ -509,9 +513,27 @@ public sealed class ClientHost : IDisposable
             ApplyModerator(user.IsModerator);
             ApplyAutoPublish(user.AutoPublish);
         }, _shutdown.Token).ConfigureAwait(false);
+        if (result.Kind == TokenCheckKind.Ok && ticket.ChecksConfigured(Config.ApiToken))
+        {
+            try
+            {
+                result = result with { Merge = await Auth.MergeGuestAsync(ticket.Token, _shutdown.Token).ConfigureAwait(false) };
+            }
+            catch (Exception e) when (e is not OperationCanceledException || !_shutdown.IsCancellationRequested)
+            {
+                // As when the merge ran inside the check: a failure there
+                // (the config write, say) is the check's error.
+                _log($"token check: guest merge failed: {e.Message}");
+                result = new TokenCheckResult(TokenCheckKind.Error, Error: e);
+            }
+        }
         if (!Current())
         {
-            _log($"token check: a superseded {result.Kind} result was ignored");
+            _log(result.Merge is { } merged
+                ? $"token check: a superseded {result.Kind} result was ignored (the guest merge ran: {merged})"
+                : $"token check: a superseded {result.Kind} result was ignored");
+            // Runs queued under the merged guest go out now, not at the next trigger.
+            if (result.Merge == MergeResult.Ok) Poll.RequestRetry();
             return null;
         }
         switch (result.Kind)

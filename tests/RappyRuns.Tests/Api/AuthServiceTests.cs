@@ -251,8 +251,8 @@ public class AuthServiceTests
         Assert.StartsWith("Not linked", result.StatusText(Language.En));
     }
 
-    [Fact(DisplayName = "check-token: ok verifies, applies flags first, merges the guest and clears it")]
-    public async Task CheckOkMerges()
+    [Fact(DisplayName = "check-token: ok verifies and applies flags first; the merge is the app's next step (S48)")]
+    public async Task CheckOk()
     {
         var order = new List<string>();
         var (auth, handler, settings) = Make(r =>
@@ -265,37 +265,64 @@ public class AuthServiceTests
         MeUser? verified = null;
         var result = await auth.CheckTokenAsync(u => { verified = u; order.Add("verified"); });
         Assert.Equal(TokenCheckKind.Ok, result.Kind);
-        Assert.Equal(["https://s.example/api/me", "verified", "https://s.example/api/merge-anonymous"], order);
+        Assert.Equal(["https://s.example/api/me", "verified"], order);
         Assert.Equal("tpot", verified!.Username);
-        Assert.Equal(MergeResult.Ok, result.Merge);
-        Assert.Equal("", settings.AnonToken);
-        Assert.Equal(1, settings.Saves);
+        Assert.Null(result.Merge);
+        Assert.Equal("eta_g", settings.AnonToken); // left for MergeGuestAsync
         Assert.Equal("Bearer eta_x", handler.Requests[0].Authorization);
-        Assert.Equal("Bearer eta_x", handler.Requests[1].Authorization);
         Assert.Equal((true, true, true, true), (result.PinShareAllowed!.Value, result.IsModerator!.Value, result.AutoPublish!.Value, result.RetryQueue));
         Assert.Equal("Token: OK (tpot)", result.StatusText(Language.En));
         Assert.Equal("Token OK - authenticated as tpot.", result.DialogText(Language.En));
     }
 
-    [Fact(DisplayName = "check-token: a gone guest is dropped too; a transport error keeps it")]
-    public async Task CheckMergeOutcomes()
+    [Fact(DisplayName = "guest merge: merges into the given token's account and clears the guest")]
+    public async Task MergeGuestOk()
     {
-        var (gone, _, goneSettings) = Make(r => r.Url.EndsWith("/api/me", StringComparison.Ordinal) ? (200, """{"username":"u"}""") : (404, ""),
-            new FakeSettings { ApiToken = "eta_x", AnonToken = "eta_g" });
-        Assert.Equal(MergeResult.Gone, (await gone.CheckTokenAsync()).Merge);
+        var (auth, handler, settings) = Make(_ => (200, "{}"), new FakeSettings { ApiToken = "eta_x", AnonToken = "eta_g" });
+        Assert.Equal(MergeResult.Ok, await auth.MergeGuestAsync("eta_x"));
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("https://s.example/api/merge-anonymous", request.Url);
+        Assert.Equal("Bearer eta_x", request.Authorization);
+        Assert.Equal("", settings.AnonToken);
+        Assert.Equal(1, settings.Saves);
+    }
+
+    [Fact(DisplayName = "guest merge: a gone guest is dropped too; a transport error keeps it")]
+    public async Task MergeGuestOutcomes()
+    {
+        var (gone, _, goneSettings) = Make(_ => (404, ""), new FakeSettings { ApiToken = "eta_x", AnonToken = "eta_g" });
+        Assert.Equal(MergeResult.Gone, await gone.MergeGuestAsync("eta_x"));
         Assert.Equal("", goneSettings.AnonToken);
 
-        var (failing, _, failingSettings) = Make(r => r.Url.EndsWith("/api/me", StringComparison.Ordinal) ? (200, """{"username":"u"}""") : (500, ""),
-            new FakeSettings { ApiToken = "eta_x", AnonToken = "eta_g" });
-        var result = await failing.CheckTokenAsync();
-        Assert.Equal(TokenCheckKind.Ok, result.Kind);
-        Assert.Null(result.Merge);
+        var (failing, _, failingSettings) = Make(_ => (500, ""), new FakeSettings { ApiToken = "eta_x", AnonToken = "eta_g" });
+        Assert.Null(await failing.MergeGuestAsync("eta_x"));
         Assert.Equal("eta_g", failingSettings.AnonToken);
         Assert.Equal(0, failingSettings.Saves);
     }
 
-    [Fact(DisplayName = "check-token: no guest, no merge request")]
-    public async Task CheckNoGuest()
+    [Fact(DisplayName = "guest merge: a guest registered while the merge was out is kept (S48)")]
+    public async Task MergeGuestKeepsNewGuest()
+    {
+        var settings = new FakeSettings { ApiToken = "eta_x", AnonToken = "eta_g" };
+        var (auth, _, _) = Make(_ =>
+        {
+            settings.AnonToken = "eta_g2"; // the queue registered a fresh guest meanwhile
+            return (200, "{}");
+        }, settings);
+        Assert.Equal(MergeResult.Ok, await auth.MergeGuestAsync("eta_x"));
+        Assert.Equal("eta_g2", settings.AnonToken);
+    }
+
+    [Fact(DisplayName = "guest merge: no guest, no request")]
+    public async Task MergeNoGuest()
+    {
+        var (auth, handler, _) = Make(_ => (200, "{}"), new FakeSettings { ApiToken = "eta_x" });
+        Assert.Null(await auth.MergeGuestAsync("eta_x"));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact(DisplayName = "check-token: flags follow the features and role")]
+    public async Task CheckFlags()
     {
         var (auth, handler, _) = Make(_ => (200, """{"username":"u","features":[]}"""), new FakeSettings { ApiToken = "eta_x" });
         var result = await auth.CheckTokenAsync();
