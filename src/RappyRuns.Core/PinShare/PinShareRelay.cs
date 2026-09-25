@@ -4,6 +4,9 @@ using System.Text.RegularExpressions;
 
 namespace RappyRuns.Core.PinShare;
 
+/// <summary>One in.txt <c>alert</c> line (C#, S47): <c>alert\t&lt;code&gt;\t&lt;message&gt;[\t&lt;arg&gt;]</c>.</summary>
+public sealed record RelayAlert(string Code, string Message, string? Arg = null);
+
 /// <summary>
 /// The relay's state for one session (Lisp <c>pinshare-relay</c> struct,
 /// pinshare.lisp:29): the client stands in for the Pin Share addon's
@@ -77,17 +80,26 @@ public sealed partial class PinShareRelay
     /// <summary>in.txt <c>alert</c> code: the running addon is older than the installed one.</summary>
     public const string AlertAddonOutdated = "addon_outdated";
 
+    /// <summary>The English fallback for <see cref="AlertAddonOutdated"/> (the addon from version 2 words it itself).</summary>
+    public const string AlertAddonOutdatedMessage = "This addon is outdated: Reload it from the game's addon menu";
+
     /// <summary>
     /// What the client wants the addon's window to say about the client's
-    /// view of it (C#, S47), as in.txt's <c>alert</c> line, or null for none.
-    /// <c>Code</c> is a stable token the addon may word itself; <c>Message</c>
-    /// is the English fallback it shows for a code it does not know, so a
-    /// later client can add codes without an addon update. Every input it
-    /// depends on changes only in <see cref="Consume"/> / <see cref="SkipBacklog"/>
+    /// view of it (C#, S47), one in.txt <c>alert</c> line each; empty for
+    /// none. <see cref="RelayAlert.Code"/> is a stable token the addon may
+    /// word itself; <see cref="RelayAlert.Message"/> is the English fallback
+    /// it shows for a code it does not know, so a later client can add codes
+    /// without an addon update. <see cref="AlertAddonOutdated"/> carries the
+    /// installed version as its argument: in.txt is shared by every game
+    /// window on the install, and the addon that last spoke need not be the
+    /// one reading, so each addon compares its own version with it. Every
+    /// input changes only in <see cref="Consume"/> / <see cref="SkipBacklog"/>
     /// or per session, which already mark in.txt dirty.
     /// </summary>
-    public (string Code, string Message)? Alert =>
-        AddonOutdated ? (AlertAddonOutdated, "This addon is outdated: Reload it from the game's addon menu") : null;
+    public IReadOnlyList<RelayAlert> Alerts =>
+        AddonOutdated
+            ? [new RelayAlert(AlertAddonOutdated, AlertAddonOutdatedMessage, InstalledAddonVersion.ToString(CultureInfo.InvariantCulture))]
+            : [];
 
     /// <summary>
     /// ADDON_VERSION of the init.lua installed next to the game - what a

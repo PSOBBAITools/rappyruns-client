@@ -578,7 +578,7 @@ session\t<8桁16進>
 time\t<unix 秒>
 ack\t<処理済みの最大 seq>
 status\t<connecting|connected|error|local>\t<message>
-alert\t<code>\t<英文>          (C#, S47。注意があるときだけ)
+alert\t<code>\t<英文>[\t<arg>]  (C#, S47。注意があるときだけ、1 件 1 行)
 channel\t<合言葉>
 member\t<名前>                 (人数ぶん)
 pin\t<id>\t<owner>\t<floor>\t<x>\t<y>\t<z>\t<remaining>\t<label>\t<no>\t<ownerNo>\t<color>\t<roomNo>\t<room>[\t<locked>]
@@ -592,7 +592,7 @@ end
 - 最後は必ず `\nend\n` で終える (アドオンの `readInbox` は `"\nend\r?\n?$"` で終わっているかを見て、書きかけを弾く)
 - アドオンは `time` が 5 秒より古いと「中継が動いていない」と見なし、何も描かない。だから**変化がなくても 1 秒ごとに書き直す**
 - status の文字列 `connecting` / `connected` / `error` / `local` はアドオンが文字列のまま比べる
-- `alert` 行 (C#, S47): クライアントから見たアドオンの状態を、ゲーム内の Pin Share 設定ウィンドウに赤字 1 行で出させる。注意が無いときは行ごと出さない (Lisp の中継や注意の無いときの in.txt はバイト単位で従来どおり)。`code` は決まった語で、アドオンは知っている code なら自分の文言を、知らない code なら 2 列目の英文をそのまま出す (クライアントだけで code を足せる)。今ある code は `addon_outdated` だけで、`PinShareRelay.AddonOutdated` (上の `version` の表) と同じ条件で出る。判定の材料は out.txt の処理でしか変わらず、そこで dirty になるので次の書き込みで届く。`readInbox` は行の種類の if/elseif に else が無いので、版 1 のアドオン (と Lisp 版) は `alert` 行を読み飛ばす。つまり表示できるのは版 2 以降のアドオンで、ゲームが版 1 を読み込んだままのときは今までどおりクライアントの設定画面の `AddonOutdated` だけが知らせる。アドオンの `ADDON_VERSION` は 2 (`BundledAddonVersion` と揃える)
+- `alert` 行 (C#, S47): クライアントから見たアドオンの状態を、ゲーム内の Pin Share 設定ウィンドウに赤字で出させる (新しく出た注意は、設定ウィンドウを閉じていても画面中央の一時表示で一度だけ知らせる)。注意が無いときは行ごと出さない (Lisp の中継や注意の無いときの in.txt はバイト単位で従来どおり)。複数あれば 1 件 1 行で、アドオンは全部を読む。`code` は決まった語で、アドオンは知っている code なら自分の文言を、知らない code なら 2 列目の英文をそのまま出す (クライアントだけで code を足せる)。各列は `pinshare-clean` を通す。今ある code は `addon_outdated` だけで、`PinShareRelay.AddonOutdated` (上の `version` の表) と同じ条件で出る。`arg` はインストール済みの版で、アドオンは自分の `ADDON_VERSION` がそれ以上なら出さない (in.txt は同じゲームフォルダーの全ウィンドウで共有され、判定は最後に name を送ったアドオンのものなので、Reload 済みのウィンドウに誤って出さないため)。判定の材料は out.txt の処理でしか変わらず、そこで dirty になるので次の書き込みで届く。`readInbox` は行の種類の if/elseif に else が無いので、版 1 のアドオン (と Lisp 版) は `alert` 行を読み飛ばす。つまり表示できるのは版 2 以降のアドオンで、ゲームが版 1 を読み込んだままのときは今までどおりクライアントの設定画面の `AddonOutdated` だけが知らせる。アドオンの `ADDON_VERSION` は 2 (`BundledAddonVersion` と揃える)
 
 ### 8.7 ピンセット
 - 取得: クエストを読み込んだ瞬間 (`pinshare-set-fetch-wanted`, `pinshare.lisp:663`)。ゴーストと同じく、クエストのポインタが変わったら 1 回だけ取る

@@ -40,7 +40,13 @@ public static class Inbox
         // S47: only when there is one, so an alert-free in.txt stays byte
         // for byte what addons before version 2 (and the Lisp relay) know.
         // Those addons skip line kinds they do not know.
-        if (relay.Alert is { } alert) Line("alert", alert.Code, PinShareText.Clean(alert.Message));
+        foreach (var alert in relay.Alerts)
+        {
+            var code = PinShareText.Clean(alert.Code);
+            var message = PinShareText.Clean(alert.Message);
+            if (alert.Arg is null) Line("alert", code, message);
+            else Line("alert", code, message, PinShareText.Clean(alert.Arg));
+        }
         Line("channel", PinShareText.Clean(relay.Channel));
         foreach (var member in relay.Members)
         {
