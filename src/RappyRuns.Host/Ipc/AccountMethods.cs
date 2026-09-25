@@ -6,7 +6,7 @@ internal sealed class AccountMethods(ClientHost host)
     public void Register(IIpcRegistry r) =>
         r.RegisterSync("account.link", _ =>
         {
-            host.StartPairing();
+            host.StartPairing(); // runs on its own; progress goes to state.token
             return null;
         });
 }

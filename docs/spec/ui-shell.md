@@ -113,6 +113,7 @@ C# への対応づけの目安:
 - 通信失敗: `token-status-error-text` (赤)
 - ペアリング中: `:pairing-waiting` / `:pairing-expired` / `:pairing-failed` (赤)
 - login.txt: `:file-login-checking` / `:file-login-bad-file` / `:file-login-invalid` / `:file-login-failed`
+- C# 版 (S49): ペアリングと login.txt の行は、その流れを始めた後にトークン確認が始まったか、トークンが替わったら出さない (新しい確認の結果を古い流れの失敗で上書きしない)。流れ自体は止めない
 
 #### 1.2.2 Runs 一覧 `runs-list` (`gui.lisp:117-138`)
 

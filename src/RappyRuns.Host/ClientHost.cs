@@ -556,59 +556,72 @@ public sealed class ClientHost : IDisposable
     /// <summary>check-token's on-invalid at startup: a revoked token heals itself when login.txt is there.</summary>
     private void ReloginWithFile()
     {
-        if (Credentials.Present(Options.ExeDir)) StartFileLogin();
+        if (Credentials.Present(Options.ExeDir)) _ = StartFileLogin();
     }
 
     /// <summary>prompt-for-token-setup (gui.lisp:758): no token + login.txt = file login. Never the browser.</summary>
     private void PromptForTokenSetup()
     {
-        if (Auth.IsUnlinked && Credentials.Present(Options.ExeDir)) StartFileLogin();
+        if (Auth.IsUnlinked && Credentials.Present(Options.ExeDir)) _ = StartFileLogin();
     }
 
-    /// <summary>run-file-login-flow (gui.lisp:836); success hands over to TokenLinked → check-token.</summary>
-    internal void StartFileLogin() => _ = Task.Run(async () =>
+    /// <summary>
+    /// run-file-login-flow (gui.lisp:836); success hands over to TokenLinked →
+    /// check-token. Its lines give way to a token check started after it or
+    /// a token changed meanwhile (S49, <see cref="TokenCheckGate.Watch"/>).
+    /// </summary>
+    internal Task StartFileLogin()
     {
-        var credentials = Credentials.Read(Credentials.PathIn(Options.ExeDir));
-        if (credentials is null)
+        var ticket = _tokenChecks.Watch(Config.ApiToken);
+        return Task.Run(async () =>
         {
-            Ui.SetToken(Line.Error(Msg.Of("file-login-bad-file")));
-            return;
-        }
-        Ui.SetToken(Line.Busy(Msg.Of("file-login-checking")));
-        var result = await Auth.LoginWithCredentialsAsync(credentials.Username, credentials.Password, _shutdown.Token)
-            .ConfigureAwait(false);
-        switch (result.Outcome)
-        {
-            case FileLoginOutcome.BadFile:
-                Ui.SetToken(Line.Error(Msg.Of("file-login-bad-file")));
-                break;
-            case FileLoginOutcome.Invalid:
-                Ui.SetToken(Line.Error(Msg.Of("file-login-invalid")));
-                break;
-            case FileLoginOutcome.Failed:
-                Ui.SetToken(Line.Error(Msg.Of("file-login-failed", result.Error)));
-                break;
-        }
-    });
+            var credentials = Credentials.Read(Credentials.PathIn(Options.ExeDir));
+            if (credentials is null)
+            {
+                SetTokenLine(ticket, Line.Error(Msg.Of("file-login-bad-file")));
+                return;
+            }
+            SetTokenLine(ticket, Line.Busy(Msg.Of("file-login-checking")));
+            var result = await Auth.LoginWithCredentialsAsync(credentials.Username, credentials.Password, _shutdown.Token)
+                .ConfigureAwait(false);
+            switch (result.Outcome)
+            {
+                case FileLoginOutcome.BadFile:
+                    SetTokenLine(ticket, Line.Error(Msg.Of("file-login-bad-file")));
+                    break;
+                case FileLoginOutcome.Invalid:
+                    SetTokenLine(ticket, Line.Error(Msg.Of("file-login-invalid")));
+                    break;
+                case FileLoginOutcome.Failed:
+                    SetTokenLine(ticket, Line.Error(Msg.Of("file-login-failed", result.Error)));
+                    break;
+            }
+        });
+    }
 
-    /// <summary>run-pairing-flow (gui.lisp:783) on a worker; progress on the token line.</summary>
-    internal void StartPairing()
+    /// <summary>
+    /// run-pairing-flow (gui.lisp:783) on a worker; progress on the token line,
+    /// which gives way to a token check started after it or a token changed
+    /// meanwhile (S49, <see cref="TokenCheckGate.Watch"/>).
+    /// </summary>
+    internal Task StartPairing()
     {
-        if (Auth.IsPairing || Ui.Pairing) return;
+        if (Auth.IsPairing || Ui.Pairing) return Task.CompletedTask;
         Ui.SetPairing(true);
-        _ = Task.Run(async () =>
+        var ticket = _tokenChecks.Watch(Config.ApiToken);
+        return Task.Run(async () =>
         {
             try
             {
                 var result = await Auth.RunPairingAsync(OpenExternal,
-                    () => Ui.SetToken(Line.Busy(Msg.Of("pairing-waiting"))), _shutdown.Token).ConfigureAwait(false);
+                    () => SetTokenLine(ticket, Line.Busy(Msg.Of("pairing-waiting"))), _shutdown.Token).ConfigureAwait(false);
                 switch (result.Outcome)
                 {
                     case PairingOutcome.Expired:
-                        Ui.SetToken(Line.Neutral(Msg.Of("pairing-expired")));
+                        SetTokenLine(ticket, Line.Neutral(Msg.Of("pairing-expired")));
                         break;
                     case PairingOutcome.FailedToStart:
-                        Ui.SetToken(Line.Error(Msg.Of("pairing-failed", result.Error)));
+                        SetTokenLine(ticket, Line.Error(Msg.Of("pairing-failed", result.Error)));
                         break;
                 }
             }
@@ -617,6 +630,13 @@ public sealed class ClientHost : IDisposable
                 Ui.SetPairing(false);
             }
         });
+    }
+
+    // The token line for a login or pairing flow, unless a newer check owns it.
+    private void SetTokenLine(TokenCheckGate.Ticket ticket, Line line)
+    {
+        if (ticket.IsCurrent(Config.ApiToken)) Ui.SetToken(line);
+        else _log($"token line: a superseded {line.Msg.Key} was not shown");
     }
 
     /// <summary>pinshare-permission-loop: re-ask /api/me every 30 minutes while linked.</summary>

@@ -26,4 +26,14 @@ internal sealed class TokenCheckGate
     /// <summary>Starts a check of <paramref name="configuredToken"/>; every earlier ticket goes stale.</summary>
     public Ticket Begin(string? configuredToken) =>
         new(this, Interlocked.Increment(ref _latest), Tokens.Normalize(configuredToken));
+
+    /// <summary>
+    /// A ticket for another writer of the token line (S49: the login.txt login,
+    /// the browser pairing) that does not itself start a check: it stays
+    /// current until a check starts after it or the token changes, so a
+    /// late failure of that flow cannot overwrite a newer check's result.
+    /// Earlier tickets stay as they were.
+    /// </summary>
+    public Ticket Watch(string? configuredToken) =>
+        new(this, Volatile.Read(ref _latest), Tokens.Normalize(configuredToken));
 }

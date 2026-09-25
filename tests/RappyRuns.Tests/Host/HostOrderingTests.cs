@@ -71,6 +71,52 @@ public sealed class HostOrderingTests
         Assert.DoesNotContain("alice", Json(h.Host.Ui.Token), StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "ordering: a login.txt login that fails after a newer token check leaves that check's line (S49)")]
+    public async Task FileLoginLosesToNewerCheck()
+    {
+        using var h = new HostHarness(new GatedHandler((url, _) => Me(url) || url.EndsWith("/api/login", StringComparison.Ordinal) ? null : (404, "")),
+            c => c.ApiToken = "token-a");
+        File.WriteAllText(Path.Combine(h.Dir, "login.txt"), "username=alice\npassword=wrong\n");
+        h.CallOrdered("app.hello");
+        var login = h.Host.StartFileLogin();
+        var loginAnswer = h.Http.Take((url, _) => url.EndsWith("/api/login", StringComparison.Ordinal));
+        // Meanwhile the player pastes bob's token and saves: a newer check.
+        h.Config.ApiToken = "token-b";
+        var check = h.Host.CheckTokenAsync();
+        h.Http.Take((url, auth) => Me(url) && auth == "Bearer token-b").SetResult((200, MeB));
+        Assert.Equal(TokenCheckKind.Ok, (await check)!.Kind);
+        loginAnswer.SetResult((401, ""));
+        await login;
+        Assert.Equal(Json(Line.Ok(Msg.Of("token-ok", "bob"))), Json(h.Host.Ui.Token));
+    }
+
+    [Fact(DisplayName = "ordering: a login.txt login with nothing newer still shows its failure (S49)")]
+    public async Task FileLoginShowsOwnFailure()
+    {
+        using var h = new HostHarness(new GatedHandler((url, _) => url.EndsWith("/api/login", StringComparison.Ordinal) ? (401, "") : (404, "")),
+            c => c.ApiToken = "token-a");
+        File.WriteAllText(Path.Combine(h.Dir, "login.txt"), "username=alice\npassword=wrong\n");
+        h.CallOrdered("app.hello");
+        await h.Host.StartFileLogin();
+        Assert.Equal(Json(Line.Error(Msg.Of("file-login-invalid"))), Json(h.Host.Ui.Token));
+    }
+
+    [Fact(DisplayName = "ordering: a pairing that fails after a newer token check leaves that check's line (S49)")]
+    public async Task PairingLosesToNewerCheck()
+    {
+        using var h = new HostHarness(new GatedHandler((url, _) => Me(url) || url.EndsWith("/api/pair", StringComparison.Ordinal) ? null : (404, "")));
+        h.CallOrdered("app.hello");
+        var pairing = h.Host.StartPairing();
+        var pairAnswer = h.Http.Take((url, _) => url.EndsWith("/api/pair", StringComparison.Ordinal));
+        h.Config.ApiToken = "token-b"; // pasted in Settings instead of waiting for the browser
+        var check = h.Host.CheckTokenAsync();
+        h.Http.Take((url, auth) => Me(url) && auth == "Bearer token-b").SetResult((200, MeB));
+        Assert.Equal(TokenCheckKind.Ok, (await check)!.Kind);
+        pairAnswer.SetResult((500, ""));
+        await pairing;
+        Assert.Equal(Json(Line.Ok(Msg.Of("token-ok", "bob"))), Json(h.Host.Ui.Token));
+    }
+
     [Fact(DisplayName = "ordering: no runs list reaches the UI before the hello reply, and none is lost after it (S32)")]
     public void RunsNeverOvertakeHello()
     {
