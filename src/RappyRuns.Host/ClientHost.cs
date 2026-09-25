@@ -33,14 +33,6 @@ public enum StartupUpdateNote
     DownloadFailed,
 }
 
-/// <summary><see cref="PsobbConnector"/> behind the poll loop's seam.</summary>
-internal sealed class PsobbGameConnector(PsobbConnector connector) : IGameConnector
-{
-    public IProcessMemoryReader? TryAttach() => connector.TryAttach();
-
-    public PsobbRejection? Rejection => connector.Rejection;
-}
-
 /// <summary>
 /// The client: owns every service, wires them together and runs the startup
 /// and quit sequences (spec core §2, ui-shell §4, adapted to WebView2 - see
@@ -56,7 +48,8 @@ public sealed class ClientHost : IDisposable
     private readonly StartupUpdateNote _startupNote;
     private readonly MachineInfo _machine;
     private readonly HwEncoderStatus _hw = new();
-    private readonly Autostart _autostart;
+    private readonly IAutostartSetting _autostart;
+    private readonly Action<string> _log;
     private volatile bool _autostartEnabled;
     private string? _lastRunsJson;
     private string? _lastRoomsJson;
@@ -69,16 +62,19 @@ public sealed class ClientHost : IDisposable
     private int _applyingUpdate;
     private readonly TokenCheckGate _tokenChecks = new();
 
+    /// <param name="services">The machine-facing services; null = the real ones (<see cref="HostServices"/>). Tests pass fakes.</param>
     public ClientHost(ConfigStore config, HostOptions options, HttpTransport transport, SelfUpdater updater,
-        StartupUpdateNote startupNote = StartupUpdateNote.None)
+        StartupUpdateNote startupNote = StartupUpdateNote.None, IHostServices? services = null)
     {
+        services ??= new HostServices();
         Config = config;
         Options = options;
         Transport = transport;
         Updater = updater;
         _startupNote = startupNote;
-        _machine = MachineProbe.Current();
-        _autostart = new Autostart(valueName: options.AutostartValueName);
+        _log = services.Log;
+        _machine = services.Machine;
+        _autostart = services.Autostart(options.AutostartValueName);
         _autostartEnabled = _autostart.IsEnabled();
 
         Api = new ApiClient(transport, new ConfigAuthSettings(config));
@@ -87,7 +83,7 @@ public sealed class ClientHost : IDisposable
         // Game.
         Clock = SystemGameClock.Instance;
         Catalog = new QuestCatalog();
-        LoadBuiltinQuests(Catalog, QuestCatalog.ResolvePath(options.ExeDir), RecordingLog.Write);
+        LoadBuiltinQuests(Catalog, QuestCatalog.ResolvePath(options.ExeDir), _log);
         var detector = new Detector(Catalog, Clock);
         RunLogs = new RunLogs(Clock);
         TriggerLog = new TriggerLog(options.TriggerLogPath, Clock);
@@ -95,13 +91,12 @@ public sealed class ClientHost : IDisposable
         {
             TriggerLogEnabled = () => config.TriggerLog,
             CameraWanted = () => config.GhostOverlay && config.GhostMarker,
-        }, TriggerLog, RecordingLog.Write);
-        var connector = new PsobbConnector(RecordingLog.Write);
+        }, TriggerLog, _log);
 
         // Queue.
         Queue = new RunQueue(config.QueuePath);
         Queue.Load();
-        Queue.SaveFailed += (_, e) => RecordingLog.Write("queue.sexp save failed: " + e.Message);
+        Queue.SaveFailed += (_, e) => _log("queue.sexp save failed: " + e.Message);
         Network = new QueueNetwork(Api, RunPayload.RunJson,
             () => RecordingLog.DiagnosticsReport(ClientVersion.Display, _machine, _hw));
 
@@ -115,7 +110,7 @@ public sealed class ClientHost : IDisposable
             return options.MultiInstance ? settings with { RecordEnabled = false } : settings;
         }
         Recorder = new Recorder(
-            new Win32FfmpegBackend(PsobbConnector.FindPsobbWindow, () => config.GetBool(ConfigKeys.WgcDisable), Gdigrab),
+            services.CaptureBackend(() => config.GetBool(ConfigKeys.WgcDisable), Gdigrab),
             new RecorderEnvironment
             {
                 Settings = RecordingSettings,
@@ -131,7 +126,7 @@ public sealed class ClientHost : IDisposable
 
         // Ghost race and overlay.
         Ghost = new GhostSession();
-        Overlay = new GameOverlay(() => Ghost.LiveCamera, log: RecordingLog.Write);
+        Overlay = new GameOverlay(() => Ghost.LiveCamera, log: _log);
 
         // Pin Share.
         Permission = new PinSharePermission(config.PinshareAllowed, allowed =>
@@ -147,11 +142,11 @@ public sealed class ClientHost : IDisposable
                 var r = await Api.FetchPinSetAsync(slug, extra, cancellationToken: ct).ConfigureAwait(false);
                 return r.Found && r.Payload is not null ? JsonSerializer.SerializeToElement(r.Payload) : null;
             },
-            RecordingLog.Write);
+            _log);
         PinShare = new PinShareSupervisor(
             // The addon's exchange files sit next to the game: one relay per game only.
             () => new PinShareConfig(config.PinshareEnabled && !options.MultiInstance, config.PinshareChannel, config.PinshareServer),
-            Permission, PinSets, log: RecordingLog.Write);
+            Permission, PinSets, services.PinShareInstaller, log: _log, connect: services.PinShareConnect);
 
         // UI state.
         Ui = new UiState(BuildSettings, config.Moderator, Permission.Allowed);
@@ -173,15 +168,16 @@ public sealed class ClientHost : IDisposable
             Language = () => config.Language,
             PrepareQuit = PrepareQuit,
             OpenUrl = OpenExternal,
-            Log = RecordingLog.Write,
+            Log = _log,
             TrayClassName = options.TrayClassName,
+            ShowTrayIcon = services.ShowTrayIcon,
         });
 
         _pollServices = new PollLoopServices
         {
             Config = config,
             Clock = Clock,
-            Connector = new PsobbGameConnector(connector),
+            Connector = services.Connector(),
             Frames = Frames,
             Catalog = Catalog,
             Recorder = Recorder,
@@ -208,7 +204,7 @@ public sealed class ClientHost : IDisposable
             ApplyDeferredUpdate = ready => ApplyUpdateRestart(ready.ZipPath, ready.Tag),
             Toast = toast => Shell.Notify(toast.Title, toast.Text, NotifyKind.Info, toast.Url),
             Tick = OnTick,
-            Log = RecordingLog.Write,
+            Log = _log,
             MachineName = Submission.SafeMachineName(),
         };
         Poll = new PollLoop(_pollServices);
@@ -306,16 +302,16 @@ public sealed class ClientHost : IDisposable
     public void Start()
     {
         if (Interlocked.Exchange(ref _started, 1) != 0) return;
-        if (!Shell.Start()) RecordingLog.Write("tray: could not start (running without a tray icon)");
+        if (!Shell.Start()) _log("tray: could not start (running without a tray icon)");
         PinShare.Start();
         _ = PermissionLoopAsync();
-        RecordingLog.Write(RecordingLog.SessionLine(ClientVersion.Display, _machine, FfmpegPath()));
+        _log(RecordingLog.SessionLine(ClientVersion.Display, _machine, FfmpegPath()));
         if (Config.HwEncode) HwProbe.Start();
         // Before the Start, whether logging is on or not: a Lisp-era log of
         // hundreds of MB is cut to its newest lines (S42).
         Try("trigger log cleanup", () =>
         {
-            foreach (var line in TriggerLog.CompactOversized()) RecordingLog.Write(line);
+            foreach (var line in TriggerLog.CompactOversized()) _log(line);
         });
         if (Config.TriggerLog) Try("trigger log", () => TriggerLog.Start());
         Poll.Start();
@@ -453,7 +449,7 @@ public sealed class ClientHost : IDisposable
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            RecordingLog.Write("config.sexp save failed: " + e.Message);
+            _log("config.sexp save failed: " + e.Message);
         }
     }
 
@@ -514,7 +510,7 @@ public sealed class ClientHost : IDisposable
         }, _shutdown.Token).ConfigureAwait(false);
         if (!Current())
         {
-            RecordingLog.Write($"token check: a superseded {result.Kind} result was ignored");
+            _log($"token check: a superseded {result.Kind} result was ignored");
             return null;
         }
         switch (result.Kind)
@@ -639,7 +635,7 @@ public sealed class ClientHost : IDisposable
             }
             catch (Exception e)
             {
-                RecordingLog.Write("pin share permission refresh failed: " + e.Message);
+                _log("pin share permission refresh failed: " + e.Message);
             }
         }
     }
@@ -697,14 +693,14 @@ public sealed class ClientHost : IDisposable
     {
         if (Interlocked.CompareExchange(ref _applyingUpdate, 1, 0) != 0)
         {
-            RecordingLog.Write($"update {tag}: a hand-over is already in progress; ignored");
+            _log($"update {tag}: a hand-over is already in progress; ignored");
             return;
         }
         SetVersionNote(Msg.Of("update-restarting", tag));
         var thread = new Thread(() =>
         {
             Poll.Stop(TimeSpan.FromSeconds(10));
-            var started = UpdateLauncher.ApplyAndRestart(zip, SingleInstance.ReleaseProcessClaim, RecordingLog.Write);
+            var started = UpdateLauncher.ApplyAndRestart(zip, SingleInstance.ReleaseProcessClaim, _log);
             if (started)
             {
                 Shell.Quit(); // the flag stays set: this process is leaving
@@ -905,7 +901,7 @@ public sealed class ClientHost : IDisposable
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
-            RecordingLog.Write("rooms list failed: " + e.Message);
+            _log("rooms list failed: " + e.Message);
             return null;
         }
     }
@@ -941,7 +937,7 @@ public sealed class ClientHost : IDisposable
     private void PrepareQuit()
     {
         _shutdown.Cancel();
-        if (!Poll.Stop(TimeSpan.FromSeconds(10))) RecordingLog.Write("quit: the poll loop did not stop within 10 s");
+        if (!Poll.Stop(TimeSpan.FromSeconds(10))) _log("quit: the poll loop did not stop within 10 s");
         Try("overlay", Overlay.Dispose);
         Try("pin share", () => PinShare.Stop(TimeSpan.FromSeconds(2)));
         Try("trigger log", TriggerLog.Close);
