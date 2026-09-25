@@ -34,10 +34,18 @@ internal sealed class FakeHostServices : IHostServices
 
     public bool ShowTrayIcon => false;
 
-    public Func<string, CancellationToken, Task<RelaySocket>>? PinShareConnect { get; init; } =
-        (_, _) => Task.FromException<RelaySocket>(new IOException("no relay server in tests"));
+    /// <summary>Exit codes the quit sequence asked for (the test runner keeps running).</summary>
+    public List<int> Exits { get; } = [];
 
-    public AddonInstaller? PinShareInstaller { get; init; } = new([]);
+    public void Exit(int code)
+    {
+        lock (Exits) Exits.Add(code);
+    }
+
+    public Task<RelaySocket> PinShareConnect(string url, CancellationToken cancellationToken) =>
+        Task.FromException<RelaySocket>(new IOException("no relay server in tests"));
+
+    public AddonInstaller PinShareInstaller() => new([], Log);
 
     internal sealed class FakeAutostart : IAutostartSetting
     {
@@ -88,7 +96,16 @@ internal sealed class GatedHandler : HttpMessageHandler
                 _pending.Add((url, auth, tcs));
                 Monitor.PulseAll(_gate);
             }
-            answer = await tcs.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                answer = await tcs.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Abandoned: Take must never hand out its answer handle.
+                lock (_gate) _pending.RemoveAll(p => p.Answer == tcs);
+                throw;
+            }
         }
         var (status, body) = answer.Value;
         return new HttpResponseMessage((HttpStatusCode)status)
@@ -154,7 +171,7 @@ internal sealed class HostHarness : IDisposable
         Config = ConfigStore.Open(_dir.Path);
         Config.ServerUrl = "https://s.example";
         configure?.Invoke(Config);
-        var transport = new HttpTransport(Http);
+        var transport = _transport = new HttpTransport(Http);
         Host = new ClientHost(Config, new HostOptions { ConfigDir = _dir.Path, Isolated = true, ExeDir = _dir.Path },
             transport, new SelfUpdater(transport, () => "", "1.0.0", _dir.Path), services: Services);
         Host.AttachIpc(new Registry(this), Sink);
@@ -182,8 +199,11 @@ internal sealed class HostHarness : IDisposable
     public void Dispose()
     {
         Host.Dispose();
+        _transport.Dispose(); // and the handler with it
         _dir.Dispose();
     }
+
+    private readonly HttpTransport _transport;
 
     private sealed class Registry(HostHarness harness) : IIpcRegistry
     {

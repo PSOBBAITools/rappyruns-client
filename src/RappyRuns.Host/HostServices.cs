@@ -44,34 +44,38 @@ public interface IHostServices
     /// <summary>False keeps the tray to its hidden window (no icon in the user's tray).</summary>
     bool ShowTrayIcon { get; }
 
-    /// <summary>The Pin Share relay's WebSocket connector; null = the real one.</summary>
-    Func<string, CancellationToken, Task<RelaySocket>>? PinShareConnect { get; }
+    /// <summary>Ends the process once the quit sequence ran (ExitProcess in production).</summary>
+    void Exit(int code);
 
-    /// <summary>The Pin Share addon installer; null = the real one (the bundled data folder).</summary>
-    AddonInstaller? PinShareInstaller { get; }
+    /// <summary>Opens the Pin Share relay's WebSocket.</summary>
+    Task<RelaySocket> PinShareConnect(string url, CancellationToken cancellationToken);
+
+    /// <summary>The Pin Share addon installer (the bundled data folder in production).</summary>
+    AddonInstaller PinShareInstaller();
 }
 
 /// <summary>The production <see cref="IHostServices"/>: the real registry, game, capture, tray and log.</summary>
-public class HostServices : IHostServices
+public sealed class HostServices : IHostServices
 {
-    private MachineInfo? _machine;
+    public MachineInfo Machine { get; } = MachineProbe.Current();
 
-    public virtual MachineInfo Machine => _machine ??= MachineProbe.Current();
+    public void Log(string line) => RecordingLog.Write(line);
 
-    public virtual void Log(string line) => RecordingLog.Write(line);
+    public IAutostartSetting Autostart(string valueName) => new RegistryAutostart(new Autostart(valueName: valueName));
 
-    public virtual IAutostartSetting Autostart(string valueName) => new RegistryAutostart(new Autostart(valueName: valueName));
+    public IGameConnector Connector() => new PsobbGameConnector(new PsobbConnector(Log));
 
-    public virtual IGameConnector Connector() => new PsobbGameConnector(new PsobbConnector(Log));
-
-    public virtual ICaptureBackend CaptureBackend(Func<bool> wgcDisabled, GdigrabProbe gdigrab) =>
+    public ICaptureBackend CaptureBackend(Func<bool> wgcDisabled, GdigrabProbe gdigrab) =>
         new Win32FfmpegBackend(PsobbConnector.FindPsobbWindow, wgcDisabled, gdigrab);
 
-    public virtual bool ShowTrayIcon => true;
+    public bool ShowTrayIcon => true;
 
-    public virtual Func<string, CancellationToken, Task<RelaySocket>>? PinShareConnect => null;
+    public void Exit(int code) => ShellHost.ExitProcess(code);
 
-    public virtual AddonInstaller? PinShareInstaller => null;
+    public Task<RelaySocket> PinShareConnect(string url, CancellationToken cancellationToken) =>
+        RelaySocket.ConnectAsync(url, cancellationToken: cancellationToken);
+
+    public AddonInstaller PinShareInstaller() => new(log: Log);
 
     private sealed class RegistryAutostart(Autostart autostart) : IAutostartSetting
     {

@@ -146,7 +146,7 @@ public sealed class ClientHost : IDisposable
         PinShare = new PinShareSupervisor(
             // The addon's exchange files sit next to the game: one relay per game only.
             () => new PinShareConfig(config.PinshareEnabled && !options.MultiInstance, config.PinshareChannel, config.PinshareServer),
-            Permission, PinSets, services.PinShareInstaller, log: _log, connect: services.PinShareConnect);
+            Permission, PinSets, services.PinShareInstaller(), log: _log, connect: services.PinShareConnect);
 
         // UI state.
         Ui = new UiState(BuildSettings, config.Moderator, Permission.Allowed);
@@ -171,6 +171,7 @@ public sealed class ClientHost : IDisposable
             Log = _log,
             TrayClassName = options.TrayClassName,
             ShowTrayIcon = services.ShowTrayIcon,
+            Exit = services.Exit,
         });
 
         _pollServices = new PollLoopServices

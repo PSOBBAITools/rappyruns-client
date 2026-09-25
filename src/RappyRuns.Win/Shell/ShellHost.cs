@@ -151,8 +151,11 @@ public sealed class ShellHost : IShellHost, IDisposable
         catch (Exception ex) { _options.Log($"quit: prepare failed: {ex.Message}"); }
         try { _tray.RemoveIconNow(); }
         catch (Exception ex) { _options.Log($"quit: tray removal failed: {ex.Message}"); }
-        (_options.Exit ?? (code => NativeMethods.ExitProcess((uint)code)))(0);
+        (_options.Exit ?? ExitProcess)(0);
     }
+
+    /// <summary>The default <see cref="ShellHostOptions.Exit"/>: ExitProcess, no unwinding.</summary>
+    public static void ExitProcess(int code) => NativeMethods.ExitProcess((uint)code);
 
     /// <inheritdoc />
     public void OnLanguageChanged() => _tray.RefreshTooltip();
