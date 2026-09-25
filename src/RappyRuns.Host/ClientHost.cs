@@ -485,6 +485,8 @@ public sealed class ClientHost : IDisposable
     /// check-token (gui.lisp:1486): the token line, the Pin Share verdict, the
     /// moderator role and auto-publish mirror, the guest merge and the queue
     /// flush. <paramref name="onInvalid"/> runs on a definite 401 only.
+    /// The guest merge also waits for the check to be current (S48): a stale
+    /// check must not move the guest's runs into the account it verified.
     /// Checks finish in any order: a result applies only while its check is
     /// the latest and its token still the configured one (<see cref="TokenCheckGate"/>);
     /// a superseded check applies nothing and returns null.
@@ -508,7 +510,7 @@ public sealed class ClientHost : IDisposable
             Permission.Set(user.PinShareAllowed);
             ApplyModerator(user.IsModerator);
             ApplyAutoPublish(user.AutoPublish);
-        }, _shutdown.Token).ConfigureAwait(false);
+        }, Current, _shutdown.Token).ConfigureAwait(false);
         if (!Current())
         {
             _log($"token check: a superseded {result.Kind} result was ignored");

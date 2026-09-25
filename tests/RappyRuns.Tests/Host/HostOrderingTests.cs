@@ -71,6 +71,32 @@ public sealed class HostOrderingTests
         Assert.DoesNotContain("alice", Json(h.Host.Ui.Token), StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "ordering: a token check gone stale before its answer does not merge the guest or clear its token (S48)")]
+    public async Task StaleTokenCheckKeepsGuest()
+    {
+        var merges = 0;
+        using var h = new HostHarness(new GatedHandler((url, _) =>
+        {
+            if (Me(url)) return null;
+            if (url.EndsWith("/api/merge-anonymous", StringComparison.Ordinal)) Interlocked.Increment(ref merges);
+            return (200, "");
+        }), c =>
+        {
+            c.ApiToken = "token-a";
+            c.AnonToken = "guest-1";
+        });
+        h.CallOrdered("app.hello");
+        var check = h.Host.CheckTokenAsync();
+        var answer = h.Http.Take((url, _) => Me(url));
+        h.Config.ApiToken = "token-b"; // the player switched accounts while alice's check was out
+        answer.SetResult((200, MeA));
+        Assert.Null(await check);
+        // The guest's runs were not moved into alice's account, and the
+        // guest token is still there for token-b's own check to merge.
+        Assert.Equal(0, Volatile.Read(ref merges));
+        Assert.Equal("guest-1", h.Config.AnonToken);
+    }
+
     [Fact(DisplayName = "ordering: no runs list reaches the UI before the hello reply, and none is lost after it (S32)")]
     public void RunsNeverOvertakeHello()
     {

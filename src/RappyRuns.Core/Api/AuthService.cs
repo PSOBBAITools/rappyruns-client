@@ -306,8 +306,17 @@ public sealed class AuthService
     /// the next check. Unlinked returns at once without network. The app shows
     /// <c>:token-checking</c> before calling and applies the returned result.
     /// </summary>
+    /// <param name="onVerified">Runs on a 200, before the merge.</param>
+    /// <param name="isCurrent">
+    /// Asked after the 200, before the merge (C#, S48): false when the app has
+    /// since changed the token or started a newer check. The merge is then
+    /// skipped and the guest token kept, so a stale check cannot move the
+    /// guest's runs into the account it verified; the current check merges.
+    /// Null means always current.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the requests.</param>
     public async Task<TokenCheckResult> CheckTokenAsync(Action<MeUser>? onVerified = null,
-        CancellationToken cancellationToken = default)
+        Func<bool>? isCurrent = null, CancellationToken cancellationToken = default)
     {
         var token = Tokens.Normalize(_settings.ApiToken);
         if (token.Length == 0) return new TokenCheckResult(TokenCheckKind.Unlinked);
@@ -319,7 +328,7 @@ public sealed class AuthService
             onVerified?.Invoke(user);
             MergeResult? merge = null;
             var anon = Tokens.Normalize(_settings.AnonToken);
-            if (anon.Length > 0)
+            if (anon.Length > 0 && (isCurrent?.Invoke() ?? true))
             {
                 try
                 {

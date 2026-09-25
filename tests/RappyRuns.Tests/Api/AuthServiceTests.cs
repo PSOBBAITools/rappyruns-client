@@ -259,6 +259,19 @@ public class AuthServiceTests
         Assert.Equal(0, failingSettings.Saves);
     }
 
+    [Fact(DisplayName = "check-token: a check the app no longer calls current skips the merge and keeps the guest (S48)")]
+    public async Task CheckStaleSkipsMerge()
+    {
+        var (auth, handler, settings) = Make(r => r.Url.EndsWith("/api/me", StringComparison.Ordinal) ? (200, """{"username":"u"}""") : (200, "{}"),
+            new FakeSettings { ApiToken = "eta_x", AnonToken = "eta_g" });
+        var result = await auth.CheckTokenAsync(isCurrent: () => false);
+        Assert.Equal(TokenCheckKind.Ok, result.Kind);
+        Assert.Null(result.Merge);
+        Assert.Single(handler.Requests); // /api/me only
+        Assert.Equal("eta_g", settings.AnonToken);
+        Assert.Equal(0, settings.Saves);
+    }
+
     [Fact(DisplayName = "check-token: no guest, no merge request")]
     public async Task CheckNoGuest()
     {
