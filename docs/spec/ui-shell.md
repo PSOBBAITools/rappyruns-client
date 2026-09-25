@@ -503,7 +503,7 @@ trigger json は `{"type":"monster","monster":id}` / `{"type":"floor-switch","fl
 1. `addons\init.lua` (Solybum のアドオンプラグイン本体) が無い → `(:no-addon-plugin)`
 2. `addons\Pin Share` がリンク先の消えたジャンクションかシンボリックリンク → `(:broken-link path)`。**消さない** (ユーザーのリンクなので)
 3. 同梱の `data\pin-share\init.lua` を探す。場所は exe の隣、無ければソースツリー (`pinshare-bundled-file`、`lw:lisp-image-name` から辿る。argv[0] は相対パスのことがあるので使わない)
-4. `addons\Pin Share` が**リンクでなければ**、中身を比べて違うときだけ init.lua を上書きし、`pinshare-install-input-dll` も実行する。リンク (開発者の作業コピー) には書かない。Lisp はその場で上書きしていた (書き込み失敗で途中までのスクリプトが残りうる)。C# 版 (S45) は `init.lua.new` に書き切ってから上書きリネーム (`File.Move(overwrite: true)`) で差し替え、失敗しても動いている init.lua には触れない。`.new` は成否にかかわらず片付ける
+4. `addons\Pin Share` が**リンクでなければ**、中身を比べて違うときだけ init.lua を上書きし、`pinshare-install-input-dll` も実行する。リンク (開発者の作業コピー) には書かない。Lisp はその場で上書きしていた (書き込み失敗で途中までのスクリプトが残りうる)。C# 版 (S45) は `init.lua.new` に書き切り (ディスクまでフラッシュ) してから上書きリネーム (`File.Move(overwrite: true)`) で差し替え、失敗しても動いている init.lua には触れない。`.new` は成否にかかわらず片付け、クライアントが途中で落ちて残った `.new` も次回の確認で消す。DLL の `.new` も同じくフラッシュしてから入れ替える
 5. `exchange\` を作る
 6. init.lua が無ければ `(:install-failed "init.lua is missing")`、例外なら `(:install-failed msg)`
 - **書くのは init.lua と pinshare-input.dll だけ**。`options.lua` (ユーザーのキー割り当て) などには触れない

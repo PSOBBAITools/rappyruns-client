@@ -137,6 +137,11 @@ public class PinShareInstallerTests
         Assert.Null(game.Installer().EnsureAddon(game.AddonDir));
         Assert.Equal("-- pin share addon v2", File.ReadAllText(installed));
         Assert.False(File.Exists(installed + ".new"));
+
+        // A .new left by a client killed mid-swap is swept even when init.lua is already current.
+        File.WriteAllText(installed + ".new", "-- pin");
+        Assert.Null(game.Installer().EnsureAddon(game.AddonDir));
+        Assert.False(File.Exists(installed + ".new"));
     }
 
     [Fact(DisplayName = "install: a refused final rename moves the old dll back; if that fails too, the aside copy is kept (S39)")]

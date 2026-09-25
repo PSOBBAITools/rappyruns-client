@@ -32,7 +32,7 @@ public sealed class AddonInstaller
     /// </param>
     /// <param name="log">The client log.</param>
     /// <param name="universalTime">Seconds since 1900 for the aside name (tests pin it).</param>
-    /// <param name="writeFile">Writes an installed file; default <see cref="File.WriteAllBytes(string, byte[])"/> (tests make it fail).</param>
+    /// <param name="writeFile">Writes the <c>.new</c> copy; default <see cref="WriteFlushed"/> (tests make it fail).</param>
     /// <param name="moveFile">Renames during the DLL swap; default <see cref="File.Move(string, string)"/> (tests make it fail).</param>
     /// <param name="replaceFile">
     /// Renames the addon's <c>init.lua.new</c> over init.lua; default
@@ -44,7 +44,7 @@ public sealed class AddonInstaller
         _bundledDirs = bundledDirs ?? DefaultBundledDirs();
         _log = log;
         _universalTime = universalTime ?? (() => DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 2208988800L);
-        _writeFile = writeFile ?? File.WriteAllBytes;
+        _writeFile = writeFile ?? WriteFlushed;
         _moveFile = moveFile ?? File.Move;
         _replaceFile = replaceFile ?? ((from, to) => File.Move(from, to, overwrite: true));
     }
@@ -72,6 +72,19 @@ public sealed class AddonInstaller
         return dirs;
     }
 
+    /// <summary>
+    /// Writes <paramref name="bytes"/> and flushes them to disk before
+    /// returning, so the rename that follows can never reach the disk ahead
+    /// of the data (a power cut would otherwise leave an empty file under
+    /// the installed name).
+    /// </summary>
+    public static void WriteFlushed(string path, byte[] bytes)
+    {
+        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        stream.Write(bytes);
+        stream.Flush(flushToDisk: true);
+    }
+
     /// <summary>A shipped file (e.g. init.lua), or null when no bundled folder has it.</summary>
     public string? BundledFile(string name) =>
         _bundledDirs.Select(dir => Path.Combine(dir, name)).FirstOrDefault(File.Exists);
@@ -96,6 +109,8 @@ public sealed class AddonInstaller
         {
             if (BundledFile(AddonFile) is not null && !IsReparsePoint(addonDir))
             {
+                // A .new outlives InstallFile only if the client died mid-swap.
+                try { File.Delete(installed + NewSuffix); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
                 if (InstallFile(AddonFile, addonDir, renameAside: false))
                     _log?.Invoke($"pin share: addon installed at {installed}");
                 InstallInputDll(addonDir);
@@ -155,17 +170,16 @@ public sealed class AddonInstaller
     /// Copies the shipped <paramref name="name"/> into <paramref name="addonDir"/>
     /// unless the installed copy already has the same bytes. True when it
     /// wrote; false when already current or nothing is shipped under that
-    /// name. Either way the new bytes are written to <c>&lt;name&gt;.new</c>
-    /// first and only a complete file replaces the installed one, so a failed
-    /// or interrupted write never leaves a truncated copy in its place (the
-    /// <c>.new</c> is deleted on the way out). The addon file (S45) creates the
-    /// folder first and renames its <c>.new</c> over init.lua in one replacing
-    /// rename: nothing keeps the script open (the game reads it once at load).
-    /// With <paramref name="renameAside"/> (C#, S39; the Lisp overwrote in
-    /// place and renamed only after that failed, so a failed write could
-    /// truncate the working copy and a failed restore strand it aside): the
-    /// new bytes are written to <c>&lt;name&gt;.new</c> first, and only a
-    /// complete file is swapped in - the installed copy renamed aside to a
+    /// name. Both files are written to <c>&lt;name&gt;.new</c> first (flushed
+    /// to disk) and only a complete file replaces the installed one, so a
+    /// failed or interrupted write never leaves a truncated copy in its place
+    /// (the Lisp overwrote in place). Without <paramref name="renameAside"/>
+    /// (the addon, S45) the <c>.new</c> is renamed over init.lua in one
+    /// replacing rename: the game only reads the script while loading it.
+    /// With <paramref name="renameAside"/> (the DLL, C#, S39; the Lisp renamed
+    /// only after an in-place write failed, so a failed write could truncate
+    /// the working copy and a failed restore strand it aside), the complete
+    /// file is swapped in - the installed copy renamed aside to a
     /// fresh <c>&lt;name&gt;.old-&lt;universal time&gt;</c> (allowed even while the
     /// game holds it loaded), the new file renamed into place, the aside copy
     /// deleted when nothing holds it. Any failure before the swap leaves the
@@ -182,7 +196,7 @@ public sealed class AddonInstaller
         var installed = Path.Combine(addonDir, name);
         var wanted = File.ReadAllBytes(bundled);
         if (File.Exists(installed) && wanted.AsSpan().SequenceEqual(File.ReadAllBytes(installed))) return false;
-        if (!renameAside) Directory.CreateDirectory(addonDir);
+        Directory.CreateDirectory(addonDir);
         var fresh = installed + NewSuffix;
         try
         {
