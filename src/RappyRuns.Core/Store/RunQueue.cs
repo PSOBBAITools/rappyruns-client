@@ -142,7 +142,9 @@ public sealed class RunQueue
             }
             try
             {
-                SexpWriter.WriteFile(Path, form);
+                // Not flushed to disk (S50): saved from the poll thread, which
+                // must never wait on the disk.
+                SexpWriter.WriteFile(Path, form, durable: false);
                 _unsaved = false;
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)

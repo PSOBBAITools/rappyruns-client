@@ -16,6 +16,17 @@ public class DurableFileTests
         Assert.False(File.Exists(temp));
     }
 
+    [Fact(DisplayName = "durable file: a non-durable replace writes and renames the same way (S50)")]
+    public void NonDurableReplace()
+    {
+        using var dir = new TempDir("rr-durable");
+        var path = dir.File("queue.sexp");
+        File.WriteAllText(path, "old");
+        DurableFile.Replace(path, path + ".tmp", s => s.Write("new"u8), durable: false);
+        Assert.Equal("new", File.ReadAllText(path));
+        Assert.False(File.Exists(path + ".tmp"));
+    }
+
     [Fact(DisplayName = "durable file: a failed write leaves the target untouched (S50)")]
     public void FailedWriteKeepsTarget()
     {
