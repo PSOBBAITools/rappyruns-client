@@ -455,7 +455,7 @@ JSON の数値: 浮動小数 (座標等) は **単精度の最短表現** (`12.3
 ### 8.5 check-token とマージ (`gui.lisp:1486 check-token`)
 - api-token 空: Pin Share 許可を偽に、`:token-unlinked` 表示。ネットワークなし。
 - 非空: 別スレッドで `GET /api/me`。
-  - ok: `:token-ok <username>` 表示 → Pin Share 許可 = features に `"pinshare"` → モデレーター判定変化時のみ config 保存 + ウィンドウ再構築 → `auto_publish` 同期 → **anon-token が非空なら `POST /api/merge-anonymous`**、ok/gone で `:anon-token` を `""` にして保存、api-error なら温存 (次回検証で再試行) → `*retry-requested*` を立てる (キューの一括再送)。
+  - ok: `:token-ok <username>` 表示 → Pin Share 許可 = features に `"pinshare"` → モデレーター判定変化時のみ config 保存 + ウィンドウ再構築 → `auto_publish` 同期 → **anon-token が非空なら `POST /api/merge-anonymous`**、ok/gone で `:anon-token` を `""` にして保存、api-error なら温存 (次回検証で再試行) → `*retry-requested*` を立てる (キューの一括再送)。C# 版 (S48) では確認 (`AuthService.CheckTokenAsync`) はマージしない。ホストが確認の後に `MergeGuestAsync` を呼び、確認したトークンがまだ設定中のときだけマージする。詳細は ui-shell §2.3 の 5。
   - unauthorized: Pin Share 許可偽、`:token-invalid` 赤字、`on-invalid` 実行 (login.txt 自己修復)。
   - エラー: `:token-could-not-verify` 赤字 (トークン自体は疑わない)。
 - 呼ばれるタイミング: 起動時、設定保存時 (`notify` でダイアログ)、ペアリング/ログイン完了時、言語切替の再構築時。

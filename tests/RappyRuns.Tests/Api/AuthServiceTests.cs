@@ -287,7 +287,7 @@ public class AuthServiceTests
     }
 
     [Fact(DisplayName = "check-token: flags follow the features and role")]
-    public async Task CheckNoGuest()
+    public async Task CheckFlags()
     {
         var (auth, handler, _) = Make(_ => (200, """{"username":"u","features":[]}"""), new FakeSettings { ApiToken = "eta_x" });
         var result = await auth.CheckTokenAsync();

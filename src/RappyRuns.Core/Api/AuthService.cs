@@ -333,7 +333,8 @@ public sealed class AuthService
     /// token a check just verified. Ok or gone clears <c>:anon-token</c> (saved),
     /// but only while it is still the guest that was merged (a guest registered
     /// meanwhile is kept); an API error keeps it for the next check. Null when
-    /// there was no guest or the merge failed.
+    /// there was no guest or the merge failed. Anything but an API error (a
+    /// config write failure, a bug) is thrown for the caller to report.
     /// </summary>
     public async Task<MergeResult?> MergeGuestAsync(string token, CancellationToken cancellationToken = default)
     {
@@ -344,7 +345,7 @@ public sealed class AuthService
         {
             merge = await _api.MergeAnonymousAsync(anon, token, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        catch (ApiException)
         {
             // Transport failure: keep the guest token, the next verification retries.
             return null;

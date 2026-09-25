@@ -514,10 +514,26 @@ public sealed class ClientHost : IDisposable
             ApplyAutoPublish(user.AutoPublish);
         }, _shutdown.Token).ConfigureAwait(false);
         if (result.Kind == TokenCheckKind.Ok && ticket.ChecksConfigured(Config.ApiToken))
-            result = result with { Merge = await Auth.MergeGuestAsync(ticket.Token, _shutdown.Token).ConfigureAwait(false) };
+        {
+            try
+            {
+                result = result with { Merge = await Auth.MergeGuestAsync(ticket.Token, _shutdown.Token).ConfigureAwait(false) };
+            }
+            catch (Exception e) when (e is not OperationCanceledException || !_shutdown.IsCancellationRequested)
+            {
+                // As when the merge ran inside the check: a failure there
+                // (the config write, say) is the check's error.
+                _log($"token check: guest merge failed: {e.Message}");
+                result = new TokenCheckResult(TokenCheckKind.Error, Error: e);
+            }
+        }
         if (!Current())
         {
-            _log($"token check: a superseded {result.Kind} result was ignored");
+            _log(result.Merge is { } merged
+                ? $"token check: a superseded {result.Kind} result was ignored (the guest merge ran: {merged})"
+                : $"token check: a superseded {result.Kind} result was ignored");
+            // Runs queued under the merged guest go out now, not at the next trigger.
+            if (result.Merge == MergeResult.Ok) Poll.RequestRetry();
             return null;
         }
         switch (result.Kind)
