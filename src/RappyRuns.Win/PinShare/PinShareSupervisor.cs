@@ -152,6 +152,15 @@ public sealed class PinShareSupervisor : IDisposable
         return (new PinShareWanted(exe, channel, PinShareSettings.ServerUrl(config.Server)), PinShareStatus.Off);
     }
 
+    // The installed init.lua's ADDON_VERSION. A read that failed (a scanner
+    // holding the file just after the install) falls back to the bundled
+    // version rather than switch the check off for the whole session.
+    private static int InstalledAddonVersion(string addonDir)
+    {
+        var text = ExchangeFiles.ReadText(Path.Combine(addonDir, AddonInstaller.AddonFile));
+        return text.Length == 0 ? PinShareRelay.BundledAddonVersion : PinShareRelay.AddonVersionOf(text);
+    }
+
     internal bool SessionCurrent(PinShareWanted wanted) =>
         !_stop.IsCancellationRequested && wanted == Wanted().Wanted;
 
@@ -199,7 +208,7 @@ public sealed class PinShareSupervisor : IDisposable
             // Fresh per session: the addon only re-sends its name to a NEW session.
             Session = RandomNumberGenerator.GetHexString(8, lowercase: true),
             // What a Reload would load (S21): the installed copy, not the bundled one.
-            InstalledAddonVersion = PinShareRelay.AddonVersionOf(ExchangeFiles.ReadText(Path.Combine(addonDir, AddonInstaller.AddonFile))),
+            InstalledAddonVersion = InstalledAddonVersion(addonDir),
         };
         // The old PowerShell relay still running would fight us over both
         // files; stand aside until its heartbeat goes stale.

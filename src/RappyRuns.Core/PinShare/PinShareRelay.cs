@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace RappyRuns.Core.PinShare;
 
@@ -12,7 +14,7 @@ namespace RappyRuns.Core.PinShare;
 /// limits); this is a translator plus reconnect bookkeeping.
 /// Not thread-safe: one relay session thread owns it.
 /// </summary>
-public sealed class PinShareRelay
+public sealed partial class PinShareRelay
 {
     /// <summary>
     /// ADDON_VERSION of the init.lua this client ships (C#, S21). Kept in step
@@ -82,11 +84,12 @@ public sealed class PinShareRelay
 
     /// <summary>The <c>local ADDON_VERSION = &lt;n&gt;</c> line of an init.lua, or 0 when it has none (C#, S21).</summary>
     public static int AddonVersionOf(string? initLua) =>
-        initLua is not null
-        && System.Text.RegularExpressions.Regex.Match(initLua, @"^local ADDON_VERSION = (\d{1,9})\s*$",
-            System.Text.RegularExpressions.RegexOptions.Multiline) is { Success: true } match
-            ? int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture)
+        initLua is not null && AddonVersionLine().Match(initLua) is { Success: true } match
+            ? int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture)
             : 0;
+
+    [GeneratedRegex(@"^local ADDON_VERSION = (\d{1,9})\s*$", RegexOptions.Multiline)]
+    private static partial Regex AddonVersionLine();
 
     /// <summary>in.txt needs rewriting.</summary>
     public bool Dirty { get; set; } = true;

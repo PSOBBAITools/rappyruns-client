@@ -202,19 +202,21 @@ public class PinShareLispTests
         Assert.Equal(PinShareRelay.BundledAddonVersion, PinShareRelay.AddonVersionOf(lua));
         // The addon sends it (before its name) to each new relay session.
         Assert.Contains("sendCommand({ \"version\", ADDON_VERSION })", lua, StringComparison.Ordinal);
-        // A forgotten bump would silently disable the check: every edit of
-        // init.lua must come with a new ADDON_VERSION (and BundledAddonVersion)
-        // and a new entry here.
-        var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
-            System.Text.Encoding.UTF8.GetBytes(lua.Replace("\r\n", "\n", StringComparison.Ordinal))));
+        // A forgotten bump would silently disable the check: every code edit
+        // of init.lua must come with a new ADDON_VERSION (and
+        // BundledAddonVersion) and a new entry here. Whole-line comments and
+        // blank lines do not count, so a comment fix needs no bump.
+        var code = string.Join("\n", lua.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n')
+            .Where(line => line.Trim() is { Length: > 0 } t && !t.StartsWith("--", StringComparison.Ordinal)));
+        var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(code)));
         Assert.True(KnownAddonHashes.TryGetValue(PinShareRelay.BundledAddonVersion, out var known) && known == hash,
             $"init.lua changed (sha256 {hash}): bump ADDON_VERSION and PinShareRelay.BundledAddonVersion, then record the hash for the new version");
     }
 
-    // sha256 of init.lua (LF line ends) per ADDON_VERSION.
+    // sha256 of init.lua's code lines (no whole-line comments or blank lines, LF-joined) per ADDON_VERSION.
     private static readonly Dictionary<int, string> KnownAddonHashes = new()
     {
-        [1] = "4e6c704f38ef6f2b4f657305b36ab6de286a1f4d2dbb89f2e66f43088450f6f2",
+        [1] = "354b9500e70b9b1be0c407323153fc075f8ba43c118bea5861115c3d2f05586b",
     };
 
     [Theory(DisplayName = "addon version: read from the installed init.lua; none reads as 0")]
