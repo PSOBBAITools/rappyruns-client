@@ -24,6 +24,7 @@ public sealed class AddonInstaller
     private readonly Func<long> _universalTime;
     private readonly Action<string, byte[]> _writeFile;
     private readonly Action<string, string> _moveFile;
+    private readonly Action<string, string> _replaceFile;
 
     /// <param name="bundledDirs">
     /// Where to look for the shipped files, first match wins. Default:
@@ -33,14 +34,19 @@ public sealed class AddonInstaller
     /// <param name="universalTime">Seconds since 1900 for the aside name (tests pin it).</param>
     /// <param name="writeFile">Writes an installed file; default <see cref="File.WriteAllBytes(string, byte[])"/> (tests make it fail).</param>
     /// <param name="moveFile">Renames during the DLL swap; default <see cref="File.Move(string, string)"/> (tests make it fail).</param>
+    /// <param name="replaceFile">
+    /// Renames the addon's <c>init.lua.new</c> over init.lua; default
+    /// <see cref="File.Move(string, string, bool)"/> with overwrite (tests make it fail).
+    /// </param>
     public AddonInstaller(IReadOnlyList<string>? bundledDirs = null, Action<string>? log = null, Func<long>? universalTime = null,
-        Action<string, byte[]>? writeFile = null, Action<string, string>? moveFile = null)
+        Action<string, byte[]>? writeFile = null, Action<string, string>? moveFile = null, Action<string, string>? replaceFile = null)
     {
         _bundledDirs = bundledDirs ?? DefaultBundledDirs();
         _log = log;
         _universalTime = universalTime ?? (() => DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 2208988800L);
         _writeFile = writeFile ?? File.WriteAllBytes;
         _moveFile = moveFile ?? File.Move;
+        _replaceFile = replaceFile ?? ((from, to) => File.Move(from, to, overwrite: true));
     }
 
     /// <summary>
@@ -149,7 +155,12 @@ public sealed class AddonInstaller
     /// Copies the shipped <paramref name="name"/> into <paramref name="addonDir"/>
     /// unless the installed copy already has the same bytes. True when it
     /// wrote; false when already current or nothing is shipped under that
-    /// name. The addon file creates the folder first and writes in place.
+    /// name. Either way the new bytes are written to <c>&lt;name&gt;.new</c>
+    /// first and only a complete file replaces the installed one, so a failed
+    /// or interrupted write never leaves a truncated copy in its place (the
+    /// <c>.new</c> is deleted on the way out). The addon file (S45) creates the
+    /// folder first and renames its <c>.new</c> over init.lua in one replacing
+    /// rename: nothing keeps the script open (the game reads it once at load).
     /// With <paramref name="renameAside"/> (C#, S39; the Lisp overwrote in
     /// place and renamed only after that failed, so a failed write could
     /// truncate the working copy and a failed restore strand it aside): the
@@ -171,16 +182,16 @@ public sealed class AddonInstaller
         var installed = Path.Combine(addonDir, name);
         var wanted = File.ReadAllBytes(bundled);
         if (File.Exists(installed) && wanted.AsSpan().SequenceEqual(File.ReadAllBytes(installed))) return false;
-        if (!renameAside)
-        {
-            Directory.CreateDirectory(addonDir);
-            _writeFile(installed, wanted);
-            return true;
-        }
+        if (!renameAside) Directory.CreateDirectory(addonDir);
         var fresh = installed + NewSuffix;
         try
         {
             _writeFile(fresh, wanted);
+            if (!renameAside)
+            {
+                _replaceFile(fresh, installed);
+                return true;
+            }
             if (!File.Exists(installed))
             {
                 _moveFile(fresh, installed);

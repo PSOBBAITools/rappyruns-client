@@ -109,6 +109,36 @@ public class PinShareInstallerTests
         Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(installed));
     }
 
+    [Fact(DisplayName = "install: a failed init.lua write or swap leaves the working addon whole and no .new behind (S45)")]
+    public void RefusedAddonWriteKeepsScript()
+    {
+        using var game = new GameFolder(dll: false);
+        Directory.CreateDirectory(game.AddonDir);
+        var installed = Path.Combine(game.AddonDir, "init.lua");
+        File.WriteAllText(installed, "-- pin share addon v1");
+        // The disk fills up partway through the write.
+        var partial = new AddonInstaller([game.Bundled], null, () => 3900000000, (path, bytes) =>
+        {
+            File.WriteAllBytes(path, bytes[..3]);
+            throw new IOException("There is not enough space on the disk.");
+        });
+        Assert.Equal(new PinShareStatus(PinShareStatusKind.InstallFailed, "There is not enough space on the disk."), partial.EnsureAddon(game.AddonDir));
+        Assert.Equal("-- pin share addon v1", File.ReadAllText(installed));
+        Assert.False(File.Exists(installed + ".new"));
+
+        // The write completes but the swap is refused (antivirus, a lock).
+        var refusedSwap = new AddonInstaller([game.Bundled], null, () => 3900000000,
+            replaceFile: (_, _) => throw new UnauthorizedAccessException("swap refused"));
+        Assert.Equal(new PinShareStatus(PinShareStatusKind.InstallFailed, "swap refused"), refusedSwap.EnsureAddon(game.AddonDir));
+        Assert.Equal("-- pin share addon v1", File.ReadAllText(installed));
+        Assert.False(File.Exists(installed + ".new"));
+
+        // A working install replaces it through the same path.
+        Assert.Null(game.Installer().EnsureAddon(game.AddonDir));
+        Assert.Equal("-- pin share addon v2", File.ReadAllText(installed));
+        Assert.False(File.Exists(installed + ".new"));
+    }
+
     [Fact(DisplayName = "install: a refused final rename moves the old dll back; if that fails too, the aside copy is kept (S39)")]
     public void RefusedSwapMovesBack()
     {
